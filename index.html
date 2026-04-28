@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LASC Scheduler</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f5f7; color: #333; font-size: 14px; }
+    header { background: #1a1a2e; color: white; padding: 12px 20px; display: flex; align-items: center; gap: 12px; }
+    header h1 { font-size: 17px; font-weight: 600; }
+    #back-btn { display: none; background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.35); color: white; padding: 5px 14px; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 500; }
+    #back-btn:hover { background: rgba(255,255,255,0.3); }
+    #header-teacher-name { font-size: 15px; font-weight: 400; opacity: 0.85; }
+    .view { display: none; } .view.active { display: block; }
+    main { padding: 16px 20px; max-width: 1500px; margin: 0 auto; }
+    .card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+    .card h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 10px; }
+    .form-group label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+    .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 7px 10px; border: 1px solid #d0d0d0; border-radius: 5px; font-size: 13px; font-family: inherit; background: white; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #1a1a2e; }
+    .btn { padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit; }
+    .btn-primary { background: #1a1a2e; color: white; } .btn-primary:hover { background: #2e2e50; }
+    .btn-secondary { background: #f0f0f0; color: #333; } .btn-secondary:hover { background: #e4e4e4; }
+    .btn-danger { background: #dc2626; color: white; } .btn-danger:hover { background: #b91c1c; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+    .btn-done { background: #dcfce7; color: #15803d; border: 1px solid #86efac; } .btn-done:hover { background: #bbf7d0; }
+    .btn-mark { background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd; } .btn-mark:hover { background: #dbeafe; }
+
+    /* Warnings / messages */
+    .warnings { margin: 8px 0; }
+    .warning-item { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; padding: 7px 11px; border-radius: 5px; margin-bottom: 5px; font-size: 12.5px; }
+    .error-item   { background: #fef2f2; border: 1px solid #f87171; color: #dc2626; padding: 7px 11px; border-radius: 5px; margin-bottom: 5px; font-size: 12.5px; font-weight: 600; }
+    .info-item    { background: #f0f9ff; border: 1px solid #bae6fd; color: #0369a1; padding: 7px 11px; border-radius: 5px; margin-bottom: 5px; font-size: 12.5px; }
+
+    /* Campus sections */
+    .campus-section { margin-bottom: 20px; }
+    .campus-section:last-child { margin-bottom: 0; }
+    .campus-section-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; padding: 4px 0 8px; border-bottom: 1px solid #e8e8e8; margin-bottom: 10px; }
+    .teacher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+    .teacher-card { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .teacher-card-info { cursor: pointer; flex: 1; }
+    .teacher-card-info:hover .teacher-card-name { color: #1a1a2e; text-decoration: underline; }
+    .teacher-card-name { font-weight: 600; font-size: 14px; }
+    .teacher-card-actions { display: flex; gap: 5px; flex-shrink: 0; }
+
+    /* Day toggles */
+    .day-toggle { padding: 4px 9px; border: 1px solid #d0d0d0; background: white; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit; }
+    .day-toggle.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
+    .day-toggle:hover:not(.active) { background: #f5f5f5; }
+
+    /* Time slot rows */
+    .time-slot-row { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; }
+    .time-slot-row .form-group { flex: 1; margin-bottom: 0; }
+
+    /* Detail tabs */
+    .detail-tabs { background: white; border-bottom: 1px solid #e0e0e0; padding: 0 20px; display: flex; }
+    .detail-tab { background: none; border: none; border-bottom: 3px solid transparent; padding: 11px 18px; cursor: pointer; font-size: 13px; color: #666; font-family: inherit; }
+    .detail-tab.active { color: #1a1a2e; border-bottom-color: #1a1a2e; font-weight: 600; }
+    .detail-tab:hover { color: #1a1a2e; background: #f8f8f8; }
+    .detail-tab-content { display: none; } .detail-tab-content.active { display: block; }
+
+    /* Schedule controls */
+    .schedule-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
+    .schedule-controls-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .week-nav { display: flex; align-items: center; gap: 6px; }
+    .week-nav button { background: #f0f0f0; border: 1px solid #d0d0d0; padding: 5px 10px; cursor: pointer; border-radius: 4px; font-size: 13px; }
+    .week-nav button:hover { background: #e4e4e4; }
+    .week-label { font-weight: 600; font-size: 13px; min-width: 130px; text-align: center; }
+    .legend { display: flex; gap: 14px; margin-bottom: 10px; flex-wrap: wrap; }
+    .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #555; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+    .legend-dot.Regular { background: #dbeafe; border: 1px solid #93c5fd; }
+    .legend-dot.PT      { background: #dcfce7; border: 1px solid #86efac; }
+
+    /* Grid */
+    .grid-wrapper { overflow-x: auto; border: 1px solid #e0e0e0; border-radius: 8px; }
+    .schedule-grid { display: flex; min-width: 300px; }
+    .time-column { width: 58px; flex-shrink: 0; border-right: 1px solid #e0e0e0; }
+    .time-column .col-header { height: 38px; background: #fafafa; border-bottom: 1px solid #e0e0e0; }
+    .time-slot-label { height: 30px; display: flex; align-items: center; justify-content: flex-end; padding-right: 8px; font-size: 11px; color: #aaa; border-bottom: 1px solid #f5f5f5; }
+    .time-slot-label.hour { color: #666; border-bottom-color: #e8e8e8; }
+    .teacher-column { flex: 1; min-width: 160px; }
+    .col-header { height: 38px; background: #fafafa; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; padding: 0 4px; gap: 4px; }
+    .grid-body { position: relative; height: 960px; }
+    .grid-slot { height: 30px; border-bottom: 1px solid #f8f8f8; }
+    .grid-slot.hour { border-bottom-color: #ebebeb; }
+    .session-block { position: absolute; left: 2px; right: 2px; border-radius: 4px; padding: 3px 6px; font-size: 11px; overflow: hidden; cursor: pointer; z-index: 1; border-left: 3px solid transparent; transition: filter 0.1s; }
+    .session-block:hover { filter: brightness(0.92); }
+    .session-block.Regular { background: #eff6ff; color: #1d4ed8; border-left-color: #3b82f6; }
+    .session-block.PT      { background: #f0fdf4; color: #15803d; border-left-color: #22c55e; }
+    .session-block.PT.pending { background: #f9fafb; color: #6b7280; border-left-color: #d1d5db; border-style: dashed; }
+    .sb-student { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sb-meta    { font-size: 10px; opacity: 0.75; }
+
+    /* PT Tracker */
+    .pt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .pt-table th { background: #fafafa; padding: 8px 12px; text-align: left; border-bottom: 2px solid #e0e0e0; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; color: #555; }
+    .pt-table td { padding: 7px 12px; border-bottom: 1px solid #f2f2f2; vertical-align: middle; }
+    .pt-table tr:last-child td { border-bottom: none; }
+    .pt-table tr.pending-row td { color: #9ca3af; }
+    .progress-bar { height: 7px; background: #e5e7eb; border-radius: 4px; min-width: 90px; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 4px; background: #22c55e; }
+    .progress-fill.warn { background: #f59e0b; } .progress-fill.over { background: #ef4444; }
+    .hours-over { color: #dc2626; font-weight: 600; }
+    .btn-student-link { background: none; border: none; font-size: 15px; font-weight: 600; color: #1a1a2e; cursor: pointer; padding: 0; font-family: inherit; }
+    .btn-student-link:hover { text-decoration: underline; color: #3730a3; }
+
+    /* Modal */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: white; border-radius: 10px; padding: 22px; width: 460px; max-width: 96vw; max-height: 90vh; overflow-y: auto; }
+    .modal h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+    .modal-row { display: flex; gap: 6px; margin-bottom: 8px; font-size: 13px; }
+    .modal-row strong { min-width: 70px; color: #666; font-weight: 500; }
+
+    /* Mini Schedule Modal */
+    .mini-modal { width: 780px; max-width: 97vw; }
+    .mini-schedule-grid { display: flex; min-width: 500px; }
+    .mini-time-col { width: 48px; flex-shrink: 0; border-right: 1px solid #e0e0e0; }
+    .mini-col-hdr { height: 30px; background: #fafafa; border-bottom: 1px solid #e0e0e0; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 600; gap: 2px; padding: 0 2px; }
+    .mini-time-label { height: 20px; display: flex; align-items: center; justify-content: flex-end; padding-right: 6px; font-size: 10px; color: #ccc; border-bottom: 1px solid #f8f8f8; }
+    .mini-time-label.hour { color: #666; border-bottom-color: #ebebeb; }
+    .mini-day-col { flex: 1; min-width: 80px; border-left: 1px solid #e0e0e0; }
+    .mini-grid-body { position: relative; height: 640px; cursor: pointer; }
+    .mini-grid-body:hover { background: #fafeff; }
+    .mini-grid-slot { height: 20px; border-bottom: 1px solid #f8f8f8; }
+    .mini-grid-slot.hour { border-bottom-color: #ebebeb; }
+    .mini-session-blk { position: absolute; left: 2px; right: 2px; border-radius: 3px; padding: 1px 4px; font-size: 10px; overflow: hidden; z-index: 1; border-left: 2px solid transparent; pointer-events: none; line-height: 1.3; }
+    .mini-session-blk.student { background: #f0fdf4; color: #15803d; border-left-color: #22c55e; font-weight: 600; }
+    .mini-session-blk.student.pending { background: #f9fafb; color: #9ca3af; border-left-color: #d1d5db; }
+    .mini-session-blk.other   { background: #f3f4f6; color: #9ca3af; border-left-color: #d1d5db; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; color: white; padding: 10px 18px; border-radius: 7px; font-size: 13px; z-index: 400; transform: translateY(80px); opacity: 0; transition: all 0.25s; pointer-events: none; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.error { background: #dc2626; } .toast.ok { background: #16a34a; }
+    .empty-state { text-align: center; padding: 36px; color: #aaa; font-size: 13px; }
+    #logo-btn { background: none; border: none; color: white; font-size: 17px; font-weight: 600; cursor: pointer; padding: 0; font-family: inherit; }
+    #logo-btn:hover { opacity: 0.85; }
+  </style>
+</head>
+<body>
+
+<header>
+  <button id="back-btn" onclick="goHome()">&#8592; Back</button>
+  <h1><button id="logo-btn" onclick="goHome()">LASC Scheduler</button></h1>
+  <span id="header-teacher-name"></span>
+</header>
+
+<!-- VIEW 1: 선생님 목록 -->
+<div id="view-home" class="view active">
+  <main>
+    <div class="card" style="max-width:500px;">
+      <h2 id="teacher-form-title">Add Teacher</h2>
+      <div class="form-grid">
+        <div class="form-group"><label>Name</label><input type="text" id="teacher-name" placeholder="Teacher name"></div>
+        <div class="form-group"><label>Campus</label>
+          <select id="teacher-campus">
+            <option value="IRV">IRV</option><option value="RH">RH</option><option value="LA">LA</option>
+          </select>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-primary" onclick="saveTeacher()">Save</button>
+        <button class="btn btn-secondary" id="cancel-edit-btn" style="display:none;" onclick="cancelEditTeacher()">Cancel</button>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Teachers</h2>
+      <div id="teacher-list"><div class="empty-state">Loading…</div></div>
+    </div>
+  </main>
+</div>
+
+<!-- VIEW 2: 선생님 개인 페이지 -->
+<div id="view-detail" class="view">
+  <div class="detail-tabs">
+    <button class="detail-tab active" onclick="switchDetailTab('schedule')">Schedule</button>
+    <button class="detail-tab" onclick="switchDetailTab('pt')">PT Tracker</button>
+  </div>
+
+  <div id="dtab-schedule" class="detail-tab-content active">
+    <main>
+      <div class="card">
+        <div class="schedule-controls">
+          <div class="schedule-controls-left">
+            <div class="week-nav">
+              <button onclick="changeWeek(-1)">&#8592;</button>
+              <span id="week-label" class="week-label"></span>
+              <button onclick="changeWeek(1)">&#8594;</button>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="goToToday()">Today</button>
+          </div>
+          <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Add Session</button>
+        </div>
+      </div>
+      <div class="legend">
+        <span class="legend-item"><span class="legend-dot Regular"></span>Regular</span>
+        <span class="legend-item"><span class="legend-dot PT"></span>PT (done)</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#f9fafb;border:1px dashed #d1d5db;"></span>PT (scheduled)</span>
+      </div>
+      <div class="card" style="padding:0;overflow:hidden;">
+        <div class="grid-wrapper">
+          <div class="schedule-grid" id="schedule-grid"><div class="empty-state">Loading…</div></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="dtab-pt" class="detail-tab-content">
+    <main>
+      <div class="card" style="max-width:540px;">
+        <h2>Set PT Contract</h2>
+        <div class="form-grid">
+          <div class="form-group"><label>Student Name</label><input type="text" id="pt-student" placeholder="Student name"></div>
+          <div class="form-group"><label>Contract Hours</label><input type="number" id="pt-hours" min="0" step="0.5" placeholder="e.g. 20"></div>
+        </div>
+        <button class="btn btn-primary" onclick="savePTContract()">Save</button>
+      </div>
+      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;">
+        <button class="btn btn-secondary btn-sm" onclick="exportPTCSV()">&#8595; Export CSV</button>
+        <button class="btn btn-secondary btn-sm" onclick="printPTTracker()">&#128438; Print</button>
+      </div>
+      <div id="pt-tracker-content"><div class="empty-state">Loading…</div></div>
+    </main>
+  </div>
+</div>
+
+<!-- Add Session Modal -->
+<div class="modal-overlay" id="add-session-modal">
+  <div class="modal">
+    <h3>Add Session</h3>
+
+    <div class="form-group" style="margin-bottom:14px;">
+      <label>Session Type</label>
+      <select id="sess-type" onchange="onSessionTypeChange()">
+        <option value="Regular">Regular</option>
+        <option value="PT">PT</option>
+      </select>
+    </div>
+
+    <!-- Regular form -->
+    <div id="regular-form">
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Class Name</label>
+        <input type="text" id="reg-class-name" placeholder="e.g. Advanced English A" oninput="validateForm()">
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Days of Week</label>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;" id="day-toggles">
+          <button class="day-toggle" data-day="Mon" onclick="toggleDay(this)">Mon</button>
+          <button class="day-toggle" data-day="Tue" onclick="toggleDay(this)">Tue</button>
+          <button class="day-toggle" data-day="Wed" onclick="toggleDay(this)">Wed</button>
+          <button class="day-toggle" data-day="Thu" onclick="toggleDay(this)">Thu</button>
+          <button class="day-toggle" data-day="Fri" onclick="toggleDay(this)">Fri</button>
+          <button class="day-toggle" data-day="Sat" onclick="toggleDay(this)">Sat</button>
+          <button class="day-toggle" data-day="Sun" onclick="toggleDay(this)">Sun</button>
+        </div>
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
+        <div class="form-group"><label>From Date</label><input type="date" id="reg-from-date" oninput="validateForm()"></div>
+        <div class="form-group"><label>To Date</label><input type="date" id="reg-to-date" oninput="validateForm()"></div>
+      </div>
+      <div style="margin-bottom:6px;">
+        <label style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.4px;">Time Slots</label>
+      </div>
+      <div id="time-slots-container"></div>
+      <button class="btn btn-secondary btn-sm" onclick="addTimeSlotRow()" style="margin-bottom:10px;">+ Add Time Slot</button>
+    </div>
+
+    <!-- PT form -->
+    <div id="pt-form" style="display:none;">
+      <div class="form-grid">
+        <div class="form-group"><label>Student Name</label><input type="text" id="sess-student" placeholder="Student name" oninput="validateForm()"></div>
+        <div class="form-group"><label>Date</label><input type="date" id="sess-date" oninput="validateForm()"></div>
+        <div class="form-group"><label>Start Time</label><input type="time" id="sess-start" value="09:00" oninput="validateForm()"></div>
+        <div class="form-group"><label>End Time</label><input type="time" id="sess-end" value="10:00" oninput="validateForm()"></div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:10px;">
+      <label>Notes</label>
+      <textarea id="sess-notes" rows="2" placeholder="Optional"></textarea>
+    </div>
+    <div class="warnings" id="session-warnings"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closeAddModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="addSession()">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Session Detail Modal -->
+<div class="modal-overlay" id="session-detail-modal">
+  <div class="modal">
+    <h3>Session Details</h3>
+    <div id="session-detail-content"></div>
+    <div class="modal-actions">
+      <button class="btn btn-danger btn-sm" onclick="deleteSession()">Delete</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeDetailModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- PT Mini Schedule Modal -->
+<div class="modal-overlay" id="pt-mini-schedule-modal">
+  <div class="modal mini-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+      <h3 id="pt-mini-title" style="margin:0;"></h3>
+      <button onclick="closePTMiniSchedule()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;padding:0 4px;">&times;</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+      <div class="week-nav">
+        <button onclick="changePTMiniWeek(-1)">&#8592;</button>
+        <span id="pt-mini-week-label" class="week-label"></span>
+        <button onclick="changePTMiniWeek(1)">&#8594;</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;border:1px solid #e0e0e0;border-radius:8px;">
+      <div id="pt-mini-grid" class="mini-schedule-grid"></div>
+    </div>
+    <div id="pt-mini-manual-form" style="margin-top:16px;padding-top:14px;border-top:1px solid #f0f0f0;">
+      <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">직접 날짜 입력</div>
+      <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:8px;">
+        <div class="form-group"><label>Date</label><input type="date" id="pt-mini-date"></div>
+        <div class="form-group"><label>Start Time</label><input type="time" id="pt-mini-start" value="09:00"></div>
+        <div class="form-group"><label>End Time</label><input type="time" id="pt-mini-end" value="10:00"></div>
+        <div class="form-group"><label>Notes</label><input type="text" id="pt-mini-notes" placeholder="Optional"></div>
+      </div>
+      <div id="pt-mini-warnings" class="warnings"></div>
+      <button class="btn btn-primary btn-sm" onclick="addPTFromMini()">+ Add PT Session</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBhGm70nO96hXjKaWVD6Yo1KkLUsoQVWk8",
+  authDomain: "lasc-scheduler.firebaseapp.com",
+  projectId: "lasc-scheduler",
+  storageBucket: "lasc-scheduler.firebasestorage.app",
+  messagingSenderId: "1024791105352",
+  appId: "1:1024791105352:web:a5e1dd6a9421994f98ad7d"
+};
+if (typeof firebase === 'undefined') {
+  document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('teacher-list').innerHTML =
+      '<div class="empty-state" style="color:#dc2626;">Firebase SDK failed to load. Check your internet connection and reload.</div>';
+  });
+  throw new Error('Firebase SDK not loaded');
+}
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// State
+let teachers = [], sessions = [], ptContracts = [];
+let currentTeacher = null, currentWeekStart = getWeekStart(new Date());
+let editingTeacherId = null, selectedSessionId = null;
+let ptMiniStudentName = null, ptMiniWeekStart = null;
+let unsubSessions = null, unsubContracts = null;
+let pendingTeacherId = window.location.hash.slice(1) || null;
+
+// Utilities
+function getWeekStart(date) {
+  const d = new Date(date);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  d.setHours(0,0,0,0); return d;
+}
+function dateToStr(d) { return d.toISOString().slice(0,10); }
+function strToDate(s) { return new Date(s + 'T00:00:00'); }
+function timeToMins(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
+function minsToTime(m) { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
+function formatTime(t) {
+  const [h,m] = t.split(':').map(Number);
+  const ap = h>=12?'pm':'am'; const hr = h%12||12;
+  return m===0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2,'0')}${ap}`;
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function showToast(msg, type='') {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.className = 'toast show' + (type?' '+type:'');
+  clearTimeout(el._t); el._t = setTimeout(()=>{ el.className='toast'; }, 2800);
+}
+
+// Overlap detection
+function getOverlaps(date, startTime, endTime, excludeId=null) {
+  const s = timeToMins(startTime), e = timeToMins(endTime);
+  if (e <= s) return [];
+  return sessions.filter(sess =>
+    sess.date === date && sess.id !== excludeId &&
+    timeToMins(sess.startTime) < e && timeToMins(sess.endTime) > s
+  );
+}
+function slotsOverlap(a, b) {
+  return timeToMins(a.start) < timeToMins(b.end) && timeToMins(b.start) < timeToMins(a.end);
+}
+
+// Session dates for Regular batch
+function getSessionDates(fromStr, toStr, dayNames) {
+  const dates = []; const to = strToDate(toStr); let cur = strToDate(fromStr);
+  while (cur <= to) {
+    const dayName = DAYS[((cur.getDay()+6)%7)];
+    if (dayNames.includes(dayName)) dates.push(dateToStr(cur));
+    cur.setDate(cur.getDate()+1);
+  }
+  return dates;
+}
+
+// Views
+function goHome() {
+  if (unsubSessions)  { unsubSessions();  unsubSessions  = null; }
+  if (unsubContracts) { unsubContracts(); unsubContracts = null; }
+  currentTeacher = null;
+  history.pushState('', document.title, window.location.pathname);
+  document.getElementById('view-home').classList.add('active');
+  document.getElementById('view-detail').classList.remove('active');
+  document.getElementById('back-btn').style.display = 'none';
+  document.getElementById('header-teacher-name').textContent = '';
+}
+
+function openTeacherDetail(teacher) {
+  currentTeacher = teacher; currentWeekStart = getWeekStart(new Date());
+  window.location.hash = teacher.id;
+  document.getElementById('view-home').classList.remove('active');
+  document.getElementById('view-detail').classList.add('active');
+  document.getElementById('back-btn').style.display = '';
+  document.getElementById('header-teacher-name').textContent = `— ${teacher.name} (${teacher.campus})`;
+  switchDetailTab('schedule');
+  startTeacherListeners(teacher.id);
+}
+
+function switchDetailTab(name) {
+  document.querySelectorAll('.detail-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.detail-tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.detail-tab')[name==='schedule'?0:1].classList.add('active');
+  document.getElementById('dtab-'+name).classList.add('active');
+  if (name==='schedule') renderSchedule();
+  if (name==='pt')       renderPTTracker();
+}
+
+// Firestore
+function initTeacherListener() {
+  db.collection('teachers').orderBy('name').onSnapshot(
+    snap => {
+      teachers = snap.docs.map(d => ({id:d.id,...d.data()}));
+      renderTeacherList();
+      if (currentTeacher) {
+        const updated = teachers.find(t => t.id===currentTeacher.id);
+        if (updated) { currentTeacher=updated; document.getElementById('header-teacher-name').textContent=`— ${updated.name} (${updated.campus})`; }
+      } else if (pendingTeacherId) {
+        const teacher = teachers.find(t => t.id===pendingTeacherId);
+        if (teacher) { pendingTeacherId=null; openTeacherDetail(teacher); }
+      }
+    },
+    err => {
+      console.error('Firestore teachers error:', err);
+      document.getElementById('teacher-list').innerHTML =
+        '<div class="empty-state" style="color:#dc2626;">Firebase error: ' + escHtml(err.message) + '</div>';
+    }
+  );
+}
+
+function startTeacherListeners(teacherId) {
+  if (unsubSessions)  unsubSessions();
+  if (unsubContracts) unsubContracts();
+  unsubSessions = db.collection('sessions').where('teacherId','==',teacherId).onSnapshot(
+    snap => {
+      sessions = snap.docs.map(d => ({id:d.id,...d.data()}));
+      renderSchedule();
+      if (document.getElementById('dtab-pt').classList.contains('active')) renderPTTracker();
+      if (document.getElementById('pt-mini-schedule-modal').classList.contains('open')) renderPTMiniGrid();
+    },
+    err => { console.error('Firestore sessions error:', err); showToast('Firebase error: ' + err.message, 'error'); }
+  );
+  unsubContracts = db.collection('pt_contracts').where('teacherId','==',teacherId).onSnapshot(
+    snap => {
+      ptContracts = snap.docs.map(d => ({id:d.id,...d.data()}));
+      if (document.getElementById('dtab-pt').classList.contains('active')) renderPTTracker();
+    },
+    err => { console.error('Firestore contracts error:', err); showToast('Firebase error: ' + err.message, 'error'); }
+  );
+}
+
+// Schedule
+const GRID_START=7*60, GRID_END=23*60, SLOT_H=30, TOTAL_SLOTS=(GRID_END-GRID_START)/30;
+const MINI_GRID_START=7*60, MINI_GRID_END=23*60, MINI_SLOT_H=20, MINI_TOTAL_SLOTS=(MINI_GRID_END-MINI_GRID_START)/30;
+const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function updateWeekLabel() {
+  const end = new Date(currentWeekStart); end.setDate(end.getDate()+6);
+  document.getElementById('week-label').textContent =
+    `${currentWeekStart.getMonth()+1}/${currentWeekStart.getDate()} – ${end.getMonth()+1}/${end.getDate()}/${end.getFullYear()}`;
+}
+function changeWeek(dir) { currentWeekStart.setDate(currentWeekStart.getDate()+dir*7); renderSchedule(); }
+function goToToday() { currentWeekStart=getWeekStart(new Date()); renderSchedule(); }
+
+function renderSchedule() {
+  if (!document.getElementById('dtab-schedule').classList.contains('active')) return;
+  updateWeekLabel();
+  const grid=document.getElementById('schedule-grid'), today=dateToStr(new Date());
+  let html='<div class="time-column"><div class="col-header"></div><div class="grid-body">';
+  for (let i=0;i<TOTAL_SLOTS;i++) {
+    const mins=GRID_START+i*30, isHr=mins%60===0;
+    html+=`<div class="time-slot-label${isHr?' hour':''}">${isHr?formatTime(minsToTime(mins)):''}</div>`;
+  }
+  html+='</div></div>';
+  for (let i=0;i<7;i++) {
+    const d=new Date(currentWeekStart); d.setDate(d.getDate()+i);
+    const dateStr=dateToStr(d), isToday=dateStr===today;
+    const daySessions=sessions.filter(s=>s.date===dateStr);
+    const hdrStyle=isToday?'background:#eef2ff;color:#3730a3;':'';
+    html+=`<div class="teacher-column"><div class="col-header" style="${hdrStyle}">
+      ${DAYS[i]}<span style="font-weight:400;font-size:11px;margin-left:4px;">${d.getMonth()+1}/${d.getDate()}</span>
+      ${isToday?'<span style="font-size:9px;background:#3730a3;color:white;padding:1px 5px;border-radius:3px;margin-left:3px;">TODAY</span>':''}
+    </div><div class="grid-body">`;
+    for (let j=0;j<TOTAL_SLOTS;j++) html+=`<div class="grid-slot${(GRID_START+j*30)%60===0?' hour':''}"></div>`;
+    daySessions.forEach(sess => {
+      const top=(timeToMins(sess.startTime)-GRID_START)/30*SLOT_H;
+      const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
+      if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
+      const label = sess.type==='Regular' ? (sess.studentName ? escHtml(sess.studentName) : 'Regular') : escHtml(sess.studentName);
+      const isPending = sess.type==='PT' && sess.conducted===false;
+      html+=`<div class="session-block ${sess.type}${isPending?' pending':''}"
+        style="top:${top}px;height:${Math.max(height-2,16)}px;"
+        onclick="openDetailModal('${sess.id}')">
+        <div class="sb-student">${label}</div>
+        <div class="sb-meta">${sess.type}${isPending?' · scheduled':''} · ${formatTime(sess.startTime)}–${formatTime(sess.endTime)}</div>
+      </div>`;
+    });
+    html+='</div></div>';
+  }
+  grid.innerHTML=html;
+}
+
+// Add Session Modal
+function openAddModal() {
+  const today=new Date(), todayStr=dateToStr(today);
+  const todayDay=DAYS[((today.getDay()+6)%7)];
+  document.getElementById('sess-type').value='Regular';
+  document.getElementById('sess-notes').value='';
+  document.getElementById('session-warnings').innerHTML='';
+  document.getElementById('reg-class-name').value='';
+  document.getElementById('reg-from-date').value=todayStr;
+  document.getElementById('reg-to-date').value=todayStr;
+  document.querySelectorAll('.day-toggle').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.day===todayDay);
+  });
+  document.getElementById('time-slots-container').innerHTML='';
+  addTimeSlotRow();
+  document.getElementById('regular-form').style.display='';
+  document.getElementById('pt-form').style.display='none';
+  document.getElementById('add-session-modal').classList.add('open');
+}
+function closeAddModal() { document.getElementById('add-session-modal').classList.remove('open'); }
+
+function onSessionTypeChange() {
+  const type=document.getElementById('sess-type').value;
+  document.getElementById('regular-form').style.display=type==='Regular'?'':'none';
+  document.getElementById('pt-form').style.display=type==='PT'?'':'none';
+  document.getElementById('session-warnings').innerHTML='';
+  validateForm();
+}
+
+// Day toggles
+function toggleDay(btn) {
+  const active=document.querySelectorAll('.day-toggle.active');
+  if (btn.classList.contains('active') && active.length===1) return;
+  btn.classList.toggle('active');
+  validateForm();
+}
+function getSelectedDays() {
+  return Array.from(document.querySelectorAll('.day-toggle.active')).map(b=>b.dataset.day);
+}
+
+// Time slot rows
+function addTimeSlotRow() {
+  const container=document.getElementById('time-slots-container');
+  const div=document.createElement('div');
+  div.className='time-slot-row';
+  div.innerHTML=`
+    <div class="form-group"><input type="time" class="slot-start" value="09:00" oninput="validateForm()"></div>
+    <span style="color:#999;font-size:13px;flex-shrink:0;">–</span>
+    <div class="form-group"><input type="time" class="slot-end" value="10:00" oninput="validateForm()"></div>
+    <button class="btn btn-secondary btn-sm" onclick="removeTimeSlotRow(this)" style="flex-shrink:0;">×</button>`;
+  container.appendChild(div);
+  validateForm();
+}
+function removeTimeSlotRow(btn) {
+  const container=document.getElementById('time-slots-container');
+  if (container.children.length<=1) return;
+  btn.closest('.time-slot-row').remove();
+  validateForm();
+}
+function getTimeSlots() {
+  return Array.from(document.querySelectorAll('.time-slot-row')).map(row=>({
+    start: row.querySelector('.slot-start').value,
+    end:   row.querySelector('.slot-end').value
+  }));
+}
+
+function validateForm() {
+  const type=document.getElementById('sess-type').value;
+  const warnEl=document.getElementById('session-warnings');
+  const errors=[], warnings=[], infos=[];
+
+  if (type==='Regular') {
+    const from=document.getElementById('reg-from-date').value;
+    const to=document.getElementById('reg-to-date').value;
+    const days=getSelectedDays();
+    const slots=getTimeSlots();
+    if (!from||!to) { warnEl.innerHTML=''; return; }
+    if (to<from) { errors.push('To date must be on or after From date.'); }
+    slots.forEach((ts,i) => {
+      if (!ts.start||!ts.end) return;
+      if (timeToMins(ts.end)<=timeToMins(ts.start)) errors.push(`Slot ${i+1}: end must be after start.`);
+    });
+    for (let i=0;i<slots.length;i++) for (let j=i+1;j<slots.length;j++) {
+      if (slots[i].start&&slots[i].end&&slots[j].start&&slots[j].end&&slotsOverlap(slots[i],slots[j]))
+        errors.push(`Slot ${i+1} and slot ${j+1} overlap each other.`);
+    }
+    if (errors.length===0 && from && to) {
+      const dates=getSessionDates(from,to,days);
+      if (dates.length===0) { errors.push('No dates match the selected days in this range.'); }
+      else {
+        const validSlots=slots.filter(s=>s.start&&s.end&&timeToMins(s.end)>timeToMins(s.start));
+        infos.push(`Will create ${dates.length*validSlots.length} session(s) across ${dates.length} day(s).`);
+        const conflictDates=[];
+        for (const date of dates) for (const ts of validSlots) {
+          if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
+        }
+        if (conflictDates.length>0)
+          errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
+      }
+    }
+  } else {
+    const date=document.getElementById('sess-date').value;
+    const stud=document.getElementById('sess-student').value.trim();
+    const start=document.getElementById('sess-start').value;
+    const end=document.getElementById('sess-end').value;
+    if (!date||!stud||!start||!end||!currentTeacher) { warnEl.innerHTML=''; return; }
+    if (timeToMins(end)>timeToMins(start)) {
+      const overlaps=getOverlaps(date,start,end);
+      if (overlaps.length>0) {
+        errors.push(`Overlaps with ${overlaps[0].type} session: ${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}`);
+      }
+      warnings.push(...getRuleWarnings({date,startTime:start,endTime:end,type,teacherId:currentTeacher.id}));
+    }
+  }
+
+  warnEl.innerHTML=[
+    ...errors.map(e=>`<div class="error-item">⛔ ${e}</div>`),
+    ...warnings.map(w=>`<div class="warning-item">⚠ ${w}</div>`),
+    ...infos.map(i=>`<div class="info-item">ℹ ${i}</div>`)
+  ].join('');
+}
+
+function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null) {
+  const warnings=[];
+  const start=timeToMins(startTime), end=timeToMins(endTime), dur=end-start;
+  if (end<=start) { warnings.push('End time must be after start time.'); return warnings; }
+  if (start<7*60||end>23*60) warnings.push('Session is outside allowed hours (7am–11pm).');
+  const same=sessions.filter(s=>s.date===date&&s.id!==excludeId);
+  const totalToday=same.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+  if (type==='PT') {
+    const ptToday=same.filter(s=>s.type==='PT').reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+    if (ptToday+dur>3.5*60) warnings.push(`PT hours would exceed 3.5 hrs today (${(ptToday/60).toFixed(1)} hrs already).`);
+  }
+  if (totalToday+dur>8*60) warnings.push(`Teacher would exceed 8 hrs today (${(totalToday/60).toFixed(1)} hrs already).`);
+  const workedDates=new Set(sessions.filter(s=>s.id!==excludeId).map(s=>s.date));
+  workedDates.add(date);
+  const pivot=strToDate(date); let streak=0;
+  for (let i=-7;i<=7;i++) {
+    const d=new Date(pivot); d.setDate(d.getDate()+i);
+    if (workedDates.has(dateToStr(d))) streak++; else streak=0;
+    if (streak>=7) { warnings.push('Would work 7 or more consecutive days.'); break; }
+  }
+  return warnings;
+}
+
+async function addSession() {
+  const type=document.getElementById('sess-type').value;
+  const notes=document.getElementById('sess-notes').value.trim();
+
+  if (type==='Regular') {
+    const from=document.getElementById('reg-from-date').value;
+    const to=document.getElementById('reg-to-date').value;
+    const days=getSelectedDays();
+    const slots=getTimeSlots();
+    if (!from) return showToast('Please select a From date.','error');
+    if (!to)   return showToast('Please select a To date.','error');
+    if (to<from) return showToast('To date must be on or after From date.','error');
+    if (days.length===0) return showToast('Please select at least one day.','error');
+    const validSlots=slots.filter(s=>s.start&&s.end&&timeToMins(s.end)>timeToMins(s.start));
+    if (validSlots.length===0) return showToast('Please add at least one valid time slot.','error');
+    for (let i=0;i<validSlots.length;i++) for (let j=i+1;j<validSlots.length;j++) {
+      if (slotsOverlap(validSlots[i],validSlots[j])) return showToast('Time slots overlap each other.','error');
+    }
+    const dates=getSessionDates(from,to,days);
+    if (dates.length===0) return showToast('No dates match the selected days.','error');
+    if (dates.length*validSlots.length>300) return showToast('Too many sessions (max 300). Reduce the range.','error');
+    const conflictDates=[];
+    for (const date of dates) for (const ts of validSlots) {
+      if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
+    }
+    if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?'…':''}`, 'error');
+    try {
+      const batch=db.batch();
+      for (const date of dates) for (const ts of validSlots) {
+        batch.set(db.collection('sessions').doc(), {
+          teacherId:currentTeacher.id,
+          studentName:document.getElementById('reg-class-name').value.trim(),
+          type:'Regular',
+          date, startTime:ts.start, endTime:ts.end, notes,
+          createdAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      await batch.commit();
+      showToast(`${dates.length*validSlots.length} sessions added!`,'ok');
+      closeAddModal();
+    } catch(e) { console.error(e); showToast('Error saving sessions.','error'); }
+
+  } else {
+    const stud=document.getElementById('sess-student').value.trim();
+    const date=document.getElementById('sess-date').value;
+    const start=document.getElementById('sess-start').value;
+    const end=document.getElementById('sess-end').value;
+    if (!stud) return showToast('Please enter a student name.','error');
+    if (!date) return showToast('Please select a date.','error');
+    if (!start||!end) return showToast('Please set start and end times.','error');
+    if (timeToMins(end)<=timeToMins(start)) return showToast('End time must be after start time.','error');
+    const overlaps=getOverlaps(date,start,end);
+    if (overlaps.length>0) return showToast(`Cannot add: overlaps with ${overlaps[0].type} session (${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}).`,'error');
+    try {
+      await db.collection('sessions').add({
+        teacherId:currentTeacher.id, studentName:stud, type:'PT',
+        date, startTime:start, endTime:end, notes, conducted:false,
+        createdAt:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      showToast('PT session added!','ok');
+      closeAddModal();
+    } catch(e) { console.error(e); showToast('Error saving session.','error'); }
+  }
+}
+
+// Session Detail Modal
+function openDetailModal(id) {
+  const s=sessions.find(x=>x.id===id); if (!s) return;
+  selectedSessionId=id;
+  const isPending=s.type==='PT'&&s.conducted===false;
+  document.getElementById('session-detail-content').innerHTML=`
+    ${s.type==='Regular'&&s.studentName?`<div class="modal-row"><strong>Class</strong>${escHtml(s.studentName)}</div>`:''}
+    ${s.type!=='Regular'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
+    <div class="modal-row"><strong>Date</strong>${s.date}</div>
+    <div class="modal-row"><strong>Time</strong>${formatTime(s.startTime)} – ${formatTime(s.endTime)}</div>
+    <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}</div>
+    ${s.notes?`<div class="modal-row"><strong>Notes</strong>${escHtml(s.notes)}</div>`:''}
+  `;
+  document.getElementById('session-detail-modal').classList.add('open');
+}
+function closeDetailModal() { document.getElementById('session-detail-modal').classList.remove('open'); selectedSessionId=null; }
+async function deleteSession() {
+  if (!selectedSessionId||!confirm('Delete this session?')) return;
+  try { await db.collection('sessions').doc(selectedSessionId).delete(); closeDetailModal(); showToast('Session deleted.','ok'); }
+  catch(e) { showToast('Error deleting session.','error'); }
+}
+
+// PT Tracker
+async function savePTContract() {
+  const student=document.getElementById('pt-student').value.trim();
+  const hours=parseFloat(document.getElementById('pt-hours').value);
+  if (!student||isNaN(hours)||hours<0) return showToast('Please enter student name and contract hours.','error');
+  const existing=ptContracts.find(c=>c.studentName===student);
+  try {
+    if (existing) await db.collection('pt_contracts').doc(existing.id).update({totalHours:hours});
+    else await db.collection('pt_contracts').add({teacherId:currentTeacher.id, studentName:student, totalHours:hours});
+    document.getElementById('pt-student').value='';
+    document.getElementById('pt-hours').value='';
+    showToast('PT contract saved!','ok');
+  } catch(e) { showToast('Error saving contract.','error'); }
+}
+
+async function togglePTConducted(sessionId, currentValue) {
+  try {
+    await db.collection('sessions').doc(sessionId).update({conducted:!currentValue});
+    showToast(!currentValue?'✓ Marked as done!':'Unmarked.','ok');
+  } catch(e) { showToast('Error updating session.','error'); }
+}
+
+function renderPTTracker() {
+  const container=document.getElementById('pt-tracker-content');
+  const ptSessions=sessions.filter(s=>s.type==='PT')
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime));
+
+  const studentSessions={};
+  ptSessions.forEach(s=>{ if (!studentSessions[s.studentName]) studentSessions[s.studentName]=[]; studentSessions[s.studentName].push(s); });
+  ptContracts.forEach(c=>{ if (!studentSessions[c.studentName]) studentSessions[c.studentName]=[]; });
+
+  const students=Object.keys(studentSessions).sort();
+  if (students.length===0) { container.innerHTML='<div class="empty-state">No PT sessions yet.</div>'; return; }
+
+  let html='';
+  students.forEach(student => {
+    const list=studentSessions[student];
+    const contract=ptContracts.find(c=>c.studentName===student);
+    const total=contract?contract.totalHours:null;
+    const conductedList=list.filter(s=>s.conducted!==false);
+    const totalUsed=conductedList.reduce((n,s)=>n+(timeToMins(s.endTime)-timeToMins(s.startTime))/60,0);
+    const pct=total?Math.min(totalUsed/total*100,100):0;
+    const fillCls=pct>=100?'over':pct>=80?'warn':'';
+
+    html+=`<div class="card" style="margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
+        <h2 style="margin:0;">
+          <button class="btn-student-link" data-student="${escHtml(student)}" onclick="openPTMiniSchedule(this.dataset.student)">
+            ${escHtml(student)} <span style="font-size:12px;color:#6b7280;font-weight:400;">↗</span>
+          </button>
+        </h2>
+        <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+          <span>Contract: <strong>${total!==null?total+' hrs':'—'}</strong></span>
+          <span>Used: <strong>${totalUsed.toFixed(1)} hrs</strong></span>
+          <span>Remaining: <strong>${total!==null
+            ?(total-totalUsed<0?`<span class="hours-over">${Math.abs(total-totalUsed).toFixed(1)} hrs over</span>`:`${(total-totalUsed).toFixed(1)} hrs`)
+            :'—'}</strong></span>
+        </div>
+      </div>
+      ${total?`<div class="progress-bar" style="margin-bottom:12px;height:9px;"><div class="progress-fill ${fillCls}" style="width:${pct}%"></div></div>`:''}`;
+
+    if (list.length===0) {
+      html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No sessions yet.</div>`;
+    } else {
+      html+=`<table class="pt-table"><thead><tr>
+        <th>#</th><th>Date</th><th>Time</th><th>Duration</th><th>Status</th><th>Used (cumul.)</th><th>Remaining</th>
+      </tr></thead><tbody>`;
+      let running=0;
+      list.forEach((sess,idx) => {
+        const dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
+        const isConducted=sess.conducted!==false;
+        if (isConducted) running+=dur;
+        const rem=total!==null?total-running:null;
+        const remCell=rem===null?'<span style="color:#bbb">—</span>'
+          :rem<0?`<span class="hours-over">${Math.abs(rem).toFixed(1)} over</span>`:`${rem.toFixed(1)} hrs`;
+        html+=`<tr class="${isConducted?'':'pending-row'}">
+          <td style="color:#aaa;">${idx+1}</td>
+          <td>${sess.date}</td>
+          <td>${formatTime(sess.startTime)} – ${formatTime(sess.endTime)}</td>
+          <td>${dur.toFixed(1)} hrs</td>
+          <td>
+            ${isConducted
+              ?`<button class="btn btn-done btn-sm" onclick="togglePTConducted('${sess.id}',true)">✓ Done</button>`
+              :`<button class="btn btn-mark btn-sm" onclick="togglePTConducted('${sess.id}',false)">Mark Done</button>`}
+          </td>
+          <td>${isConducted?running.toFixed(1)+' hrs':'<span style="color:#bbb">—</span>'}</td>
+          <td>${isConducted?remCell:'<span style="color:#bbb">pending</span>'}</td>
+        </tr>`;
+      });
+      html+=`</tbody></table>`;
+    }
+    html+=`</div>`;
+  });
+  container.innerHTML=html;
+}
+
+// PT Mini Schedule
+function openPTMiniSchedule(studentName) {
+  ptMiniStudentName=studentName;
+  ptMiniWeekStart=getWeekStart(new Date());
+  document.getElementById('pt-mini-title').textContent=`${studentName} — PT Schedule`;
+  document.getElementById('pt-mini-date').value=dateToStr(new Date());
+  document.getElementById('pt-mini-start').value='09:00';
+  document.getElementById('pt-mini-end').value='10:00';
+  document.getElementById('pt-mini-notes').value='';
+  document.getElementById('pt-mini-warnings').innerHTML='';
+  document.getElementById('pt-mini-schedule-modal').classList.add('open');
+  renderPTMiniGrid();
+}
+function closePTMiniSchedule() {
+  document.getElementById('pt-mini-schedule-modal').classList.remove('open');
+  ptMiniStudentName=null;
+}
+function changePTMiniWeek(dir) { ptMiniWeekStart.setDate(ptMiniWeekStart.getDate()+dir*7); renderPTMiniGrid(); }
+
+function renderPTMiniGrid() {
+  const end=new Date(ptMiniWeekStart); end.setDate(end.getDate()+6);
+  document.getElementById('pt-mini-week-label').textContent=
+    `${ptMiniWeekStart.getMonth()+1}/${ptMiniWeekStart.getDate()} – ${end.getMonth()+1}/${end.getDate()}/${end.getFullYear()}`;
+  const today=dateToStr(new Date());
+  let html='<div class="mini-time-col"><div class="mini-col-hdr"></div>';
+  for (let i=0;i<MINI_TOTAL_SLOTS;i++) {
+    const mins=MINI_GRID_START+i*30, isHr=mins%60===0;
+    html+=`<div class="mini-time-label${isHr?' hour':''}">${isHr?formatTime(minsToTime(mins)):''}</div>`;
+  }
+  html+='</div>';
+  for (let i=0;i<7;i++) {
+    const d=new Date(ptMiniWeekStart); d.setDate(d.getDate()+i);
+    const dateStr=dateToStr(d), isToday=dateStr===today;
+    const daySessions=sessions.filter(s=>s.date===dateStr);
+    const hdrStyle=isToday?'background:#eef2ff;color:#3730a3;':'';
+    html+=`<div class="mini-day-col">
+      <div class="mini-col-hdr" style="${hdrStyle}">
+        ${DAYS[i]}<span style="font-weight:400;font-size:10px;margin-left:2px;">${d.getMonth()+1}/${d.getDate()}</span>
+      </div>
+      <div class="mini-grid-body" onclick="ptMiniGridClick(event,'${dateStr}',this)">`;
+    for (let j=0;j<MINI_TOTAL_SLOTS;j++) html+=`<div class="mini-grid-slot${(MINI_GRID_START+j*30)%60===0?' hour':''}"></div>`;
+    daySessions.forEach(sess => {
+      const top=(timeToMins(sess.startTime)-MINI_GRID_START)/30*MINI_SLOT_H;
+      const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*MINI_SLOT_H;
+      if (top<0||top>=MINI_TOTAL_SLOTS*MINI_SLOT_H) return;
+      const isStudent=sess.type==='PT'&&sess.studentName===ptMiniStudentName;
+      const isPending=isStudent&&sess.conducted===false;
+      const cls=isStudent?(isPending?'student pending':'student'):'other';
+      const label=sess.type==='Regular'?'Regular':escHtml(sess.studentName);
+      html+=`<div class="mini-session-blk ${cls}" style="top:${top}px;height:${Math.max(height-1,8)}px;">${label}</div>`;
+    });
+    html+='</div></div>';
+  }
+  document.getElementById('pt-mini-grid').innerHTML=html;
+}
+
+function ptMiniGridClick(e,dateStr,bodyEl) {
+  const rect=bodyEl.getBoundingClientRect();
+  const y=e.clientY-rect.top;
+  const slotIdx=Math.max(0,Math.min(MINI_TOTAL_SLOTS-2,Math.floor(y/MINI_SLOT_H)));
+  const startMin=MINI_GRID_START+slotIdx*30;
+  const endMin=Math.min(startMin+60,MINI_GRID_END);
+  document.getElementById('pt-mini-date').value=dateStr;
+  document.getElementById('pt-mini-start').value=minsToTime(startMin);
+  document.getElementById('pt-mini-end').value=minsToTime(endMin);
+  document.getElementById('pt-mini-warnings').innerHTML='';
+  document.getElementById('pt-mini-manual-form').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+async function addPTFromMini() {
+  const date=document.getElementById('pt-mini-date').value;
+  const start=document.getElementById('pt-mini-start').value;
+  const end=document.getElementById('pt-mini-end').value;
+  const notes=document.getElementById('pt-mini-notes').value.trim();
+  const warnEl=document.getElementById('pt-mini-warnings');
+  if (!date||!start||!end) return showToast('Please fill in date and times.','error');
+  if (timeToMins(end)<=timeToMins(start)) return showToast('End time must be after start time.','error');
+  const overlaps=getOverlaps(date,start,end);
+  if (overlaps.length>0) {
+    warnEl.innerHTML=`<div class="error-item">⛔ Overlaps with ${overlaps[0].type} session: ${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}</div>`;
+    return;
+  }
+  warnEl.innerHTML='';
+  try {
+    await db.collection('sessions').add({
+      teacherId:currentTeacher.id, studentName:ptMiniStudentName, type:'PT',
+      date, startTime:start, endTime:end, notes, conducted:false,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('PT session scheduled!','ok');
+    document.getElementById('pt-mini-notes').value='';
+    ptMiniWeekStart=getWeekStart(strToDate(date));
+  } catch(e) { console.error(e); showToast('Error adding session.','error'); }
+}
+
+// Teachers
+function renderTeacherList() {
+  const list=document.getElementById('teacher-list');
+  if (teachers.length===0) { list.innerHTML='<div class="empty-state">No teachers yet.</div>'; return; }
+  const campusOrder=['IRV','RH','LA'];
+  const grouped={};
+  teachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
+  const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
+  list.innerHTML=campuses.map(campus=>`
+    <div class="campus-section">
+      <div class="campus-section-header">${escHtml(campus)}</div>
+      <div class="teacher-grid">
+        ${grouped[campus].map(t=>`
+          <div class="teacher-card">
+            <div class="teacher-card-info" data-teacher-id="${t.id}" onclick="openTeacherDetailById(this.dataset.teacherId)">
+              <div class="teacher-card-name">${escHtml(t.name)}</div>
+            </div>
+            <div class="teacher-card-actions">
+              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editTeacher('${t.id}')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeTeacher('${t.id}')">Del</button>
+            </div>
+          </div>`).join('')}
+      </div>
+    </div>`).join('');
+}
+
+function openTeacherDetailById(id) {
+  const t = teachers.find(x => x.id === id);
+  if (t) openTeacherDetail(t);
+}
+
+function editTeacher(id) {
+  const t=teachers.find(x=>x.id===id); if (!t) return;
+  editingTeacherId=id;
+  document.getElementById('teacher-name').value=t.name;
+  document.getElementById('teacher-campus').value=t.campus;
+  document.getElementById('teacher-form-title').textContent='Edit Teacher';
+  document.getElementById('cancel-edit-btn').style.display='';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function cancelEditTeacher() {
+  editingTeacherId=null;
+  document.getElementById('teacher-name').value='';
+  document.getElementById('teacher-campus').value='IRV';
+  document.getElementById('teacher-form-title').textContent='Add Teacher';
+  document.getElementById('cancel-edit-btn').style.display='none';
+}
+async function saveTeacher() {
+  const name=document.getElementById('teacher-name').value.trim();
+  const campus=document.getElementById('teacher-campus').value;
+  if (!name) return showToast('Please enter a teacher name.','error');
+  try {
+    if (editingTeacherId) { await db.collection('teachers').doc(editingTeacherId).update({name,campus}); showToast('Teacher updated.','ok'); }
+    else { await db.collection('teachers').add({name,campus}); showToast('Teacher added!','ok'); }
+    cancelEditTeacher();
+  } catch(e) { showToast('Error saving teacher.','error'); }
+}
+async function removeTeacher(id) {
+  const t=teachers.find(x=>x.id===id);
+  if (!confirm(`Delete ${t?.name}? Their sessions will not be deleted.`)) return;
+  try { await db.collection('teachers').doc(id).delete(); showToast('Teacher removed.','ok'); }
+  catch(e) { showToast('Error deleting teacher.','error'); }
+}
+
+// PT Tracker Export / Print
+function getPTData() {
+  const ptSessions=sessions.filter(s=>s.type==='PT')
+    .sort((a,b)=>a.date.localeCompare(b.date)||a.startTime.localeCompare(b.startTime));
+  const studentSessions={};
+  ptSessions.forEach(s=>{ if(!studentSessions[s.studentName]) studentSessions[s.studentName]=[]; studentSessions[s.studentName].push(s); });
+  ptContracts.forEach(c=>{ if(!studentSessions[c.studentName]) studentSessions[c.studentName]=[]; });
+  return { studentSessions, students: Object.keys(studentSessions).sort() };
+}
+
+function exportPTCSV() {
+  const {studentSessions, students} = getPTData();
+  if (students.length===0) return showToast('No PT data to export.','error');
+  const rows=[['Student','Contract (hrs)','Date','Start','End','Duration (hrs)','Conducted','Cumul. Used (hrs)','Remaining (hrs)']];
+  students.forEach(function(student) {
+    var list=studentSessions[student];
+    var contract=ptContracts.find(function(c){return c.studentName===student;});
+    var total=contract?contract.totalHours:'';
+    var running=0;
+    if (list.length===0) {
+      rows.push([student,total,'','','','','','','']);
+    } else {
+      list.forEach(function(sess) {
+        var dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
+        var isConducted=sess.conducted!==false;
+        if (isConducted) running+=dur;
+        var rem=total!==''?total-running:'';
+        rows.push([student,total,sess.date,sess.startTime,sess.endTime,dur.toFixed(1),
+          isConducted?'Yes':'No',
+          isConducted?running.toFixed(1):'',
+          isConducted&&rem!==''?rem.toFixed(1):'']);
+      });
+    }
+  });
+  var bom='\ufeff';
+  var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"';}).join(',');}).join('\r\n');
+  var blob=new Blob([bom+csv],{type:'text/csv;charset=utf-8;'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;
+  a.download='PT_Tracker_'+(currentTeacher?currentTeacher.name:'export')+'_'+dateToStr(new Date())+'.csv';
+  a.click();
+  setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+
+function buildPrintHTML(teacherName, students, studentSessions) {
+  var td='padding:6px 10px;border:1px solid #ddd;font-size:12px;';
+  var th='padding:6px 10px;border:1px solid #ddd;font-size:12px;background:#f5f5f5;font-weight:600;text-align:left;';
+  var rows='';
+  students.forEach(function(student) {
+    var list=studentSessions[student];
+    var contract=ptContracts.find(function(c){return c.studentName===student;});
+    var total=contract?contract.totalHours:null;
+    var conducted=list.filter(function(s){return s.conducted!==false;});
+    var used=conducted.reduce(function(n,s){return n+(timeToMins(s.endTime)-timeToMins(s.startTime))/60;},0);
+    var rem=total!==null?total-used:null;
+    rows+='<div style="margin-bottom:28px;page-break-inside:avoid;">';
+    rows+='<h2 style="font-size:15px;margin-bottom:6px;">'+escHtml(student)+'</h2>';
+    rows+='<div style="font-size:12px;margin-bottom:8px;color:#555;">Contract: <strong>'+(total!==null?total+' hrs':'&mdash;')+'</strong> &nbsp;|&nbsp; ';
+    rows+='Conducted: <strong>'+used.toFixed(1)+' hrs</strong> &nbsp;|&nbsp; ';
+    rows+='Remaining: <strong>'+(rem!==null?(rem<0?Math.abs(rem).toFixed(1)+' hrs over':rem.toFixed(1)+' hrs'):'&mdash;')+'</strong></div>';
+    if (list.length===0) {
+      rows+='<p style="color:#aaa;font-size:12px;">No sessions.</p>';
+    } else {
+      rows+='<table style="width:100%;border-collapse:collapse;">';
+      rows+='<thead><tr>';
+      rows+='<th style="'+th+'">#</th><th style="'+th+'">Date</th><th style="'+th+'">Time</th>';
+      rows+='<th style="'+th+'">Duration</th><th style="'+th+'">Status</th>';
+      rows+='<th style="'+th+'">Used (cumul.)</th><th style="'+th+'">Remaining</th>';
+      rows+='</tr></thead><tbody>';
+      var running=0;
+      list.forEach(function(sess,idx) {
+        var dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
+        var ok=sess.conducted!==false;
+        if (ok) running+=dur;
+        var r=total!==null?total-running:null;
+        var rs=ok?'':'color:#aaa;';
+        rows+='<tr style="'+rs+'">';
+        rows+='<td style="'+td+'">'+(idx+1)+'</td>';
+        rows+='<td style="'+td+'">'+sess.date+'</td>';
+        rows+='<td style="'+td+'">'+formatTime(sess.startTime)+' &ndash; '+formatTime(sess.endTime)+'</td>';
+        rows+='<td style="'+td+'">'+dur.toFixed(1)+' hrs</td>';
+        rows+='<td style="'+td+'">'+(ok?'&#10003; Done':'Scheduled')+'</td>';
+        rows+='<td style="'+td+'">'+(ok?running.toFixed(1)+' hrs':'&mdash;')+'</td>';
+        rows+='<td style="'+td+'">'+(ok&&r!==null?(r<0?Math.abs(r).toFixed(1)+' over':r.toFixed(1)+' hrs'):'&mdash;')+'</td>';
+        rows+='</tr>';
+      });
+      rows+='</tbody></table>';
+    }
+    rows+='</div>';
+  });
+
+  var css='body{font-family:Arial,sans-serif;margin:32px;color:#333;}'
+    +'h1{font-size:19px;margin-bottom:4px;}'
+    +'.sub{color:#666;font-size:13px;margin-bottom:28px;}'
+    +'@media print{.no-print{display:none;}body{margin:16px;}}';
+
+  var html='<!DOCTYPE html>'
+    +'<html><head><meta charset="UTF-8">'
+    +'<title>PT Tracker - '+teacherName+'</title>'
+    +'<style>'+css+'</style>'
+    +'</head><body>'
+    +'<h1>PT Tracker &mdash; '+teacherName+'</h1>'
+    +'<div class="sub">Printed: '+new Date().toLocaleString()+'</div>'
+    +(students.length===0?'<p style="color:#aaa;">No PT data.</p>':rows)
+    +'<div class="no-print" style="margin-top:24px;text-align:right;">'
+    +'<button onclick="window.print()" style="padding:9px 20px;font-size:14px;cursor:pointer;background:#1a1a2e;color:white;border:none;border-radius:6px;">Print / Save as PDF</button>'
+    +'</div>'
+    +'</body></html>';
+  return html;
+}
+
+function printPTTracker() {
+  var d=getPTData();
+  var teacherName=currentTeacher?escHtml(currentTeacher.name)+' ('+escHtml(currentTeacher.campus)+')':'';
+  var html=buildPrintHTML(teacherName,d.students,d.studentSessions);
+  var blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var win=window.open(url,'_blank');
+  if (!win) showToast('Popup blocked. Please allow popups.','error');
+  setTimeout(function(){URL.revokeObjectURL(url);},30000);
+}
+
+// Close on outside click
+['add-session-modal','session-detail-modal','pt-mini-schedule-modal'].forEach(id => {
+  document.getElementById(id).addEventListener('click', function(e) {
+    if (e.target===this) {
+      if (id==='add-session-modal') closeAddModal();
+      else if (id==='session-detail-modal') closeDetailModal();
+      else closePTMiniSchedule();
+    }
+  });
+});
+
+initTeacherListener();
+</script>
+</body>
+</html>
