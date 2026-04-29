@@ -1128,15 +1128,15 @@ function buildPrintHTML(teacherName, students, studentSessions) {
   var html='<!DOCTYPE html>'
     +'<html><head><meta charset="UTF-8">'
     +'<title>PT Tracker - '+teacherName+'</title>'
-    +'<style>'+css+'</style>'
-    +'</head><body>'
+    +'<style>'+css+'<\/style>'
+    +'<\/head><body>'
     +'<h1>PT Tracker &mdash; '+teacherName+'</h1>'
     +'<div class="sub">Printed: '+new Date().toLocaleString()+'</div>'
     +(students.length===0?'<p style="color:#aaa;">No PT data.</p>':rows)
     +'<div class="no-print" style="margin-top:24px;text-align:right;">'
     +'<button onclick="window.print()" style="padding:9px 20px;font-size:14px;cursor:pointer;background:#1a1a2e;color:white;border:none;border-radius:6px;">Print / Save as PDF</button>'
     +'</div>'
-    +'</body></html>';
+    +'<\/body><\/html>';
   return html;
 }
 

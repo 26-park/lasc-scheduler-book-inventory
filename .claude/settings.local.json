@@ -1,7 +1,19 @@
 {
   "permissions": {
     "allow": [
-      "Bash(python3 *)"
+      "Bash(python3 *)",
+      "Bash(python -c ' *)",
+      "Bash(python *)",
+      "Bash(sed -n '1164,2524p' index.html)",
+      "Bash(node --check C:/temp/curr_script.js)",
+      "Bash(sed 's/^[-+]//')",
+      "Bash(git diff *)",
+      "Bash(sed -n '/^<script>$/,/^<\\\\/script>$/p')",
+      "Bash(sed -n '/^ <script>$/,/^ <\\\\/script>$/p' index.html)",
+      "Bash(grep -v \"^ *$\")",
+      "Bash(grep -v \"^[<>] *[{}\\(\\);,]\")",
+      "Bash(git restore *)",
+      "Bash(node -e ' *)"
     ]
   }
 }
