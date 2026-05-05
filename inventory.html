@@ -77,6 +77,15 @@
     .page-nav-tab.active { color: #1a1a2e; border-bottom-color: #1a1a2e; font-weight: 700; }
     .page-nav-tab:hover:not(.active) { color: #1a1a2e; background: #f8f8f8; }
 
+    /* ==========================================
+       ROLE-BASED ACCESS CONTROL
+       - manager-only : hidden for staff, visible for manager
+       - staff-only   : visible for staff only (add if needed)
+       To restrict a new element: add class="manager-only"
+       To add a new role level: add a new CSS rule here + class
+    ========================================== */
+    body.role-staff .manager-only { display: none !important; }
+
     /* Login overlay */
     #login-overlay { position: fixed; inset: 0; background: #f4f5f7; z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .login-card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 36px 32px; width: 360px; max-width: 95vw; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -159,7 +168,7 @@
 <nav>
   <button class="nav-tab active" onclick="switchTab('inventory')">Inventory</button>
   <button class="nav-tab" onclick="switchTab('sell')">Sell</button>
-  <button class="nav-tab" onclick="switchTab('stock')">Stock</button>
+  <button class="nav-tab manager-only" onclick="switchTab('stock')">Stock</button>
   <button class="nav-tab" onclick="switchTab('orders')">Orders</button>
   <button class="nav-tab" onclick="switchTab('history')">History</button>
   <button class="nav-tab" onclick="switchTab('books')">Books</button>
@@ -284,7 +293,7 @@
   <main>
     <div class="stock-grid">
       <!-- Stock In -->
-      <div class="stock-card">
+      <div class="stock-card manager-only">
         <h2>Stock In</h2>
         <div class="form-group">
           <label>Book</label>
@@ -313,7 +322,7 @@
       </div>
 
       <!-- Stock Out -->
-      <div class="stock-card">
+      <div class="stock-card manager-only">
         <h2>Stock Out</h2>
         <div class="info-box" style="font-size:11px;padding:5px 10px;margin-bottom:8px;">Lost, damaged, or removed — not sold.</div>
         <div class="form-group">
@@ -340,7 +349,7 @@
       </div>
 
       <!-- Transfer -->
-      <div class="stock-card">
+      <div class="stock-card manager-only">
         <h2>Transfer</h2>
         <div class="form-group">
           <label>Book</label>
@@ -377,7 +386,7 @@
 <!-- ======== ORDERS ======== -->
 <div id="view-orders" class="view">
   <main>
-    <div class="card" style="max-width:500px;">
+    <div class="card manager-only" style="max-width:500px;">
       <h2>Place Pending Order</h2>
       <div class="form-grid" style="grid-template-columns:1fr 1fr;">
         <div class="form-group" style="grid-column:1/-1;">
@@ -438,6 +447,12 @@
 <div id="view-history" class="view">
   <main>
     <div class="card" style="padding:0;overflow:hidden;">
+      <div style="padding:10px 16px;border-bottom:1px solid #e0e0e0;display:flex;gap:8px;align-items:center;">
+        <span style="font-size:12px;color:#666;font-weight:500;">Branch</span>
+        <select id="hist-branch" onchange="loadHistory()" style="font-size:12px;padding:5px 8px;">
+          <option value="LA">LA</option><option value="RH">RH</option><option value="IRV">IRV</option>
+        </select>
+      </div>
       <div style="display:flex;border-bottom:1px solid #e0e0e0;">
         <button class="nav-tab active" id="htab-sales" onclick="switchHistoryTab('sales')" style="font-size:12px;padding:10px 14px;">Sales</button>
         <button class="nav-tab" id="htab-stockin" onclick="switchHistoryTab('stockin')" style="font-size:12px;padding:10px 14px;">Stock In</button>
@@ -446,10 +461,6 @@
       </div>
       <div style="padding:12px 16px;">
         <div class="filters">
-          <select id="hist-branch" onchange="loadHistory()" style="font-size:12px;padding:5px 8px;">
-            <option value="ALL">All Branches</option>
-            <option value="LA">LA</option><option value="RH">RH</option><option value="IRV">IRV</option>
-          </select>
           <select id="hist-year" onchange="onHistYearQuarterChange()" style="font-size:12px;padding:5px 8px;">
             <option value="ALL">All Years</option>
           </select>
@@ -480,12 +491,12 @@
 <!-- ======== BOOKS ======== -->
 <div id="view-books" class="view">
   <main>
-    <div class="card" style="max-width:520px;">
+    <div class="card manager-only" style="max-width:520px;">
       <h2 id="book-form-title">Add Book</h2>
       <div class="form-grid" style="grid-template-columns:1fr 1fr;">
         <div class="form-group" style="grid-column:1/-1;">
-          <label>ISBN</label>
-          <input type="text" id="bk-isbn" placeholder="e.g. 9780123456789">
+          <label>ISBN <span style="font-weight:400;color:#aaa;">(optional)</span></label>
+          <input type="text" id="bk-isbn" placeholder="e.g. 9780123456789 — leave blank if none">
         </div>
         <div class="form-group" style="grid-column:1/-1;">
           <label>Title</label>
@@ -1321,7 +1332,7 @@ async function loadHistory() {
   const coll = collMap[currentHistTab];
 
   const dateField = currentHistTab === 'sales' ? 'soldAt' : 'createdAt';
-  const snap = await db.collection(coll).orderBy(dateField, 'desc').limit(500).get();
+  const snap = await db.collection(coll).orderBy(dateField, 'desc').limit(2000).get();
   let rows = snap.docs.map(d => d.data());
 
   if (branch !== 'ALL') {
@@ -1355,11 +1366,11 @@ function renderHistoryTable(rows) {
 
     const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
     const totalRev = rows.reduce((s,r) => s + Number(r.totalPaid||0), 0);
-    const txnCount = new Set(rows.map(r => r.txnId || r.id)).size;
+    const totalDiscount = rows.reduce((s,r) => s + Number(r.sellingPrice||0), 0) - totalRev;
     summEl.innerHTML = `
-      <div class="summary-card"><div class="label">Transactions</div><div class="value">${txnCount}</div></div>
-      <div class="summary-card"><div class="label">Books Sold</div><div class="value">${totalQty}</div></div>
-      <div class="summary-card"><div class="label">Revenue</div><div class="value">${fmtMoney(totalRev)}</div></div>`;
+      <div class="summary-card"><div class="label">Count</div><div class="value">${totalQty}</div></div>
+      <div class="summary-card"><div class="label">Revenue</div><div class="value">${fmtMoney(totalRev)}</div></div>
+      <div class="summary-card"><div class="label">Discount</div><div class="value">${fmtMoney(totalDiscount)}</div></div>`;
     summEl.style.display = 'flex';
 
     const txnGroups = {};
@@ -1452,29 +1463,39 @@ function renderHistoryTable(rows) {
 // ==========================================
 // BOOKS CATALOG
 // ==========================================
+function isAutoIsbn(isbn) {
+  return !isbn || isbn.startsWith('NA-');
+}
+
+function displayIsbn(isbn) {
+  return isAutoIsbn(isbn) ? '—' : isbn;
+}
+
 function renderBooks() {
   const search = (document.getElementById('bk-search').value || '').toLowerCase();
-  let rows = books.filter(b => !search || b.title.toLowerCase().includes(search) || b.isbn.includes(search));
+  let rows = books.filter(b => !search ||
+    b.title.toLowerCase().includes(search) ||
+    (!isAutoIsbn(b.isbn) && b.isbn.includes(search)));
 
   document.getElementById('books-tbody').innerHTML = rows.length ? rows.map(b => `<tr>
-    <td style="font-size:11px;color:#888;">${esc(b.isbn)}</td>
+    <td style="font-size:11px;color:#888;">${displayIsbn(b.isbn)}</td>
     <td>${esc(b.title)}</td>
     <td style="text-align:right;">${fmtMoney(b.costPrice)}</td>
     <td style="text-align:right;">${fmtMoney(b.sellingPrice)}</td>
     <td>
       <div style="display:flex;gap:4px;">
-        <button class="btn btn-secondary btn-sm" onclick="editBook('${esc(b.isbn)}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="deleteBook('${esc(b.isbn)}')">Delete</button>
+        <button class="btn btn-secondary btn-sm manager-only" onclick="editBook('${esc(b.id)}')">Edit</button>
+        <button class="btn btn-danger btn-sm manager-only" onclick="deleteBook('${esc(b.id)}')">Delete</button>
       </div>
     </td>
   </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No books.</td></tr>';
 }
 
-function editBook(isbn) {
-  const b = books.find(x => x.isbn === isbn);
+function editBook(docId) {
+  const b = books.find(x => x.id === docId);
   if (!b) return;
-  editingBookIsbn = isbn;
-  document.getElementById('bk-isbn').value = b.isbn;
+  editingBookIsbn = b.isbn;
+  document.getElementById('bk-isbn').value = isAutoIsbn(b.isbn) ? '' : b.isbn;
   document.getElementById('bk-title').value = b.title;
   document.getElementById('bk-cost').value = b.costPrice || 0;
   document.getElementById('bk-sell').value = b.sellingPrice || 0;
@@ -1494,25 +1515,35 @@ function cancelBookEdit() {
 }
 
 async function saveBook() {
-  const isbn = document.getElementById('bk-isbn').value.trim();
+  const isbnInput = document.getElementById('bk-isbn').value.trim();
   const title = document.getElementById('bk-title').value.trim();
   const costPrice = parseFloat(document.getElementById('bk-cost').value) || 0;
   const sellingPrice = parseFloat(document.getElementById('bk-sell').value) || 0;
 
-  if (!isbn || !title) { showToast('ISBN and title are required.', 'error'); return; }
+  if (!title) { showToast('Title is required.', 'error'); return; }
 
   try {
     if (editingBookIsbn) {
       const b = books.find(x => x.isbn === editingBookIsbn);
       if (!b) return;
-      await db.collection('books').doc(b.id).update({ isbn, title, costPrice, sellingPrice });
-      Object.assign(b, { isbn, title, costPrice, sellingPrice });
+      const newIsbn = isbnInput || b.isbn;
+      if (isbnInput && isbnInput !== editingBookIsbn && books.some(x => x.isbn === isbnInput)) {
+        showToast('ISBN already exists.', 'error'); return;
+      }
+      await db.collection('books').doc(b.id).update({ isbn: newIsbn, title, costPrice, sellingPrice });
+      Object.assign(b, { isbn: newIsbn, title, costPrice, sellingPrice });
       showToast('Book updated.', 'ok');
     } else {
-      if (books.some(b => b.isbn === isbn)) { showToast('ISBN already exists.', 'error'); return; }
-      const ref = await db.collection('books').add({ isbn, title, costPrice, sellingPrice });
+      if (isbnInput && books.some(b => b.isbn === isbnInput)) {
+        showToast('ISBN already exists.', 'error'); return;
+      }
+      const ref = await db.collection('books').add({
+        isbn: isbnInput || '__pending__', title, costPrice, sellingPrice
+      });
+      const isbn = isbnInput || 'NA-' + ref.id.substring(0, 8);
+      if (!isbnInput) await ref.update({ isbn });
       books.push({ id: ref.id, isbn, title, costPrice, sellingPrice });
-      books.sort((a,b) => a.title.localeCompare(b.title));
+      books.sort((a, b) => a.title.localeCompare(b.title));
       showToast('Book added!', 'ok');
     }
     cancelBookEdit();
@@ -1525,12 +1556,12 @@ async function saveBook() {
   }
 }
 
-async function deleteBook(isbn) {
-  if (!confirm(`Delete book "${isbn}"? This does not remove inventory records.`)) return;
-  const b = books.find(x => x.isbn === isbn);
+async function deleteBook(docId) {
+  const b = books.find(x => x.id === docId);
   if (!b) return;
-  await db.collection('books').doc(b.id).delete();
-  books = books.filter(x => x.isbn !== isbn);
+  if (!confirm(`Delete "${b.title}"? This does not remove inventory records.`)) return;
+  await db.collection('books').doc(docId).delete();
+  books = books.filter(x => x.id !== docId);
   renderBooks();
   populateBookSelects();
   if (currentTab === 'inventory') renderInventory();
@@ -1609,6 +1640,7 @@ firebase.auth().onAuthStateChanged(async user => {
     } catch(e) {
       currentRole = 'staff';
     }
+    document.body.classList.add('role-' + currentRole);
     document.getElementById('user-email-display').textContent = user.email;
     const badge = document.getElementById('role-badge');
     badge.textContent = currentRole;

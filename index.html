@@ -141,6 +141,15 @@
     .page-nav-tab.active { color: #1a1a2e; border-bottom-color: #1a1a2e; font-weight: 700; }
     .page-nav-tab:hover:not(.active) { color: #1a1a2e; background: #f8f8f8; }
 
+    /* ==========================================
+       ROLE-BASED ACCESS CONTROL
+       - manager-only : hidden for staff, visible for manager
+       - staff-only   : visible for staff only (add if needed)
+       To restrict a new element: add class="manager-only"
+       To add a new role level: add a new CSS rule here + class
+    ========================================== */
+    body.role-staff .manager-only { display: none !important; }
+
     /* Login overlay */
     #login-overlay { position: fixed; inset: 0; background: #f4f5f7; z-index: 1000; display: flex; align-items: center; justify-content: center; }
     .login-card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 36px 32px; width: 360px; max-width: 95vw; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
@@ -197,7 +206,7 @@
     <div class="card">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <h2 style="margin:0;">Teachers</h2>
-        <button class="btn btn-primary btn-sm" onclick="openAddTeacherModal()">+ Add Teacher</button>
+        <button class="btn btn-primary btn-sm manager-only" onclick="openAddTeacherModal()">+ Add Teacher</button>
       </div>
       <div id="teacher-list"><div class="empty-state">Loading…</div></div>
     </div>
@@ -223,7 +232,7 @@
             </div>
             <button class="btn btn-secondary btn-sm" onclick="goToToday()">Today</button>
           </div>
-          <button class="btn btn-primary btn-sm" onclick="openAddModal()">+ Add Session</button>
+          <button class="btn btn-primary btn-sm manager-only" onclick="openAddModal()">+ Add Session</button>
         </div>
       </div>
       <div class="legend">
@@ -241,7 +250,7 @@
 
   <div id="dtab-pt" class="detail-tab-content">
     <main>
-      <div class="card" style="max-width:540px;">
+      <div class="card manager-only" style="max-width:540px;">
         <h2>Set PT Contract</h2>
         <div class="form-grid">
           <div class="form-group"><label>Student Name</label><input type="text" id="pt-student" placeholder="Student name"></div>
@@ -317,7 +326,7 @@
     <div class="warnings" id="session-warnings"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closeAddModal()">Cancel</button>
-      <button class="btn btn-primary btn-sm" onclick="addSession()">Add</button>
+      <button class="btn btn-primary btn-sm manager-only" onclick="addSession()">Add</button>
     </div>
   </div>
 </div>
@@ -351,7 +360,7 @@
     <div style="overflow-x:auto;border:1px solid #e0e0e0;border-radius:8px;">
       <div id="pt-mini-grid" class="mini-schedule-grid"></div>
     </div>
-    <div id="pt-mini-manual-form" style="margin-top:16px;padding-top:14px;border-top:1px solid #f0f0f0;">
+    <div id="pt-mini-manual-form" class="manager-only" style="margin-top:16px;padding-top:14px;border-top:1px solid #f0f0f0;">
       <div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">직접 날짜 입력</div>
       <div class="form-grid" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-bottom:8px;">
         <div class="form-group"><label>Date</label><input type="date" id="pt-mini-date"></div>
@@ -360,7 +369,7 @@
         <div class="form-group"><label>Notes</label><input type="text" id="pt-mini-notes" placeholder="Optional"></div>
       </div>
       <div id="pt-mini-warnings" class="warnings"></div>
-      <button class="btn btn-primary btn-sm" onclick="addPTFromMini()">+ Add PT Session</button>
+      <button class="btn btn-primary btn-sm manager-only" onclick="addPTFromMini()">+ Add PT Session</button>
     </div>
   </div>
 </div>
@@ -594,6 +603,7 @@ function renderSchedule() {
 
 // Add Session Modal
 function openAddModal() {
+  if (currentRole !== 'manager') return;
   const today=new Date(), todayStr=dateToStr(today);
   const todayDay=DAYS[((today.getDay()+6)%7)];
   document.getElementById('sess-type').value='Regular';
@@ -738,6 +748,7 @@ function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null
 }
 
 async function addSession() {
+  if (currentRole !== 'manager') return;
   const type=document.getElementById('sess-type').value;
   const notes=document.getElementById('sess-notes').value.trim();
 
@@ -826,6 +837,7 @@ async function deleteSession() {
 
 // PT Tracker
 async function savePTContract() {
+  if (currentRole !== 'manager') return;
   const student=document.getElementById('pt-student').value.trim();
   const hours=parseFloat(document.getElementById('pt-hours').value);
   if (!student||isNaN(hours)||hours<0) return showToast('Please enter student name and contract hours.','error');
@@ -990,6 +1002,7 @@ function ptMiniGridClick(e,dateStr,bodyEl) {
 }
 
 async function addPTFromMini() {
+  if (currentRole !== 'manager') return;
   const date=document.getElementById('pt-mini-date').value;
   const start=document.getElementById('pt-mini-start').value;
   const end=document.getElementById('pt-mini-end').value;
@@ -1032,7 +1045,7 @@ function renderTeacherList() {
             <div class="teacher-card-info" data-teacher-id="${t.id}" onclick="openTeacherDetailById(this.dataset.teacherId)">
               <div class="teacher-card-name">${escHtml(t.name)}</div>
             </div>
-            <div class="teacher-card-actions">
+            <div class="teacher-card-actions manager-only">
               <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editTeacher('${t.id}')">Edit</button>
               <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeTeacher('${t.id}')">Del</button>
             </div>
@@ -1047,6 +1060,7 @@ function openTeacherDetailById(id) {
 }
 
 function openAddTeacherModal() {
+  if (currentRole !== 'manager') return;
   editingTeacherId=null;
   document.getElementById('teacher-name').value='';
   document.getElementById('teacher-campus').value='IRV';
@@ -1245,6 +1259,8 @@ function doSignOut() {
   firebase.auth().signOut();
 }
 
+let currentRole = null;
+
 firebase.auth().onAuthStateChanged(async user => {
   if (user && user.email.endsWith('@lascusa.com')) {
     let role = 'staff';
@@ -1256,6 +1272,8 @@ firebase.auth().onAuthStateChanged(async user => {
         await db.collection('users').doc(user.email).set({ email: user.email, role: 'staff' });
       }
     } catch(e) {}
+    currentRole = role;
+    document.body.classList.add('role-' + role);
     document.getElementById('user-email-display').textContent = user.email;
     const badge = document.getElementById('role-badge');
     badge.textContent = role;

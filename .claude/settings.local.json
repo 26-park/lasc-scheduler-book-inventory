@@ -16,7 +16,8 @@
       "Bash(node -e ' *)",
       "Bash(git *)",
       "Bash(npm install *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(firebase deploy *)"
     ]
   }
 }
