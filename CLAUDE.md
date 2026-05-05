@@ -1,32 +1,43 @@
 # LASC Scheduler
 
-Teacher scheduling web app for LASC language school.
+Web app for LASC language school (lascusa.com) — teacher scheduling and book inventory management.
 
 ## Stack
 
 - **Frontend**: Vanilla HTML, CSS, JavaScript (no frameworks)
 - **Backend/DB**: Firebase Firestore
-- **Hosting**: Firebase Hosting (assumed)
+- **Hosting**: Firebase Hosting
 
-## Project Overview
+## Pages
 
-A web application for managing teacher schedules at LASC (Language Arts and Studies Center / lascusa.com). Handles scheduling, assignment, and visibility of teacher sessions/classes.
+- **`index.html`** — Scheduler: teacher list, per-teacher schedule (weekly grid), PT session tracker, contracts
+- **`inventory.html`** — Book Inventory: stock management, sell, stock-in/out, orders, transfer between branches (LA / RH / IRV)
+
+Both pages share a top navigation bar (Scheduler | Inventory tabs) and the same LASC logo.
 
 ## Key Conventions
 
 - No build tools, bundlers, or transpilers — plain `.html`, `.css`, `.js` files
-- Firebase SDK loaded via CDN or module imports
-- Firestore used as the primary data store
-- Keep JS modular across files but without a module bundler (use ES modules or script tags)
+- Firebase SDK loaded via CDN module imports inside each HTML file
+- Firestore is the primary data store — all reads/writes go through the Firestore SDK
+- No shared JS files; each page is self-contained
 
 ## Firebase
 
-- Firestore is the database — all reads/writes go through the Firestore SDK
-- Auth may be Firebase Auth (check `firebase-config.js` or equivalent)
-- Security rules live in `firestore.rules`
+- Project config is inlined in each HTML file (firebase config object)
+- Auth: not currently implemented
+- Security rules: `firestore.rules`
 
 ## Development
 
-Open `index.html` directly in a browser or serve via `firebase serve` / `firebase emulators:start`.
+Open `index.html` or `inventory.html` directly in a browser, or serve via:
 
-To deploy: `firebase deploy`
+```
+firebase emulators:start
+```
+
+To deploy:
+
+```
+firebase deploy
+```

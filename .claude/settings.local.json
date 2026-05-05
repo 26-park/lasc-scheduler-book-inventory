@@ -13,7 +13,10 @@
       "Bash(grep -v \"^ *$\")",
       "Bash(grep -v \"^[<>] *[{}\\(\\);,]\")",
       "Bash(git restore *)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(git *)",
+      "Bash(npm install *)",
+      "Bash(node *)"
     ]
   }
 }
