@@ -1,0 +1,54 @@
+/* Shared styles — index.html and inventory.html */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f4f5f7; color: #333; font-size: 14px; }
+.view { display: none; } .view.active { display: block; }
+.card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 16px; margin-bottom: 14px; }
+.card h2 { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
+.form-group label { display: block; font-size: 11px; font-weight: 600; color: #666; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.4px; }
+.form-group input, .form-group select, .form-group textarea { width: 100%; padding: 7px 10px; border: 1px solid #d0d0d0; border-radius: 5px; font-size: 13px; font-family: inherit; background: white; }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #1a1a2e; }
+.btn { padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit; }
+.btn-primary { background: #1a1a2e; color: white; } .btn-primary:hover { background: #2e2e50; }
+.btn-secondary { background: #f0f0f0; color: #333; } .btn-secondary:hover { background: #e4e4e4; }
+.btn-danger { background: #dc2626; color: white; } .btn-danger:hover { background: #b91c1c; }
+.btn-sm { padding: 4px 10px; font-size: 12px; }
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: white; border-radius: 10px; padding: 22px; max-width: 96vw; max-height: 90vh; overflow-y: auto; }
+.modal h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+.toast { position: fixed; bottom: 20px; right: 20px; background: #1a1a2e; color: white; padding: 10px 18px; border-radius: 7px; font-size: 13px; z-index: 400; transform: translateY(80px); opacity: 0; transition: all 0.25s; pointer-events: none; }
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.error { background: #dc2626; } .toast.ok { background: #16a34a; }
+.empty-state { text-align: center; padding: 36px; color: #aaa; font-size: 13px; }
+#logo-img:hover { opacity: 0.85; }
+.page-nav { background: white; border-bottom: 2px solid #e0e0e0; padding: 0 20px; display: flex; }
+.page-nav-tab { background: none; border: none; border-bottom: 3px solid transparent; margin-bottom: -2px; padding: 11px 20px; cursor: pointer; font-size: 13px; font-weight: 500; color: #666; font-family: inherit; text-decoration: none; display: inline-flex; align-items: center; }
+.page-nav-tab.active { color: #1a1a2e; border-bottom-color: #1a1a2e; font-weight: 700; }
+.page-nav-tab:hover:not(.active) { color: #1a1a2e; background: #f8f8f8; }
+
+/* ==========================================
+   ROLE-BASED ACCESS CONTROL
+   - manager-only : hidden for staff, visible for manager
+   - staff-only   : visible for staff only (add if needed)
+   To restrict a new element: add class="manager-only"
+   To add a new role level: add a new CSS rule here + class
+========================================== */
+body.role-staff .manager-only { display: none !important; }
+
+/* Login overlay */
+#login-overlay { position: fixed; inset: 0; background: #f4f5f7; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+.login-card { background: white; border: 1px solid #e0e0e0; border-radius: 12px; padding: 36px 32px; width: 360px; max-width: 95vw; text-align: center; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+.login-card h2 { font-size: 16px; font-weight: 600; margin-bottom: 8px; color: #1a1a2e; }
+.btn-google { display: flex; align-items: center; justify-content: center; width: 100%; padding: 10px 16px; background: white; border: 1px solid #d0d0d0; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; color: #333; transition: background 0.15s; }
+.btn-google:hover { background: #f8f8f8; border-color: #bbb; }
+.btn-google:disabled { opacity: 0.6; cursor: not-allowed; }
+
+/* User info in header */
+.user-info { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+.role-badge { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+.role-badge.manager { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.role-badge.staff { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+.user-email { font-size: 12px; color: #666; }
+.btn-signout { font-size: 12px; padding: 4px 10px; background: #f0f0f0; border: 1px solid #d0d0d0; border-radius: 5px; cursor: pointer; font-family: inherit; color: #333; }
+.btn-signout:hover { background: #e4e4e4; }
