@@ -23,9 +23,12 @@ service cloud.firestore {
     // Only managers can update roles or delete users.
     match /users/{email} {
       allow read: if isLASCUser();
-      allow create: if isLASCUser()
-                 && email == request.auth.token.email
-                 && request.resource.data.role == 'staff';
+      // Self-create on first login: role must be 'staff' (prevents self-promotion)
+      // Manager can pre-create any user doc with any role
+      allow create: if isLASCUser() && (
+        (email == request.auth.token.email && request.resource.data.role == 'staff')
+        || isManager()
+      );
       allow update, delete: if isManager();
     }
 
