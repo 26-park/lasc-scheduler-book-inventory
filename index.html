@@ -349,6 +349,7 @@
 
 <div class="toast" id="toast"></div>
 
+<script src="utils.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
@@ -394,15 +395,6 @@ function formatTime(t) {
   const ap = h>=12?'pm':'am'; const hr = h%12||12;
   return m===0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2,'0')}${ap}`;
 }
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-function showToast(msg, type='') {
-  const el = document.getElementById('toast');
-  el.textContent = msg; el.className = 'toast show' + (type?' '+type:'');
-  clearTimeout(el._t); el._t = setTimeout(()=>{ el.className='toast'; }, 2800);
-}
-
 // Overlap detection
 function getOverlaps(date, startTime, endTime, excludeId=null) {
   const s = timeToMins(startTime), e = timeToMins(endTime);
