@@ -89,7 +89,16 @@
     .pt-table td { padding: 7px 12px; border-bottom: 1px solid #f2f2f2; vertical-align: middle; }
     .pt-table tr:last-child td { border-bottom: none; }
     .pt-table tr.pending-row td { color: #9ca3af; }
+    .pt-table tr.missed-row td { color: #9ca3af; }
     .progress-bar { height: 7px; background: #e5e7eb; border-radius: 4px; min-width: 90px; overflow: hidden; }
+    .status-badge { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;white-space:nowrap;vertical-align:middle; }
+    .status-done { background:#dcfce7;color:#15803d; }
+    .status-missed { background:#fff7ed;color:#c2410c; }
+    .status-scheduled { background:#f3f4f6;color:#6b7280; }
+    .not-held-btn { background:#fff7ed;color:#c2410c;border:1px solid #fed7aa; }
+    .not-held-btn:hover { background:#ffedd5; }
+    .miss-reason-text { font-size:11px;color:#c2410c;display:block;margin-top:3px; }
+    body.role-manager .staff-only { display:none!important; }
     .progress-fill { height: 100%; border-radius: 4px; background: #22c55e; }
     .progress-fill.warn { background: #f59e0b; } .progress-fill.over { background: #ef4444; }
     .hours-over { color: #dc2626; font-weight: 600; }
@@ -343,6 +352,32 @@
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closeTeacherModal()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveTeacher()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- PT Not Held Modal -->
+<div class="modal-overlay" id="pt-miss-modal">
+  <div class="modal" style="width:360px;">
+    <h3>Mark as Not Held</h3>
+    <div class="form-group" style="margin-bottom:10px;">
+      <label>Reason</label>
+      <select id="pt-miss-preset" onchange="onMissReasonPreset()">
+        <option value="">Select a reason…</option>
+        <option value="Student no-show">Student no-show</option>
+        <option value="Teacher absent">Teacher absent</option>
+        <option value="Holiday / school closed">Holiday / school closed</option>
+        <option value="Rescheduled">Rescheduled</option>
+        <option value="Other">Other…</option>
+      </select>
+    </div>
+    <div class="form-group" id="pt-miss-custom-group" style="display:none;margin-bottom:10px;">
+      <label>Custom reason</label>
+      <input type="text" id="pt-miss-custom" placeholder="Enter reason…">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closePTMissModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="savePTMissed()">Save</button>
     </div>
   </div>
 </div>
@@ -781,9 +816,49 @@ async function savePTContract() {
 }
 
 async function togglePTConducted(sessionId, currentValue) {
+  if (currentRole !== 'manager') return;
   try {
-    await db.collection('sessions').doc(sessionId).update({conducted:!currentValue});
-    showToast(!currentValue?'✓ Marked as done!':'Unmarked.','ok');
+    if (currentValue) {
+      await db.collection('sessions').doc(sessionId).update({conducted:false, missedReason:firebase.firestore.FieldValue.delete()});
+      showToast('Unmarked.','ok');
+    } else {
+      await db.collection('sessions').doc(sessionId).update({conducted:true, missedReason:firebase.firestore.FieldValue.delete()});
+      showToast('✓ Marked as done!','ok');
+    }
+  } catch(e) { showToast('Error updating session.','error'); }
+}
+
+let ptMissTargetId = null;
+function openPTMissModal(sessionId) {
+  if (currentRole !== 'manager') return;
+  ptMissTargetId = sessionId;
+  const sess = sessions.find(s => s.id === sessionId);
+  const existing = sess && sess.missedReason ? sess.missedReason : '';
+  const presets = ['Student no-show','Teacher absent','Holiday / school closed','Rescheduled'];
+  const isPreset = presets.includes(existing);
+  document.getElementById('pt-miss-preset').value = existing && !isPreset ? 'Other' : existing;
+  document.getElementById('pt-miss-custom').value = existing && !isPreset ? existing : '';
+  document.getElementById('pt-miss-custom-group').style.display = (existing && !isPreset) ? 'block' : 'none';
+  document.getElementById('pt-miss-modal').classList.add('open');
+}
+function closePTMissModal() {
+  document.getElementById('pt-miss-modal').classList.remove('open');
+  ptMissTargetId = null;
+}
+function onMissReasonPreset() {
+  const val = document.getElementById('pt-miss-preset').value;
+  document.getElementById('pt-miss-custom-group').style.display = val === 'Other' ? 'block' : 'none';
+}
+async function savePTMissed() {
+  if (!ptMissTargetId) return;
+  const preset = document.getElementById('pt-miss-preset').value;
+  const custom = document.getElementById('pt-miss-custom').value.trim();
+  const reason = preset === 'Other' ? custom : preset;
+  if (!reason) { showToast('Please select a reason.','error'); return; }
+  try {
+    await db.collection('sessions').doc(ptMissTargetId).update({conducted:false, missedReason:reason});
+    showToast('Marked as not held.','ok');
+    closePTMissModal();
   } catch(e) { showToast('Error updating session.','error'); }
 }
 
@@ -836,22 +911,35 @@ function renderPTTracker() {
       list.forEach((sess,idx) => {
         const dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
         const isConducted=sess.conducted!==false;
+        const isMissed=sess.conducted===false&&!!sess.missedReason;
         if (isConducted) running+=dur;
         const rem=total!==null?total-running:null;
         const remCell=rem===null?'<span style="color:#bbb">—</span>'
           :rem<0?`<span class="hours-over">${Math.abs(rem).toFixed(1)} over</span>`:`${rem.toFixed(1)} hrs`;
-        html+=`<tr class="${isConducted?'':'pending-row'}">
+        const rowCls=isConducted?'':isMissed?'missed-row':'pending-row';
+        let statusCell;
+        if (isConducted) {
+          statusCell=`<span class="status-badge status-done">✓ Done</span>
+            <button class="btn btn-sm manager-only" style="margin-left:5px;background:#f3f4f6;color:#555;font-size:11px;padding:2px 7px;" onclick="togglePTConducted('${sess.id}',true)">Undo</button>`;
+        } else if (isMissed) {
+          statusCell=`<span class="status-badge status-missed">✗ Not held</span>
+            <span class="miss-reason-text">${escHtml(sess.missedReason)}</span>
+            <button class="btn btn-sm manager-only not-held-btn" style="margin-top:4px;font-size:11px;padding:2px 7px;" onclick="openPTMissModal('${sess.id}')">Edit</button>`;
+        } else {
+          statusCell=`<span class="manager-only" style="display:inline-flex;gap:4px;">
+              <button class="btn btn-mark btn-sm" onclick="togglePTConducted('${sess.id}',false)">✓ Done</button>
+              <button class="btn btn-sm not-held-btn" onclick="openPTMissModal('${sess.id}')">✗ Not held</button>
+            </span>
+            <span class="staff-only status-badge status-scheduled">Scheduled</span>`;
+        }
+        html+=`<tr class="${rowCls}">
           <td style="color:#aaa;">${idx+1}</td>
           <td>${sess.date}</td>
           <td>${formatTime(sess.startTime)} – ${formatTime(sess.endTime)}</td>
           <td>${dur.toFixed(1)} hrs</td>
-          <td>
-            ${isConducted
-              ?`<button class="btn btn-done btn-sm" onclick="togglePTConducted('${sess.id}',true)">✓ Done</button>`
-              :`<button class="btn btn-mark btn-sm" onclick="togglePTConducted('${sess.id}',false)">Mark Done</button>`}
-          </td>
+          <td>${statusCell}</td>
           <td>${isConducted?running.toFixed(1)+' hrs':'<span style="color:#bbb">—</span>'}</td>
-          <td>${isConducted?remCell:'<span style="color:#bbb">pending</span>'}</td>
+          <td>${isConducted?remCell:'<span style="color:#bbb">—</span>'}</td>
         </tr>`;
       });
       html+=`</tbody></table>`;
@@ -1037,22 +1125,25 @@ function getPTData() {
 function exportPTCSV() {
   const {studentSessions, students} = getPTData();
   if (students.length===0) return showToast('No PT data to export.','error');
-  const rows=[['Student','Contract (hrs)','Date','Start','End','Duration (hrs)','Conducted','Cumul. Used (hrs)','Remaining (hrs)']];
+  const rows=[['Student','Contract (hrs)','Date','Start','End','Duration (hrs)','Status','Note','Cumul. Used (hrs)','Remaining (hrs)']];
   students.forEach(function(student) {
     var list=studentSessions[student];
     var contract=ptContracts.find(function(c){return c.studentName===student;});
     var total=contract?contract.totalHours:'';
     var running=0;
     if (list.length===0) {
-      rows.push([student,total,'','','','','','','']);
+      rows.push([student,total,'','','','','','','','']);
     } else {
       list.forEach(function(sess) {
         var dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
         var isConducted=sess.conducted!==false;
+        var isMissed=sess.conducted===false&&!!sess.missedReason;
         if (isConducted) running+=dur;
         var rem=total!==''?total-running:'';
+        var status=isConducted?'Done':isMissed?'Not held':'Scheduled';
         rows.push([student,total,sess.date,sess.startTime,sess.endTime,dur.toFixed(1),
-          isConducted?'Yes':'No',
+          status,
+          isMissed?(sess.missedReason||''):'',
           isConducted?running.toFixed(1):'',
           isConducted&&rem!==''?rem.toFixed(1):'']);
       });
@@ -1098,15 +1189,17 @@ function buildPrintHTML(teacherName, students, studentSessions) {
       list.forEach(function(sess,idx) {
         var dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
         var ok=sess.conducted!==false;
+        var missed=sess.conducted===false&&!!sess.missedReason;
         if (ok) running+=dur;
         var r=total!==null?total-running:null;
         var rs=ok?'':'color:#aaa;';
+        var statusText=ok?'&#10003; Done':missed?('&#10007; Not held: '+escHtml(sess.missedReason)):'Scheduled';
         rows+='<tr style="'+rs+'">';
         rows+='<td style="'+td+'">'+(idx+1)+'</td>';
         rows+='<td style="'+td+'">'+sess.date+'</td>';
         rows+='<td style="'+td+'">'+formatTime(sess.startTime)+' &ndash; '+formatTime(sess.endTime)+'</td>';
         rows+='<td style="'+td+'">'+dur.toFixed(1)+' hrs</td>';
-        rows+='<td style="'+td+'">'+(ok?'&#10003; Done':'Scheduled')+'</td>';
+        rows+='<td style="'+td+'">'+statusText+'</td>';
         rows+='<td style="'+td+'">'+(ok?running.toFixed(1)+' hrs':'&mdash;')+'</td>';
         rows+='<td style="'+td+'">'+(ok&&r!==null?(r<0?Math.abs(r).toFixed(1)+' over':r.toFixed(1)+' hrs'):'&mdash;')+'</td>';
         rows+='</tr>';
@@ -1148,12 +1241,13 @@ function printPTTracker() {
 }
 
 // Close on outside click
-['add-session-modal','session-detail-modal','pt-mini-schedule-modal','teacher-modal'].forEach(id => {
+['add-session-modal','session-detail-modal','pt-mini-schedule-modal','teacher-modal','pt-miss-modal'].forEach(id => {
   document.getElementById(id).addEventListener('click', function(e) {
     if (e.target===this) {
       if (id==='add-session-modal') closeAddModal();
       else if (id==='session-detail-modal') closeDetailModal();
       else if (id==='teacher-modal') closeTeacherModal();
+      else if (id==='pt-miss-modal') closePTMissModal();
       else closePTMiniSchedule();
     }
   });
