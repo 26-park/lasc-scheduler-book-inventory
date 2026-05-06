@@ -530,18 +530,8 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="firebase-init.js"></script>
 <script>
-const firebaseConfig = {
-  apiKey: "AIzaSyBhGm70nO96hXjKaWVD6Yo1KkLUsoQVWk8",
-  authDomain: "lasc-scheduler.firebaseapp.com",
-  projectId: "lasc-scheduler",
-  storageBucket: "lasc-scheduler.firebasestorage.app",
-  messagingSenderId: "1024791105352",
-  appId: "1:1024791105352:web:a5e1dd6a9421994f98ad7d"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-
 const BRANCHES = ['LA', 'RH', 'IRV'];
 const BRANCH_FULL = { LA: 'LA', RH: 'Rowland Heights', IRV: 'Irvine' };
 const QUARTERS = ['Winter', 'Spring', 'Summer', 'Fall'];
