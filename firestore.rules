@@ -45,6 +45,10 @@ service cloud.firestore {
       allow read: if isLASCUser();
       allow write: if isManager();
     }
+    match /school_events/{doc} {
+      allow read: if isLASCUser();
+      allow write: if isManager();
+    }
 
     // Book catalog — manager writes only
     match /books/{doc} {

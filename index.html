@@ -123,6 +123,41 @@
     .mini-session-blk.student { background: #f0fdf4; color: #15803d; border-left-color: #22c55e; font-weight: 600; }
     .mini-session-blk.student.pending { background: #f9fafb; color: #9ca3af; border-left-color: #d1d5db; }
     .mini-session-blk.other   { background: #f3f4f6; color: #9ca3af; border-left-color: #d1d5db; }
+
+    /* Holiday / event banners in schedule grid */
+    .day-holiday-banner { position:absolute;top:0;left:0;right:0;bottom:0;display:flex;align-items:flex-start;justify-content:center;padding-top:3px;font-size:10px;font-weight:600;z-index:0;pointer-events:none; }
+    .day-holiday-banner.us-holiday { background:rgba(254,226,226,0.45);color:#dc2626; }
+    .day-holiday-banner.school-event { background:rgba(224,242,254,0.45);color:#0369a1; }
+    .day-holiday-banner.school-anniversary { background:rgba(254,249,195,0.45);color:#854d0e; }
+
+    /* Hours tab */
+    .hours-period { display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;align-items:center; }
+    .hours-period-btn { padding:5px 14px;border:1px solid #d0d0d0;background:white;border-radius:5px;cursor:pointer;font-size:13px;font-family:inherit; }
+    .hours-period-btn.active { background:#1a1a2e;color:white;border-color:#1a1a2e; }
+    .hours-period-btn:hover:not(.active) { background:#f5f5f5; }
+    .hours-table { width:100%;border-collapse:collapse;font-size:13px;margin-bottom:16px; }
+    .hours-table th { background:#fafafa;padding:8px 12px;text-align:left;border-bottom:2px solid #e0e0e0;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:0.4px;color:#555; }
+    .hours-table td { padding:7px 12px;border-bottom:1px solid #f2f2f2; }
+    .hours-table tr:last-child td { border-bottom:none; }
+    .hours-total-row td { font-weight:700;background:#f8f8f8;border-top:2px solid #e0e0e0;border-bottom:none!important; }
+    .hours-section-title { font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid #e8e8e8; }
+    .hours-grand-total { margin-top:16px;padding:14px 18px;background:#1a1a2e;color:white;border-radius:8px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px; }
+
+    /* School calendar modal */
+    .cal-event-item { display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f0f0f0;font-size:13px; }
+    .cal-event-item:last-child { border-bottom:none; }
+    .cal-event-date { width:92px;color:#888;flex-shrink:0;font-size:12px; }
+    .cal-event-name { flex:1;font-weight:500; }
+    .cal-type-badge { font-size:10px;padding:2px 7px;border-radius:8px;font-weight:600;flex-shrink:0; }
+    .cal-type-us    { background:#fee2e2;color:#dc2626; }
+    .cal-type-event { background:#e0f2fe;color:#0369a1; }
+    .cal-type-anniversary { background:#fef9c3;color:#854d0e; }
+    .cal-type-holiday { background:#fee2e2;color:#dc2626; }
+
+    /* Session action section in detail modal */
+    .session-action-group { margin-top:10px; }
+    .session-action-group-label { font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px; }
+    .session-action-btns { display:flex;gap:6px;flex-wrap:wrap; }
   </style>
 </head>
 <body>
@@ -158,17 +193,49 @@
 </nav>
 <div id="teacher-context-bar"><span id="header-teacher-name"></span></div>
 
-<!-- VIEW 1: Teacher List -->
+<!-- VIEW 1: Teacher List / Hours Overview -->
 <div id="view-home" class="view active">
-  <main>
-    <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <h2 style="margin:0;">Teachers</h2>
-        <button class="btn btn-primary btn-sm manager-only" onclick="openAddTeacherModal()">+ Add Teacher</button>
+  <div class="detail-tabs" id="home-tabs">
+    <button class="detail-tab active" onclick="switchHomeTab('teachers')">Teachers</button>
+    <button class="detail-tab" onclick="switchHomeTab('hours')">Hours Overview</button>
+  </div>
+
+  <!-- Teachers tab -->
+  <div id="home-tab-teachers" class="detail-tab-content active">
+    <main>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h2 style="margin:0;">Teachers</h2>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-secondary btn-sm" onclick="openCalendarModal()">&#128197; School Calendar</button>
+            <button class="btn btn-primary btn-sm manager-only" onclick="openAddTeacherModal()">+ Add Teacher</button>
+          </div>
+        </div>
+        <div id="teacher-list"><div class="empty-state">Loading…</div></div>
       </div>
-      <div id="teacher-list"><div class="empty-state">Loading…</div></div>
-    </div>
-  </main>
+    </main>
+  </div>
+
+  <!-- Hours Overview tab -->
+  <div id="home-tab-hours" class="detail-tab-content">
+    <main>
+      <div class="card">
+        <div class="hours-period">
+          <button class="hours-period-btn active" id="hhbtn-week" onclick="setHomeHoursPeriod('week')">This Week</button>
+          <button class="hours-period-btn" id="hhbtn-month" onclick="setHomeHoursPeriod('month')">This Month</button>
+          <button class="hours-period-btn" id="hhbtn-custom" onclick="setHomeHoursPeriod('custom')">Custom</button>
+          <div id="home-hours-custom-range" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
+            <input type="date" id="home-hours-from" style="font-size:12px;padding:4px 7px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;">
+            <span style="color:#999;font-size:13px;">–</span>
+            <input type="date" id="home-hours-to" style="font-size:12px;padding:4px 7px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;">
+            <button class="btn btn-primary btn-sm" onclick="renderAllTeachersHours()">Go</button>
+          </div>
+          <span id="home-hours-range-label" style="font-size:12px;color:#888;margin-left:4px;"></span>
+        </div>
+        <div id="all-teachers-hours-content"><div class="empty-state">Select a period above.</div></div>
+      </div>
+    </main>
+  </div>
 </div>
 
 <!-- VIEW 2: Teacher Detail Page -->
@@ -294,8 +361,8 @@
   <div class="modal">
     <h3>Session Details</h3>
     <div id="session-detail-content"></div>
+    <div id="session-action-section"></div>
     <div class="modal-actions">
-      <button class="btn btn-danger btn-sm" onclick="deleteSession()">Delete</button>
       <button class="btn btn-secondary btn-sm" onclick="closeDetailModal()">Close</button>
     </div>
   </div>
@@ -356,6 +423,95 @@
   </div>
 </div>
 
+<!-- Edit Session Modal -->
+<div class="modal-overlay" id="edit-session-modal">
+  <div class="modal">
+    <h3 id="edit-modal-title">Edit Session</h3>
+    <div id="edit-scope-notice" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:5px;padding:8px 12px;margin-bottom:12px;font-size:12.5px;display:none;"></div>
+
+    <!-- Regular fields -->
+    <div id="edit-regular-fields">
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Class Name</label>
+        <input type="text" id="edit-class-name">
+      </div>
+      <div id="edit-date-group" class="form-group" style="margin-bottom:10px;">
+        <label>Date</label>
+        <input type="date" id="edit-date">
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
+        <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time"></div>
+        <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time"></div>
+      </div>
+    </div>
+
+    <!-- PT fields -->
+    <div id="edit-pt-fields" style="display:none;">
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Student Name</label>
+        <input type="text" id="edit-student-name">
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>Date</label>
+        <input type="date" id="edit-date-pt">
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
+        <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time-pt"></div>
+        <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time-pt"></div>
+      </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom:10px;">
+      <label>Notes</label>
+      <textarea id="edit-notes" rows="2" placeholder="Optional"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closeEditModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveEditedSession()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- School Calendar Modal -->
+<div class="modal-overlay" id="school-calendar-modal">
+  <div class="modal" style="width:580px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+      <h3 style="margin:0;">&#128197; School Calendar</h3>
+      <button onclick="closeCalendarModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;padding:0 4px;">&times;</button>
+    </div>
+
+    <!-- Add Event Form (manager only) -->
+    <div class="manager-only" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
+      <div style="font-size:11px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Add School Event</div>
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+        <div class="form-group" style="margin-bottom:0;width:140px;"><label>Date</label><input type="date" id="cal-event-date"></div>
+        <div class="form-group" style="margin-bottom:0;flex:1;min-width:130px;"><label>Event Name</label><input type="text" id="cal-event-name" placeholder="e.g. LASC Anniversary"></div>
+        <div class="form-group" style="margin-bottom:0;width:115px;">
+          <label>Type</label>
+          <select id="cal-event-type">
+            <option value="event">Event</option>
+            <option value="holiday">School Holiday</option>
+            <option value="anniversary">Anniversary</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="addSchoolEvent()" style="align-self:flex-end;">+ Add</button>
+      </div>
+    </div>
+
+    <!-- Year navigation -->
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+      <div class="week-nav">
+        <button onclick="changeCalYear(-1)">&#8592;</button>
+        <span id="cal-year-label" class="week-label" style="min-width:55px;"></span>
+        <button onclick="changeCalYear(1)">&#8594;</button>
+      </div>
+      <span style="font-size:12px;color:#aaa;">US federal holidays + school events</span>
+    </div>
+
+    <div id="cal-events-list" style="max-height:380px;overflow-y:auto;"></div>
+  </div>
+</div>
+
 <!-- PT Not Held Modal -->
 <div class="modal-overlay" id="pt-miss-modal">
   <div class="modal" style="width:360px;">
@@ -391,12 +547,16 @@
 <script src="firebase-init.js"></script>
 <script>
 // State
-let teachers = [], sessions = [], ptContracts = [];
+let teachers = [], sessions = [], ptContracts = [], schoolEvents = [];
 let currentTeacher = null, currentWeekStart = getWeekStart(new Date());
 let editingTeacherId = null, selectedSessionId = null;
+let editingSessionId = null, editScope = 'single';
 let ptMiniStudentName = null, ptMiniWeekStart = null;
-let unsubSessions = null, unsubContracts = null;
+let unsubSessions = null, unsubContracts = null, unsubSchoolEvents = null;
 let pendingTeacherId = window.location.hash.slice(1) || null;
+let calendarYear = new Date().getFullYear();
+let homeHoursPeriod = 'week';
+let allSessionsGlobal = [], unsubAllSessionsGlobal = null;
 
 // Utilities
 function getWeekStart(date) {
@@ -424,6 +584,67 @@ function getOverlaps(date, startTime, endTime, excludeId=null) {
 }
 function slotsOverlap(a, b) {
   return timeToMins(a.start) < timeToMins(b.end) && timeToMins(b.start) < timeToMins(a.end);
+}
+
+// US Federal Holidays
+const _usHolCache = {};
+function getUSHolidays(year) {
+  if (_usHolCache[year]) return _usHolCache[year];
+  const h = {};
+  function fixed(m, d, name) {
+    const dt = new Date(year, m - 1, d);
+    const dow = dt.getDay();
+    if (dow === 0) dt.setDate(dt.getDate() + 1);
+    else if (dow === 6) dt.setDate(dt.getDate() - 1);
+    h[dateToStr(dt)] = name;
+  }
+  function nth(m, n, weekday, name) {
+    if (n > 0) {
+      const dt = new Date(year, m - 1, 1);
+      dt.setDate(1 + ((weekday - dt.getDay() + 7) % 7) + (n - 1) * 7);
+      h[dateToStr(dt)] = name;
+    } else {
+      const dt = new Date(year, m, 0);
+      dt.setDate(dt.getDate() - ((dt.getDay() - weekday + 7) % 7));
+      h[dateToStr(dt)] = name;
+    }
+  }
+  fixed(1,1,"New Year's Day");
+  nth(1,3,1,"MLK Day");
+  nth(2,3,1,"Presidents' Day");
+  nth(5,-1,1,"Memorial Day");
+  fixed(6,19,"Juneteenth");
+  fixed(7,4,"Independence Day");
+  nth(9,1,1,"Labor Day");
+  nth(10,2,1,"Columbus Day");
+  fixed(11,11,"Veterans Day");
+  nth(11,4,4,"Thanksgiving");
+  fixed(12,25,"Christmas Day");
+  _usHolCache[year] = h;
+  return h;
+}
+function getHolidayName(dateStr) {
+  const year = parseInt(dateStr.slice(0,4));
+  return getUSHolidays(year)[dateStr] || null;
+}
+
+function isDateBlocked(dateStr) {
+  if (schoolEvents.some(e => e.date===dateStr && e.type==='school_open')) return false;
+  if (getHolidayName(dateStr)) return true;
+  if (schoolEvents.some(e => e.date===dateStr && (e.type==='holiday' || e.type==='anniversary'))) return true;
+  return false;
+}
+
+// Recurring sessions helper (same class/time/day-of-week)
+function getRecurringSessions(sess) {
+  const targetDow = strToDate(sess.date).getDay();
+  return sessions.filter(s =>
+    s.type === 'Regular' &&
+    s.studentName === sess.studentName &&
+    s.startTime === sess.startTime &&
+    s.endTime === sess.endTime &&
+    strToDate(s.date).getDay() === targetDow
+  );
 }
 
 // Session dates for Regular batch
@@ -465,7 +686,8 @@ function openTeacherDetail(teacher) {
 function switchDetailTab(name) {
   document.querySelectorAll('.detail-tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('.detail-tab-content').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.detail-tab')[name==='schedule'?0:1].classList.add('active');
+  const idx={schedule:0,pt:1};
+  document.querySelectorAll('.detail-tab')[idx[name]].classList.add('active');
   document.getElementById('dtab-'+name).classList.add('active');
   if (name==='schedule') renderSchedule();
   if (name==='pt')       renderPTTracker();
@@ -542,11 +764,22 @@ function renderSchedule() {
     const dateStr=dateToStr(d), isToday=dateStr===today;
     const daySessions=sessions.filter(s=>s.date===dateStr);
     const hdrStyle=isToday?'background:#eef2ff;color:#3730a3;':'';
+    const usHoliday=getHolidayName(dateStr);
+    const schoolEvt=schoolEvents.find(e=>e.date===dateStr);
     html+=`<div class="teacher-column"><div class="col-header" style="${hdrStyle}">
       ${DAYS[i]}<span style="font-weight:400;font-size:11px;margin-left:4px;">${d.getMonth()+1}/${d.getDate()}</span>
       ${isToday?'<span style="font-size:9px;background:#3730a3;color:white;padding:1px 5px;border-radius:3px;margin-left:3px;">TODAY</span>':''}
     </div><div class="grid-body">`;
     for (let j=0;j<TOTAL_SLOTS;j++) html+=`<div class="grid-slot${(GRID_START+j*30)%60===0?' hour':''}"></div>`;
+    const isSchoolOpen=schoolEvents.some(e=>e.date===dateStr&&e.type==='school_open');
+    if (isSchoolOpen && (usHoliday || schoolEvents.some(e=>e.date===dateStr&&(e.type==='holiday'||e.type==='anniversary')))) {
+      html+=`<div class="day-holiday-banner" style="background:rgba(220,252,231,0.45);color:#15803d;">&#10003; School Open</div>`;
+    } else if (!isSchoolOpen && usHoliday) {
+      html+=`<div class="day-holiday-banner us-holiday">&#127482;&#127480; ${escHtml(usHoliday)}</div>`;
+    } else if (!isSchoolOpen && schoolEvt && schoolEvt.type!=='school_open') {
+      const cls=schoolEvt.type==='anniversary'?'school-anniversary':'school-event';
+      html+=`<div class="day-holiday-banner ${cls}">&#128205; ${escHtml(schoolEvt.name)}</div>`;
+    }
     daySessions.forEach(sess => {
       const top=(timeToMins(sess.startTime)-GRID_START)/30*SLOT_H;
       const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
@@ -657,13 +890,26 @@ function validateForm() {
       if (dates.length===0) { errors.push('No dates match the selected days in this range.'); }
       else {
         const validSlots=slots.filter(s=>s.start&&s.end&&timeToMins(s.end)>timeToMins(s.start));
-        infos.push(`Will create ${dates.length*validSlots.length} session(s) across ${dates.length} day(s).`);
-        const conflictDates=[];
-        for (const date of dates) for (const ts of validSlots) {
-          if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
+        const blockedDates=dates.filter(d=>isDateBlocked(d));
+        const addDates=blockedDates.length>0?dates.filter(d=>!isDateBlocked(d)):dates;
+        if (blockedDates.length>0) {
+          if (addDates.length===0)
+            errors.push(`All selected dates are school holidays. No sessions can be added.`);
+          else {
+            warnings.push(`&#128467; ${blockedDates.length} holiday date(s) will be skipped (${blockedDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${blockedDates.length>3?'…':''}). You will be asked to confirm when clicking Add.`);
+            infos.push(`Will create ${addDates.length*validSlots.length} session(s) across ${addDates.length} day(s).`);
+          }
+        } else {
+          infos.push(`Will create ${addDates.length*validSlots.length} session(s) across ${addDates.length} day(s).`);
         }
-        if (conflictDates.length>0)
-          errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
+        if (addDates.length>0) {
+          const conflictDates=[];
+          for (const date of addDates) for (const ts of validSlots) {
+            if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
+          }
+          if (conflictDates.length>0)
+            errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
+        }
       }
     }
   } else {
@@ -672,6 +918,8 @@ function validateForm() {
     const start=document.getElementById('sess-start').value;
     const end=document.getElementById('sess-end').value;
     if (!date||!stud||!start||!end||!currentTeacher) { warnEl.innerHTML=''; return; }
+    if (date && isDateBlocked(date))
+      errors.push('&#128683; This date is a school holiday. Go to School Calendar → Mark School Open to allow sessions.');
     if (timeToMins(end)>timeToMins(start)) {
       const overlaps=getOverlaps(date,start,end);
       if (overlaps.length>0) {
@@ -732,15 +980,24 @@ async function addSession() {
     }
     const dates=getSessionDates(from,to,days);
     if (dates.length===0) return showToast('No dates match the selected days.','error');
-    if (dates.length*validSlots.length>300) return showToast('Too many sessions (max 300). Reduce the range.','error');
+    const blockedDates=dates.filter(d=>isDateBlocked(d));
+    const effectiveDates=blockedDates.length>0?dates.filter(d=>!isDateBlocked(d)):dates;
+    if (blockedDates.length>0) {
+      if (effectiveDates.length===0) return showToast('All dates are school holidays. No sessions can be added.','error');
+      const confirmed=confirm(
+        `${blockedDates.length} holiday date(s) are included:\n${blockedDates.slice(0,5).map(d=>d.slice(5)).join(', ')}${blockedDates.length>5?'…':''}\n\nSkip holidays and add ${effectiveDates.length} day(s) (${effectiveDates.length*validSlots.length} sessions)?`
+      );
+      if (!confirmed) return;
+    }
+    if (effectiveDates.length*validSlots.length>300) return showToast('Too many sessions (max 300). Reduce the range.','error');
     const conflictDates=[];
-    for (const date of dates) for (const ts of validSlots) {
+    for (const date of effectiveDates) for (const ts of validSlots) {
       if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
     }
     if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?'…':''}`, 'error');
     try {
       const batch=db.batch();
-      for (const date of dates) for (const ts of validSlots) {
+      for (const date of effectiveDates) for (const ts of validSlots) {
         batch.set(db.collection('sessions').doc(), {
           teacherId:currentTeacher.id,
           studentName:document.getElementById('reg-class-name').value.trim(),
@@ -750,7 +1007,7 @@ async function addSession() {
         });
       }
       await batch.commit();
-      showToast(`${dates.length*validSlots.length} sessions added!`,'ok');
+      showToast(`${effectiveDates.length*validSlots.length} sessions added!`,'ok');
       closeAddModal();
     } catch(e) { console.error(e); showToast('Error saving sessions.','error'); }
 
@@ -765,6 +1022,7 @@ async function addSession() {
     if (timeToMins(end)<=timeToMins(start)) return showToast('End time must be after start time.','error');
     const overlaps=getOverlaps(date,start,end);
     if (overlaps.length>0) return showToast(`Cannot add: overlaps with ${overlaps[0].type} session (${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}).`,'error');
+    if (isDateBlocked(date)) return showToast('Cannot add: this date is a school holiday. Mark it as School Open in School Calendar first.','error');
     try {
       await db.collection('sessions').add({
         teacherId:currentTeacher.id, studentName:stud, type:'PT',
@@ -782,21 +1040,258 @@ function openDetailModal(id) {
   const s=sessions.find(x=>x.id===id); if (!s) return;
   selectedSessionId=id;
   const isPending=s.type==='PT'&&s.conducted===false;
+  const d=strToDate(s.date);
+  const dayName=DAYS[((d.getDay()+6)%7)];
+
   document.getElementById('session-detail-content').innerHTML=`
-    ${s.type==='Regular'&&s.studentName?`<div class="modal-row"><strong>Class</strong>${escHtml(s.studentName)}</div>`:''}
+    ${s.type==='Regular'?`<div class="modal-row"><strong>Class</strong>${escHtml(s.studentName||'Regular')}</div>`:''}
     ${s.type!=='Regular'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
-    <div class="modal-row"><strong>Date</strong>${s.date}</div>
+    <div class="modal-row"><strong>Date</strong>${s.date} (${dayName})</div>
     <div class="modal-row"><strong>Time</strong>${formatTime(s.startTime)} – ${formatTime(s.endTime)}</div>
     <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}</div>
     ${s.notes?`<div class="modal-row"><strong>Notes</strong>${escHtml(s.notes)}</div>`:''}
   `;
+
+  let actionsHtml = '';
+  if (currentRole === 'manager') {
+    if (s.type === 'Regular') {
+      const recurring = getRecurringSessions(s);
+      const recCount = recurring.length;
+      const recLabel = `All "${escHtml(s.studentName)}" on ${dayName}s (${recCount})`;
+      actionsHtml = `
+        <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;">
+          <div class="session-action-group">
+            <div class="session-action-group-label">Edit</div>
+            <div class="session-action-btns">
+              <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit this session</button>
+              <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','all')">${recLabel}</button>
+            </div>
+          </div>
+          <div class="session-action-group" style="margin-top:10px;">
+            <div class="session-action-group-label">Delete</div>
+            <div class="session-action-btns">
+              <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete this session</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteAllRecurring('${id}')">${recLabel}</button>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      actionsHtml = `
+        <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete</button>
+        </div>`;
+    }
+  }
+  document.getElementById('session-action-section').innerHTML = actionsHtml;
   document.getElementById('session-detail-modal').classList.add('open');
 }
-function closeDetailModal() { document.getElementById('session-detail-modal').classList.remove('open'); selectedSessionId=null; }
-async function deleteSession() {
+
+function closeDetailModal() {
+  document.getElementById('session-detail-modal').classList.remove('open');
+  selectedSessionId=null;
+}
+
+async function deleteThisSession() {
   if (!selectedSessionId||!confirm('Delete this session?')) return;
   try { await db.collection('sessions').doc(selectedSessionId).delete(); closeDetailModal(); showToast('Session deleted.','ok'); }
   catch(e) { showToast('Error deleting session.','error'); }
+}
+
+async function deleteAllRecurring(id) {
+  const s=sessions.find(x=>x.id===id); if (!s) return;
+  const dayName=DAYS[((strToDate(s.date).getDay()+6)%7)];
+  const recurring=getRecurringSessions(s);
+  if (!confirm(`Delete all ${recurring.length} "${s.studentName}" sessions on ${dayName}s?`)) return;
+  try {
+    const batch=db.batch();
+    recurring.forEach(sess=>batch.delete(db.collection('sessions').doc(sess.id)));
+    await batch.commit();
+    closeDetailModal();
+    showToast(`${recurring.length} sessions deleted.`,'ok');
+  } catch(e) { showToast('Error deleting sessions.','error'); }
+}
+
+// Edit Session Modal
+function openEditModal(id, scope) {
+  const s=sessions.find(x=>x.id===id); if (!s) return;
+  editingSessionId=id; editScope=scope;
+  closeDetailModal();
+  const dayName=DAYS[((strToDate(s.date).getDay()+6)%7)];
+  const titleEl=document.getElementById('edit-modal-title');
+  const noticeEl=document.getElementById('edit-scope-notice');
+
+  if (s.type==='Regular') {
+    document.getElementById('edit-regular-fields').style.display='';
+    document.getElementById('edit-pt-fields').style.display='none';
+    document.getElementById('edit-class-name').value=s.studentName||'';
+    document.getElementById('edit-start-time').value=s.startTime;
+    document.getElementById('edit-end-time').value=s.endTime;
+    if (scope==='all') {
+      const recurring=getRecurringSessions(s);
+      titleEl.textContent='Edit Recurring Sessions';
+      noticeEl.style.display='';
+      noticeEl.innerHTML=`Editing all <strong>${recurring.length}</strong> sessions of "<strong>${escHtml(s.studentName)}</strong>" on <strong>${dayName}s</strong>. Date cannot be changed here.`;
+      document.getElementById('edit-date-group').style.display='none';
+    } else {
+      titleEl.textContent='Edit Session';
+      noticeEl.style.display='none';
+      document.getElementById('edit-date-group').style.display='';
+      document.getElementById('edit-date').value=s.date;
+    }
+  } else {
+    document.getElementById('edit-regular-fields').style.display='none';
+    document.getElementById('edit-pt-fields').style.display='';
+    titleEl.textContent='Edit PT Session';
+    noticeEl.style.display='none';
+    document.getElementById('edit-student-name').value=s.studentName||'';
+    document.getElementById('edit-date-pt').value=s.date;
+    document.getElementById('edit-start-time-pt').value=s.startTime;
+    document.getElementById('edit-end-time-pt').value=s.endTime;
+  }
+  document.getElementById('edit-notes').value=s.notes||'';
+  document.getElementById('edit-session-modal').classList.add('open');
+}
+
+function closeEditModal() {
+  document.getElementById('edit-session-modal').classList.remove('open');
+  editingSessionId=null;
+}
+
+async function saveEditedSession() {
+  if (!editingSessionId||currentRole!=='manager') return;
+  const s=sessions.find(x=>x.id===editingSessionId); if (!s) return;
+  try {
+    if (s.type==='Regular') {
+      const className=document.getElementById('edit-class-name').value.trim();
+      const startTime=document.getElementById('edit-start-time').value;
+      const endTime=document.getElementById('edit-end-time').value;
+      const notes=document.getElementById('edit-notes').value.trim();
+      if (!className) return showToast('Please enter a class name.','error');
+      if (timeToMins(endTime)<=timeToMins(startTime)) return showToast('End time must be after start time.','error');
+      if (editScope==='all') {
+        const recurring=getRecurringSessions(s);
+        const batch=db.batch();
+        recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),{studentName:className,startTime,endTime,notes}));
+        await batch.commit();
+        showToast(`${recurring.length} sessions updated!`,'ok');
+      } else {
+        const date=document.getElementById('edit-date').value;
+        if (!date) return showToast('Please select a date.','error');
+        await db.collection('sessions').doc(editingSessionId).update({studentName:className,date,startTime,endTime,notes});
+        showToast('Session updated!','ok');
+      }
+    } else {
+      const student=document.getElementById('edit-student-name').value.trim();
+      const date=document.getElementById('edit-date-pt').value;
+      const startTime=document.getElementById('edit-start-time-pt').value;
+      const endTime=document.getElementById('edit-end-time-pt').value;
+      const notes=document.getElementById('edit-notes').value.trim();
+      if (!student) return showToast('Please enter a student name.','error');
+      if (!date) return showToast('Please select a date.','error');
+      if (timeToMins(endTime)<=timeToMins(startTime)) return showToast('End time must be after start time.','error');
+      await db.collection('sessions').doc(editingSessionId).update({studentName:student,date,startTime,endTime,notes});
+      showToast('PT session updated!','ok');
+    }
+    closeEditModal();
+  } catch(e) { console.error(e); showToast('Error saving changes.','error'); }
+}
+
+// Hours Tab
+function setHoursPeriod(period) {
+  hoursPeriod=period;
+  ['week','month','custom'].forEach(p=>{
+    const b=document.getElementById('hbtn-'+p);
+    if (b) b.classList.toggle('active',p===period);
+  });
+  const customRange=document.getElementById('hours-custom-range');
+  if (customRange) customRange.style.display=period==='custom'?'flex':'none';
+  if (period!=='custom') renderHoursReport();
+}
+
+function getHoursDateRange() {
+  const today=new Date();
+  if (hoursPeriod==='week') {
+    const from=getWeekStart(today);
+    const to=new Date(from); to.setDate(to.getDate()+6);
+    return {from:dateToStr(from),to:dateToStr(to)};
+  }
+  if (hoursPeriod==='month') {
+    const from=new Date(today.getFullYear(),today.getMonth(),1);
+    const to=new Date(today.getFullYear(),today.getMonth()+1,0);
+    return {from:dateToStr(from),to:dateToStr(to)};
+  }
+  return {
+    from:(document.getElementById('hours-from-date')||{}).value||'',
+    to:(document.getElementById('hours-to-date')||{}).value||''
+  };
+}
+
+function renderHoursReport() {
+  const el=document.getElementById('hours-report-content'); if (!el) return;
+  const dtabHours=document.getElementById('dtab-hours'); if (!dtabHours||!dtabHours.classList.contains('active')) return;
+  const {from,to}=getHoursDateRange();
+  if (!from||!to) { el.innerHTML='<div style="color:#aaa;font-size:13px;">Please select a date range above.</div>'; return; }
+  if (from>to) { el.innerHTML='<div class="error-item">⛔ From date must be on or before To date.</div>'; return; }
+
+  const labelEl=document.getElementById('hours-range-label');
+  if (labelEl) labelEl.textContent=from===to?from:`${from} – ${to}`;
+
+  const inRange=s=>s.date>=from&&s.date<=to;
+  const regularSessions=sessions.filter(s=>s.type==='Regular'&&inRange(s));
+  const ptSessions=sessions.filter(s=>s.type==='PT'&&inRange(s));
+
+  const byClass={};
+  regularSessions.forEach(s=>{ if (!byClass[s.studentName]) byClass[s.studentName]=[]; byClass[s.studentName].push(s); });
+  const classes=Object.keys(byClass).sort();
+
+  let totalRegMins=0;
+  let html='';
+
+  // Regular classes
+  html+=`<div class="hours-section-title">Regular Classes</div>`;
+  if (classes.length>0) {
+    html+=`<table class="hours-table"><thead><tr><th>Class Name</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
+    classes.forEach(cn=>{
+      const list=byClass[cn];
+      const mins=list.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+      totalRegMins+=mins;
+      html+=`<tr><td>${escHtml(cn)}</td><td>${list.length}</td><td>${(mins/60).toFixed(1)} hrs</td></tr>`;
+    });
+    html+=`<tr class="hours-total-row"><td>Total Regular</td><td>${regularSessions.length}</td><td>${(totalRegMins/60).toFixed(1)} hrs</td></tr>`;
+    html+=`</tbody></table>`;
+  } else {
+    html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No regular sessions in this period.</div>`;
+  }
+
+  // PT sessions
+  const ptConducted=ptSessions.filter(s=>s.conducted!==false);
+  const ptNotHeld=ptSessions.filter(s=>s.conducted===false&&!!s.missedReason);
+  const ptScheduled=ptSessions.filter(s=>s.conducted===false&&!s.missedReason);
+  const ptCondMins=ptConducted.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+  const ptNotHeldMins=ptNotHeld.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+  const ptSchedMins=ptScheduled.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+
+  html+=`<div class="hours-section-title">PT Sessions</div>`;
+  if (ptSessions.length>0) {
+    html+=`<table class="hours-table"><thead><tr><th>Status</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
+    html+=`<tr><td>&#10003; Conducted</td><td>${ptConducted.length}</td><td>${(ptCondMins/60).toFixed(1)} hrs</td></tr>`;
+    if (ptNotHeld.length>0) html+=`<tr><td>&#10007; Not Held</td><td>${ptNotHeld.length}</td><td>${(ptNotHeldMins/60).toFixed(1)} hrs</td></tr>`;
+    if (ptScheduled.length>0) html+=`<tr><td>&#8987; Scheduled</td><td>${ptScheduled.length}</td><td>${(ptSchedMins/60).toFixed(1)} hrs</td></tr>`;
+    html+=`<tr class="hours-total-row"><td>Total PT (conducted)</td><td>${ptConducted.length}</td><td>${(ptCondMins/60).toFixed(1)} hrs</td></tr>`;
+    html+=`</tbody></table>`;
+  } else {
+    html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No PT sessions in this period.</div>`;
+  }
+
+  // Grand total
+  const grand=totalRegMins+ptCondMins;
+  html+=`<div class="hours-grand-total">
+    <span style="font-size:13px;font-weight:500;opacity:0.85;">Grand Total &nbsp;<span style="opacity:0.6;font-size:11px;">(Regular + PT conducted)</span></span>
+    <span style="font-size:22px;font-weight:700;">${(grand/60).toFixed(1)} hrs</span>
+  </div>`;
+
+  el.innerHTML=html;
 }
 
 // PT Tracker
@@ -1031,6 +1526,10 @@ async function addPTFromMini() {
     warnEl.innerHTML=`<div class="error-item">⛔ Overlaps with ${overlaps[0].type} session: ${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}</div>`;
     return;
   }
+  if (isDateBlocked(date)) {
+    warnEl.innerHTML=`<div class="error-item">⛔ This date is a school holiday. Go to School Calendar → Mark School Open to allow sessions.</div>`;
+    return;
+  }
   warnEl.innerHTML='';
   try {
     await db.collection('sessions').add({
@@ -1042,6 +1541,112 @@ async function addPTFromMini() {
     document.getElementById('pt-mini-notes').value='';
     ptMiniWeekStart=getWeekStart(strToDate(date));
   } catch(e) { console.error(e); showToast('Error adding session.','error'); }
+}
+
+// School Calendar
+function initSchoolEventsListener() {
+  if (unsubSchoolEvents) return;
+  unsubSchoolEvents=db.collection('school_events').onSnapshot(snap=>{
+    schoolEvents=snap.docs.map(d=>({id:d.id,...d.data()}));
+    renderSchedule();
+    renderCalendarEvents();
+  },err=>console.error('school_events error:',err));
+}
+
+function openCalendarModal() {
+  calendarYear=new Date().getFullYear();
+  document.getElementById('cal-year-label').textContent=calendarYear;
+  document.getElementById('cal-event-date').value=dateToStr(new Date());
+  document.getElementById('cal-event-name').value='';
+  document.getElementById('cal-event-type').value='event';
+  renderCalendarEvents();
+  document.getElementById('school-calendar-modal').classList.add('open');
+}
+
+function closeCalendarModal() {
+  document.getElementById('school-calendar-modal').classList.remove('open');
+}
+
+function changeCalYear(dir) {
+  calendarYear+=dir;
+  document.getElementById('cal-year-label').textContent=calendarYear;
+  renderCalendarEvents();
+}
+
+function renderCalendarEvents() {
+  const listEl=document.getElementById('cal-events-list'); if (!listEl) return;
+  const yrStr=String(calendarYear);
+  const holidays=getUSHolidays(calendarYear);
+  const allEvents=[];
+  Object.entries(holidays).forEach(([date,name])=>{
+    allEvents.push({date,name,type:'us-holiday',id:null,blocking:true});
+  });
+  schoolEvents.filter(e=>e.date.startsWith(yrStr)&&e.type!=='school_open').forEach(e=>{
+    const blocking=e.type==='holiday'||e.type==='anniversary';
+    allEvents.push({date:e.date,name:e.name,type:e.type,id:e.id,blocking});
+  });
+  allEvents.sort((a,b)=>a.date.localeCompare(b.date));
+  if (allEvents.length===0) {
+    listEl.innerHTML='<div style="color:#aaa;font-size:13px;padding:16px 0;text-align:center;">No events for this year.</div>';
+    return;
+  }
+  const DAY_NAMES=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  listEl.innerHTML=allEvents.map(ev=>{
+    const d=strToDate(ev.date);
+    const dayLabel=`${d.getMonth()+1}/${d.getDate()} ${DAY_NAMES[d.getDay()]}`;
+    const openOverride=schoolEvents.find(e=>e.date===ev.date&&e.type==='school_open');
+    const isBlocked=ev.blocking&&!openOverride;
+    let badgeCls,badgeText;
+    if (ev.type==='us-holiday') { badgeCls='cal-type-us'; badgeText='US Holiday'; }
+    else if (ev.type==='anniversary') { badgeCls='cal-type-anniversary'; badgeText='Anniversary'; }
+    else if (ev.type==='holiday') { badgeCls='cal-type-holiday'; badgeText='School Holiday'; }
+    else { badgeCls='cal-type-event'; badgeText='Event'; }
+    let statusBadge='';
+    if (ev.blocking) {
+      statusBadge=isBlocked
+        ?`<span style="font-size:10px;color:#dc2626;font-weight:600;flex-shrink:0;">&#128683; Blocked</span>`
+        :`<span style="font-size:10px;color:#15803d;font-weight:600;flex-shrink:0;">&#10003; School Open</span>`;
+    }
+    let btns='';
+    if (currentRole==='manager') {
+      if (ev.blocking) {
+        btns+=openOverride
+          ?`<button class="btn btn-sm" style="font-size:10px;padding:2px 7px;background:#dcfce7;color:#15803d;border:1px solid #86efac;flex-shrink:0;" onclick="removeSchoolOpenOverride('${openOverride.id}')">Revert to Holiday</button>`
+          :`<button class="btn btn-secondary btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0;" onclick="addSchoolOpenOverride('${ev.date}')">Mark School Open</button>`;
+      }
+      if (ev.id) btns+=`<button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 7px;flex-shrink:0;" onclick="deleteSchoolEvent('${ev.id}')">Del</button>`;
+    }
+    return `<div class="cal-event-item" style="${isBlocked?'background:#fff8f8;':''}">
+      <span class="cal-event-date">${dayLabel}</span>
+      <span class="cal-event-name">${escHtml(ev.name)}</span>
+      <span class="cal-type-badge ${badgeCls}">${badgeText}</span>
+      ${statusBadge}
+      ${btns?`<div style="display:flex;gap:4px;flex-shrink:0;">${btns}</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+async function addSchoolEvent() {
+  if (currentRole!=='manager') return;
+  const date=document.getElementById('cal-event-date').value;
+  const name=document.getElementById('cal-event-name').value.trim();
+  const type=document.getElementById('cal-event-type').value;
+  if (!date||!name) return showToast('Please enter date and event name.','error');
+  try {
+    await db.collection('school_events').add({
+      date,name,type,
+      createdBy:firebase.auth().currentUser.email,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    document.getElementById('cal-event-name').value='';
+    showToast('Event added!','ok');
+  } catch(e) { showToast('Error adding event.','error'); }
+}
+
+async function deleteSchoolEvent(id) {
+  if (!confirm('Delete this event?')) return;
+  try { await db.collection('school_events').doc(id).delete(); showToast('Event deleted.','ok'); }
+  catch(e) { showToast('Error deleting event.','error'); }
 }
 
 // Teachers
@@ -1240,17 +1845,138 @@ function printPTTracker() {
   setTimeout(function(){URL.revokeObjectURL(url);},30000);
 }
 
-// Close on outside click
-['add-session-modal','session-detail-modal','pt-mini-schedule-modal','teacher-modal','pt-miss-modal'].forEach(id => {
-  document.getElementById(id).addEventListener('click', function(e) {
-    if (e.target===this) {
-      if (id==='add-session-modal') closeAddModal();
-      else if (id==='session-detail-modal') closeDetailModal();
-      else if (id==='teacher-modal') closeTeacherModal();
-      else if (id==='pt-miss-modal') closePTMissModal();
-      else closePTMiniSchedule();
-    }
+// School Open overrides
+async function addSchoolOpenOverride(date) {
+  if (currentRole !== 'manager') return;
+  try {
+    await db.collection('school_events').add({
+      date, type:'school_open', name:'School Open',
+      createdBy:firebase.auth().currentUser.email,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Marked as School Open!','ok');
+  } catch(e) { showToast('Error saving override.','error'); }
+}
+
+async function removeSchoolOpenOverride(id) {
+  if (!confirm('Revert to holiday? Sessions cannot be added on this date.')) return;
+  try {
+    await db.collection('school_events').doc(id).delete();
+    showToast('Reverted to holiday.','ok');
+  } catch(e) { showToast('Error removing override.','error'); }
+}
+
+// Home-level tabs (Teachers / Hours Overview)
+function switchHomeTab(name) {
+  const tabs=document.querySelectorAll('#home-tabs .detail-tab');
+  tabs[0].classList.toggle('active', name==='teachers');
+  tabs[1].classList.toggle('active', name==='hours');
+  document.getElementById('home-tab-teachers').classList.toggle('active', name==='teachers');
+  document.getElementById('home-tab-hours').classList.toggle('active', name==='hours');
+  if (name==='hours') setHomeHoursPeriod(homeHoursPeriod||'week');
+}
+
+function setHomeHoursPeriod(period) {
+  homeHoursPeriod=period;
+  ['week','month','custom'].forEach(p=>{
+    const b=document.getElementById('hhbtn-'+p);
+    if (b) b.classList.toggle('active',p===period);
   });
+  const customRange=document.getElementById('home-hours-custom-range');
+  if (customRange) customRange.style.display=period==='custom'?'flex':'none';
+  if (period!=='custom') renderAllTeachersHours();
+}
+
+function getHomeHoursDateRange() {
+  const today=new Date();
+  if (homeHoursPeriod==='week') {
+    const from=getWeekStart(today);
+    const to=new Date(from); to.setDate(to.getDate()+6);
+    return {from:dateToStr(from),to:dateToStr(to)};
+  }
+  if (homeHoursPeriod==='month') {
+    const from=new Date(today.getFullYear(),today.getMonth(),1);
+    const to=new Date(today.getFullYear(),today.getMonth()+1,0);
+    return {from:dateToStr(from),to:dateToStr(to)};
+  }
+  return {
+    from:document.getElementById('home-hours-from').value||'',
+    to:document.getElementById('home-hours-to').value||''
+  };
+}
+
+function renderAllTeachersHours() {
+  const el=document.getElementById('all-teachers-hours-content'); if (!el) return;
+  const {from,to}=getHomeHoursDateRange();
+  if (!from||!to) { el.innerHTML='<div class="empty-state">Select a period above.</div>'; return; }
+  if (from>to) { el.innerHTML='<div class="error-item">&#9940; From date must be on or before To date.</div>'; return; }
+
+  const labelEl=document.getElementById('home-hours-range-label');
+  if (labelEl) labelEl.textContent=from===to?from:`${from} – ${to}`;
+
+  if (teachers.length===0) { el.innerHTML='<div class="empty-state">No teachers yet.</div>'; return; }
+
+  const inRange=s=>s.date>=from&&s.date<=to;
+  const inRangeSessions=allSessionsGlobal.filter(inRange);
+
+  const campusOrder=['IRV','RH','LA'];
+  const grouped={};
+  teachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
+  const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
+
+  let html='';
+
+  campuses.forEach(campus=>{
+    html+=`<div class="hours-section-title">${escHtml(campus)}</div>`;
+    html+=`<table class="hours-table"><thead><tr>
+      <th>Teacher</th><th>Regular (hrs)</th><th>PT Conducted (hrs)</th><th>PT Not Held</th><th>PT Scheduled</th><th>Total (hrs)</th>
+    </tr></thead><tbody>`;
+    grouped[campus].forEach(t=>{
+      const tSess=inRangeSessions.filter(s=>s.teacherId===t.id);
+      const regSess=tSess.filter(s=>s.type==='Regular');
+      const ptSess=tSess.filter(s=>s.type==='PT');
+      const ptCond=ptSess.filter(s=>s.conducted!==false);
+      const ptNotHeld=ptSess.filter(s=>s.conducted===false&&!!s.missedReason);
+      const ptSched=ptSess.filter(s=>s.conducted===false&&!s.missedReason);
+      const regMins=regSess.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+      const ptCondMins=ptCond.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+      const total=regMins+ptCondMins;
+      html+=`<tr>
+        <td><button class="btn-student-link" onclick="openTeacherDetailById('${t.id}')">${escHtml(t.name)}</button></td>
+        <td>${(regMins/60).toFixed(1)} <span style="color:#aaa;font-size:11px;">(${regSess.length})</span></td>
+        <td>${(ptCondMins/60).toFixed(1)} <span style="color:#aaa;font-size:11px;">(${ptCond.length})</span></td>
+        <td style="color:${ptNotHeld.length>0?'#c2410c':'#ddd'};">${ptNotHeld.length>0?ptNotHeld.length:'—'}</td>
+        <td style="color:${ptSched.length>0?'#6b7280':'#ddd'};">${ptSched.length>0?ptSched.length:'—'}</td>
+        <td><strong>${(total/60).toFixed(1)}</strong></td>
+      </tr>`;
+    });
+    html+=`</tbody></table>`;
+  });
+
+  el.innerHTML=html;
+}
+
+// Global sessions listener (all teachers) for Hours Overview
+function initAllSessionsListener() {
+  if (unsubAllSessionsGlobal) return;
+  unsubAllSessionsGlobal=db.collection('sessions').onSnapshot(snap=>{
+    allSessionsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if (document.getElementById('home-tab-hours').classList.contains('active')) renderAllTeachersHours();
+  }, err=>console.error('allSessionsGlobal error:',err));
+}
+
+// Close on outside click
+const _modalClosers = {
+  'add-session-modal': closeAddModal,
+  'session-detail-modal': closeDetailModal,
+  'pt-mini-schedule-modal': closePTMiniSchedule,
+  'teacher-modal': closeTeacherModal,
+  'pt-miss-modal': closePTMissModal,
+  'edit-session-modal': closeEditModal,
+  'school-calendar-modal': closeCalendarModal
+};
+Object.entries(_modalClosers).forEach(([id,fn]) => {
+  document.getElementById(id).addEventListener('click', function(e) { if (e.target===this) fn(); });
 });
 
 // ==========================================
@@ -1296,6 +2022,8 @@ firebase.auth().onAuthStateChanged(async user => {
     } catch(e) {}
     currentRole = role;
     if (role === 'staff') { window.location.replace('inventory.html'); return; }
+    initSchoolEventsListener();
+    initAllSessionsListener();
     document.body.classList.add('role-' + role);
     document.getElementById('user-email-display').textContent = user.email;
     const badge = document.getElementById('role-badge');

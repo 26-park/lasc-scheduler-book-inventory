@@ -15,18 +15,24 @@ Web app for LASC language school (lascusa.com) — teacher scheduling and book i
 
 Both pages share a top navigation bar (Scheduler | Inventory tabs) and the same LASC logo.
 
+## Shared Files
+
+- **`shared.css`** — common styles (layout, components, role-based UI visibility)
+- **`utils.js`** — `escHtml` / `showToast` utilities, included by both pages
+- **`firebase-init.js`** — Firebase app init and `db` export, included by both pages
+
 ## Key Conventions
 
 - No build tools, bundlers, or transpilers — plain `.html`, `.css`, `.js` files
-- Firebase SDK loaded via CDN module imports inside each HTML file
+- Firebase SDK loaded via CDN script tags; `firebase-init.js` handles `initializeApp` and exports `db`
 - Firestore is the primary data store — all reads/writes go through the Firestore SDK
-- No shared JS files; each page is self-contained
+- Role-based UI: `body.role-staff .manager-only { display:none }` in `shared.css`; roles stored in Firestore `/users/{email}.role`
 
 ## Firebase
 
-- Project config is inlined in each HTML file (firebase config object)
-- Auth: not currently implemented
-- Security rules: `firestore.rules`
+- Project: `lasc-scheduler` (see `firebase-init.js` for config)
+- Auth: Google Sign-In (`@lascusa.com` accounts only), managed inside each HTML file
+- Security rules: `firestore.rules` — manager vs. staff write permissions per collection
 
 ## Development
 
