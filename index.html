@@ -311,6 +311,21 @@
         <label>Class Name</label>
         <input type="text" id="reg-class-name" placeholder="e.g. Advanced English A" oninput="validateForm()">
       </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
+        <div class="form-group"><label>Classroom</label><input type="text" id="reg-classroom" placeholder="e.g. Room 101"></div>
+        <div class="form-group"><label>Class Code</label><input type="text" id="reg-class-code" placeholder="Optional"></div>
+        <div class="form-group"><label>Level</label>
+          <select id="reg-class-level">
+            <option value="">— Select —</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Advanced-EAP">Advanced-EAP</option>
+            <option value="EAP">EAP</option>
+            <option value="BE">BE (Business English)</option>
+          </select>
+        </div>
+      </div>
       <div class="form-group" style="margin-bottom:10px;">
         <label>Days of Week</label>
         <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;" id="day-toggles">
@@ -434,6 +449,21 @@
       <div class="form-group" style="margin-bottom:10px;">
         <label>Class Name</label>
         <input type="text" id="edit-class-name">
+      </div>
+      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
+        <div class="form-group"><label>Classroom</label><input type="text" id="edit-classroom" placeholder="e.g. Room 101"></div>
+        <div class="form-group"><label>Class Code</label><input type="text" id="edit-class-code" placeholder="Optional"></div>
+        <div class="form-group"><label>Level</label>
+          <select id="edit-class-level">
+            <option value="">— Select —</option>
+            <option value="Beginner">Beginner</option>
+            <option value="Intermediate">Intermediate</option>
+            <option value="Advanced">Advanced</option>
+            <option value="Advanced-EAP">Advanced-EAP</option>
+            <option value="EAP">EAP</option>
+            <option value="BE">BE (Business English)</option>
+          </select>
+        </div>
       </div>
       <div id="edit-date-group" class="form-group" style="margin-bottom:10px;">
         <label>Date</label>
@@ -572,6 +602,14 @@ function formatTime(t) {
   const [h,m] = t.split(':').map(Number);
   const ap = h>=12?'pm':'am'; const hr = h%12||12;
   return m===0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2,'0')}${ap}`;
+}
+// 50-min period = 1 credit hour
+function calcHours(s, e) {
+  return Math.round((timeToMins(e) - timeToMins(s) + 10) / 60 * 2) / 2;
+}
+function fmtHours(h) {
+  const v = Math.round(h * 10) / 10;
+  return v + ' hr' + (v !== 1 ? 's' : '');
 }
 // Overlap detection
 function getOverlaps(date, startTime, endTime, excludeId=null) {
@@ -786,11 +824,19 @@ function renderSchedule() {
       if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
       const label = sess.type==='Regular' ? (sess.studentName ? escHtml(sess.studentName) : 'Regular') : escHtml(sess.studentName);
       const isPending = sess.type==='PT' && sess.conducted===false;
+      const hrs = calcHours(sess.startTime, sess.endTime);
+      let metaLines = '';
+      if (sess.type === 'Regular') {
+        if (sess.classroom) metaLines += `<div class="sb-meta">Room: ${escHtml(sess.classroom)}</div>`;
+        metaLines += `<div class="sb-meta">Code: ${escHtml(sess.classCode||'N/A')}</div>`;
+        if (sess.classLevel) metaLines += `<div class="sb-meta">Level: ${escHtml(sess.classLevel)}</div>`;
+      }
+      metaLines += `<div class="sb-meta">${formatTime(sess.startTime)}–${formatTime(sess.endTime)} · ${fmtHours(hrs)}${isPending?' · scheduled':''}</div>`;
       html+=`<div class="session-block ${sess.type}${isPending?' pending':''}"
         style="top:${top}px;height:${Math.max(height-2,16)}px;"
         onclick="openDetailModal('${sess.id}')">
         <div class="sb-student">${label}</div>
-        <div class="sb-meta">${sess.type}${isPending?' · scheduled':''} · ${formatTime(sess.startTime)}–${formatTime(sess.endTime)}</div>
+        ${metaLines}
       </div>`;
     });
     html+='</div></div>';
@@ -996,6 +1042,9 @@ async function addSession() {
     }
     if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?'…':''}`, 'error');
     try {
+      const regClassroom=document.getElementById('reg-classroom').value.trim();
+      const regClassCode=document.getElementById('reg-class-code').value.trim();
+      const regClassLevel=document.getElementById('reg-class-level').value;
       const batch=db.batch();
       for (const date of effectiveDates) for (const ts of validSlots) {
         batch.set(db.collection('sessions').doc(), {
@@ -1003,6 +1052,7 @@ async function addSession() {
           studentName:document.getElementById('reg-class-name').value.trim(),
           type:'Regular',
           date, startTime:ts.start, endTime:ts.end, notes,
+          classroom:regClassroom, classCode:regClassCode, classLevel:regClassLevel,
           createdAt:firebase.firestore.FieldValue.serverTimestamp()
         });
       }
@@ -1045,9 +1095,12 @@ function openDetailModal(id) {
 
   document.getElementById('session-detail-content').innerHTML=`
     ${s.type==='Regular'?`<div class="modal-row"><strong>Class</strong>${escHtml(s.studentName||'Regular')}</div>`:''}
+    ${s.type==='Regular'?`<div class="modal-row"><strong>Classroom</strong>${escHtml(s.classroom||'—')}</div>`:''}
+    ${s.type==='Regular'?`<div class="modal-row"><strong>Code</strong>${escHtml(s.classCode||'N/A')}</div>`:''}
+    ${s.type==='Regular'?`<div class="modal-row"><strong>Level</strong>${escHtml(s.classLevel||'—')}</div>`:''}
     ${s.type!=='Regular'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
     <div class="modal-row"><strong>Date</strong>${s.date} (${dayName})</div>
-    <div class="modal-row"><strong>Time</strong>${formatTime(s.startTime)} – ${formatTime(s.endTime)}</div>
+    <div class="modal-row"><strong>Time</strong>${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime))})</div>
     <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}</div>
     ${s.notes?`<div class="modal-row"><strong>Notes</strong>${escHtml(s.notes)}</div>`:''}
   `;
@@ -1125,6 +1178,9 @@ function openEditModal(id, scope) {
     document.getElementById('edit-regular-fields').style.display='';
     document.getElementById('edit-pt-fields').style.display='none';
     document.getElementById('edit-class-name').value=s.studentName||'';
+    document.getElementById('edit-classroom').value=s.classroom||'';
+    document.getElementById('edit-class-code').value=s.classCode||'';
+    document.getElementById('edit-class-level').value=s.classLevel||'';
     document.getElementById('edit-start-time').value=s.startTime;
     document.getElementById('edit-end-time').value=s.endTime;
     if (scope==='all') {
@@ -1164,6 +1220,9 @@ async function saveEditedSession() {
   try {
     if (s.type==='Regular') {
       const className=document.getElementById('edit-class-name').value.trim();
+      const classroom=document.getElementById('edit-classroom').value.trim();
+      const classCode=document.getElementById('edit-class-code').value.trim();
+      const classLevel=document.getElementById('edit-class-level').value;
       const startTime=document.getElementById('edit-start-time').value;
       const endTime=document.getElementById('edit-end-time').value;
       const notes=document.getElementById('edit-notes').value.trim();
@@ -1172,13 +1231,13 @@ async function saveEditedSession() {
       if (editScope==='all') {
         const recurring=getRecurringSessions(s);
         const batch=db.batch();
-        recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),{studentName:className,startTime,endTime,notes}));
+        recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),{studentName:className,classroom,classCode,classLevel,startTime,endTime,notes}));
         await batch.commit();
         showToast(`${recurring.length} sessions updated!`,'ok');
       } else {
         const date=document.getElementById('edit-date').value;
         if (!date) return showToast('Please select a date.','error');
-        await db.collection('sessions').doc(editingSessionId).update({studentName:className,date,startTime,endTime,notes});
+        await db.collection('sessions').doc(editingSessionId).update({studentName:className,classroom,classCode,classLevel,date,startTime,endTime,notes});
         showToast('Session updated!','ok');
       }
     } else {
@@ -1245,7 +1304,7 @@ function renderHoursReport() {
   regularSessions.forEach(s=>{ if (!byClass[s.studentName]) byClass[s.studentName]=[]; byClass[s.studentName].push(s); });
   const classes=Object.keys(byClass).sort();
 
-  let totalRegMins=0;
+  let totalRegHrs=0;
   let html='';
 
   // Regular classes
@@ -1254,11 +1313,11 @@ function renderHoursReport() {
     html+=`<table class="hours-table"><thead><tr><th>Class Name</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
     classes.forEach(cn=>{
       const list=byClass[cn];
-      const mins=list.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
-      totalRegMins+=mins;
-      html+=`<tr><td>${escHtml(cn)}</td><td>${list.length}</td><td>${(mins/60).toFixed(1)} hrs</td></tr>`;
+      const hrs=list.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      totalRegHrs+=hrs;
+      html+=`<tr><td>${escHtml(cn)}</td><td>${list.length}</td><td>${fmtHours(hrs)}</td></tr>`;
     });
-    html+=`<tr class="hours-total-row"><td>Total Regular</td><td>${regularSessions.length}</td><td>${(totalRegMins/60).toFixed(1)} hrs</td></tr>`;
+    html+=`<tr class="hours-total-row"><td>Total Regular</td><td>${regularSessions.length}</td><td>${fmtHours(totalRegHrs)}</td></tr>`;
     html+=`</tbody></table>`;
   } else {
     html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No regular sessions in this period.</div>`;
@@ -1268,27 +1327,27 @@ function renderHoursReport() {
   const ptConducted=ptSessions.filter(s=>s.conducted!==false);
   const ptNotHeld=ptSessions.filter(s=>s.conducted===false&&!!s.missedReason);
   const ptScheduled=ptSessions.filter(s=>s.conducted===false&&!s.missedReason);
-  const ptCondMins=ptConducted.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
-  const ptNotHeldMins=ptNotHeld.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
-  const ptSchedMins=ptScheduled.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+  const ptCondHrs=ptConducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+  const ptNotHeldHrs=ptNotHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+  const ptSchedHrs=ptScheduled.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
 
   html+=`<div class="hours-section-title">PT Sessions</div>`;
   if (ptSessions.length>0) {
     html+=`<table class="hours-table"><thead><tr><th>Status</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
-    html+=`<tr><td>&#10003; Conducted</td><td>${ptConducted.length}</td><td>${(ptCondMins/60).toFixed(1)} hrs</td></tr>`;
-    if (ptNotHeld.length>0) html+=`<tr><td>&#10007; Not Held</td><td>${ptNotHeld.length}</td><td>${(ptNotHeldMins/60).toFixed(1)} hrs</td></tr>`;
-    if (ptScheduled.length>0) html+=`<tr><td>&#8987; Scheduled</td><td>${ptScheduled.length}</td><td>${(ptSchedMins/60).toFixed(1)} hrs</td></tr>`;
-    html+=`<tr class="hours-total-row"><td>Total PT (conducted)</td><td>${ptConducted.length}</td><td>${(ptCondMins/60).toFixed(1)} hrs</td></tr>`;
+    html+=`<tr><td>&#10003; Conducted</td><td>${ptConducted.length}</td><td>${fmtHours(ptCondHrs)}</td></tr>`;
+    if (ptNotHeld.length>0) html+=`<tr><td>&#10007; Not Held</td><td>${ptNotHeld.length}</td><td>${fmtHours(ptNotHeldHrs)}</td></tr>`;
+    if (ptScheduled.length>0) html+=`<tr><td>&#8987; Scheduled</td><td>${ptScheduled.length}</td><td>${fmtHours(ptSchedHrs)}</td></tr>`;
+    html+=`<tr class="hours-total-row"><td>Total PT (conducted)</td><td>${ptConducted.length}</td><td>${fmtHours(ptCondHrs)}</td></tr>`;
     html+=`</tbody></table>`;
   } else {
     html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No PT sessions in this period.</div>`;
   }
 
   // Grand total
-  const grand=totalRegMins+ptCondMins;
+  const grand=totalRegHrs+ptCondHrs;
   html+=`<div class="hours-grand-total">
     <span style="font-size:13px;font-weight:500;opacity:0.85;">Grand Total &nbsp;<span style="opacity:0.6;font-size:11px;">(Regular + PT conducted)</span></span>
-    <span style="font-size:22px;font-weight:700;">${(grand/60).toFixed(1)} hrs</span>
+    <span style="font-size:22px;font-weight:700;">${fmtHours(grand)}</span>
   </div>`;
 
   el.innerHTML=html;
@@ -1375,7 +1434,7 @@ function renderPTTracker() {
     const contract=ptContracts.find(c=>c.studentName===student);
     const total=contract?contract.totalHours:null;
     const conductedList=list.filter(s=>s.conducted!==false);
-    const totalUsed=conductedList.reduce((n,s)=>n+(timeToMins(s.endTime)-timeToMins(s.startTime))/60,0);
+    const totalUsed=conductedList.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
     const pct=total?Math.min(totalUsed/total*100,100):0;
     const fillCls=pct>=100?'over':pct>=80?'warn':'';
 
@@ -1404,13 +1463,14 @@ function renderPTTracker() {
       </tr></thead><tbody>`;
       let running=0;
       list.forEach((sess,idx) => {
-        const dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
+        const dur=calcHours(sess.startTime,sess.endTime);
         const isConducted=sess.conducted!==false;
         const isMissed=sess.conducted===false&&!!sess.missedReason;
         if (isConducted) running+=dur;
         const rem=total!==null?total-running:null;
-        const remCell=rem===null?'<span style="color:#bbb">—</span>'
-          :rem<0?`<span class="hours-over">${Math.abs(rem).toFixed(1)} over</span>`:`${rem.toFixed(1)} hrs`;
+        const remVal=rem===null?null:Math.round(rem*10)/10;
+        const remCell=remVal===null?'<span style="color:#bbb">—</span>'
+          :remVal<0?`<span class="hours-over">${Math.abs(remVal)} over</span>`:`${remVal} hrs`;
         const rowCls=isConducted?'':isMissed?'missed-row':'pending-row';
         let statusCell;
         if (isConducted) {
@@ -1431,9 +1491,9 @@ function renderPTTracker() {
           <td style="color:#aaa;">${idx+1}</td>
           <td>${sess.date}</td>
           <td>${formatTime(sess.startTime)} – ${formatTime(sess.endTime)}</td>
-          <td>${dur.toFixed(1)} hrs</td>
+          <td>${fmtHours(dur)}</td>
           <td>${statusCell}</td>
-          <td>${isConducted?running.toFixed(1)+' hrs':'<span style="color:#bbb">—</span>'}</td>
+          <td>${isConducted?fmtHours(running):'<span style="color:#bbb">—</span>'}</td>
           <td>${isConducted?remCell:'<span style="color:#bbb">—</span>'}</td>
         </tr>`;
       });
@@ -1740,17 +1800,17 @@ function exportPTCSV() {
       rows.push([student,total,'','','','','','','','']);
     } else {
       list.forEach(function(sess) {
-        var dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
+        var dur=calcHours(sess.startTime,sess.endTime);
         var isConducted=sess.conducted!==false;
         var isMissed=sess.conducted===false&&!!sess.missedReason;
         if (isConducted) running+=dur;
-        var rem=total!==''?total-running:'';
+        var rem=total!==''?Math.round((total-running)*10)/10:'';
         var status=isConducted?'Done':isMissed?'Not held':'Scheduled';
-        rows.push([student,total,sess.date,sess.startTime,sess.endTime,dur.toFixed(1),
+        rows.push([student,total,sess.date,sess.startTime,sess.endTime,dur,
           status,
           isMissed?(sess.missedReason||''):'',
-          isConducted?running.toFixed(1):'',
-          isConducted&&rem!==''?rem.toFixed(1):'']);
+          isConducted?running:'',
+          isConducted&&rem!==''?rem:'']);
       });
     }
   });
@@ -1792,21 +1852,21 @@ function buildPrintHTML(teacherName, students, studentSessions) {
       rows+='</tr></thead><tbody>';
       var running=0;
       list.forEach(function(sess,idx) {
-        var dur=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/60;
+        var dur=calcHours(sess.startTime,sess.endTime);
         var ok=sess.conducted!==false;
         var missed=sess.conducted===false&&!!sess.missedReason;
         if (ok) running+=dur;
-        var r=total!==null?total-running:null;
+        var r=total!==null?Math.round((total-running)*10)/10:null;
         var rs=ok?'':'color:#aaa;';
         var statusText=ok?'&#10003; Done':missed?('&#10007; Not held: '+escHtml(sess.missedReason)):'Scheduled';
         rows+='<tr style="'+rs+'">';
         rows+='<td style="'+td+'">'+(idx+1)+'</td>';
         rows+='<td style="'+td+'">'+sess.date+'</td>';
         rows+='<td style="'+td+'">'+formatTime(sess.startTime)+' &ndash; '+formatTime(sess.endTime)+'</td>';
-        rows+='<td style="'+td+'">'+dur.toFixed(1)+' hrs</td>';
+        rows+='<td style="'+td+'">'+fmtHours(dur)+'</td>';
         rows+='<td style="'+td+'">'+statusText+'</td>';
-        rows+='<td style="'+td+'">'+(ok?running.toFixed(1)+' hrs':'&mdash;')+'</td>';
-        rows+='<td style="'+td+'">'+(ok&&r!==null?(r<0?Math.abs(r).toFixed(1)+' over':r.toFixed(1)+' hrs'):'&mdash;')+'</td>';
+        rows+='<td style="'+td+'">'+(ok?fmtHours(running):'&mdash;')+'</td>';
+        rows+='<td style="'+td+'">'+(ok&&r!==null?(r<0?Math.abs(r)+' over':r+' hrs'):'&mdash;')+'</td>';
         rows+='</tr>';
       });
       rows+='</tbody></table>';
@@ -1938,16 +1998,16 @@ function renderAllTeachersHours() {
       const ptCond=ptSess.filter(s=>s.conducted!==false);
       const ptNotHeld=ptSess.filter(s=>s.conducted===false&&!!s.missedReason);
       const ptSched=ptSess.filter(s=>s.conducted===false&&!s.missedReason);
-      const regMins=regSess.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
-      const ptCondMins=ptCond.reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
-      const total=regMins+ptCondMins;
+      const regHrs=regSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      const ptCondHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      const total=regHrs+ptCondHrs;
       html+=`<tr>
         <td><button class="btn-student-link" onclick="openTeacherDetailById('${t.id}')">${escHtml(t.name)}</button></td>
-        <td>${(regMins/60).toFixed(1)} <span style="color:#aaa;font-size:11px;">(${regSess.length})</span></td>
-        <td>${(ptCondMins/60).toFixed(1)} <span style="color:#aaa;font-size:11px;">(${ptCond.length})</span></td>
+        <td>${fmtHours(regHrs)} <span style="color:#aaa;font-size:11px;">(${regSess.length})</span></td>
+        <td>${fmtHours(ptCondHrs)} <span style="color:#aaa;font-size:11px;">(${ptCond.length})</span></td>
         <td style="color:${ptNotHeld.length>0?'#c2410c':'#ddd'};">${ptNotHeld.length>0?ptNotHeld.length:'—'}</td>
         <td style="color:${ptSched.length>0?'#6b7280':'#ddd'};">${ptSched.length>0?ptSched.length:'—'}</td>
-        <td><strong>${(total/60).toFixed(1)}</strong></td>
+        <td><strong>${fmtHours(total)}</strong></td>
       </tr>`;
     });
     html+=`</tbody></table>`;

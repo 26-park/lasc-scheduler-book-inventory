@@ -25,7 +25,11 @@
       "Bash(sed -n '395,410p' C:/lasc-scheduler/index.html)",
       "Bash(sed -n '560,575p' C:/lasc-scheduler/inventory.html)",
       "PowerShell(Get-ChildItem C:\\\\lasc-scheduler -Directory | Where-Object { $_.Name -ne \"node_modules\" } | Select-Object Name)",
-      "PowerShell(git *)"
+      "PowerShell(git *)",
+      "Bash(pip install *)",
+      "Bash(ls *.json)",
+      "Bash(ls serviceAccount*)",
+      "Bash(cat firebase.json)"
     ]
   }
 }
