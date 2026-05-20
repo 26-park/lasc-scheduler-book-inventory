@@ -28,6 +28,7 @@
     .campus-section { margin-bottom: 20px; }
     .campus-section:last-child { margin-bottom: 0; }
     .campus-section-header { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: #888; padding: 4px 0 8px; border-bottom: 1px solid #e8e8e8; margin-bottom: 10px; }
+    .campus-sub-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; color: #8b5cf6; margin: 12px 0 8px; padding: 3px 0 3px 6px; border-left: 3px solid #8b5cf6; }
     .teacher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
     .teacher-card { background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
     .teacher-card-info { cursor: pointer; flex: 1; }
@@ -158,6 +159,13 @@
     .session-action-group { margin-top:10px; }
     .session-action-group-label { font-size:10px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px; }
     .session-action-btns { display:flex;gap:6px;flex-wrap:wrap; }
+
+    /* Absence / substitute session block colors */
+    .session-block.not-held    { background:#fef9c3; color:#854d0e; border-left-color:#eab308; }
+    .session-block.sub-covered { background:#ede9fe; color:#6d28d9; border-left-color:#8b5cf6; }
+    .absence-badge { display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:0.4px;vertical-align:middle;margin-left:4px;background:#fde68a;color:#92400e; }
+
+
   </style>
 </head>
 <body>
@@ -247,15 +255,21 @@
 
   <div id="dtab-schedule" class="detail-tab-content active">
     <main>
-      <div class="card">
-        <div class="schedule-controls">
+      <!-- Quarter Selector Card (primary) -->
+      <div class="card" style="margin-bottom:8px;">
+        <div id="quarter-selector"></div>
+      </div>
+      <!-- Week Navigation Card (secondary) -->
+      <div class="card" style="padding:10px 16px;margin-bottom:8px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
           <div class="schedule-controls-left">
             <div class="week-nav">
-              <button onclick="changeWeek(-1)">&#8592;</button>
+              <button id="week-prev-btn" onclick="changeWeek(-1)">&#8592;</button>
               <span id="week-label" class="week-label"></span>
-              <button onclick="changeWeek(1)">&#8594;</button>
+              <button id="week-next-btn" onclick="changeWeek(1)">&#8594;</button>
             </div>
             <button class="btn btn-secondary btn-sm" onclick="goToToday()">Today</button>
+            <button class="btn btn-secondary btn-sm manager-only" onclick="deleteHolidaySessions()" style="background:#fff5f5;color:#dc2626;border-color:#fca5a5;" title="Delete all sessions that fall on holidays">&#128683; Clear Holiday Sessions</button>
           </div>
           <button class="btn btn-primary btn-sm manager-only" onclick="openAddModal()">+ Add Session</button>
         </div>
@@ -264,6 +278,8 @@
         <span class="legend-item"><span class="legend-dot Regular"></span>Regular</span>
         <span class="legend-item"><span class="legend-dot PT"></span>PT (done)</span>
         <span class="legend-item"><span class="legend-dot" style="background:#f9fafb;border:1px dashed #d1d5db;"></span>PT (scheduled)</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#fef9c3;border:1px solid #eab308;"></span>Not Held</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#ede9fe;border:1px solid #8b5cf6;"></span>Sub Covered</span>
       </div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div class="grid-wrapper">
@@ -284,6 +300,7 @@
         <button class="btn btn-primary" onclick="savePTContract()">Save</button>
       </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;">
+        <button class="btn btn-primary btn-sm manager-only" onclick="openAddPTFromTracker()">+ Add PT Session</button>
         <button class="btn btn-secondary btn-sm" onclick="exportPTCSV()">&#8595; Export CSV</button>
         <button class="btn btn-secondary btn-sm" onclick="printPTTracker()">&#128438; Print</button>
       </div>
@@ -352,7 +369,12 @@
     <!-- PT form -->
     <div id="pt-form" style="display:none;">
       <div class="form-grid">
-        <div class="form-group"><label>Student Name</label><input type="text" id="sess-student" placeholder="Student name" oninput="validateForm()"></div>
+        <div class="form-group"><label>Student</label>
+          <select id="sess-student-select" onchange="validateForm()">
+            <option value="">-- Select student --</option>
+          </select>
+          <div id="pt-no-students-msg" style="display:none;font-size:12px;color:#c2410c;margin-top:4px;">No registered students. Use "Set PT Contract" to register a student first.</div>
+        </div>
         <div class="form-group"><label>Date</label><input type="date" id="sess-date" oninput="validateForm()"></div>
         <div class="form-group"><label>Start Time</label><input type="time" id="sess-start" value="09:00" oninput="validateForm()"></div>
         <div class="form-group"><label>End Time</label><input type="time" id="sess-end" value="10:00" oninput="validateForm()"></div>
@@ -431,6 +453,12 @@
         </select>
       </div>
     </div>
+    <div class="form-group" style="margin-bottom:12px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">
+        <input type="checkbox" id="teacher-is-substitute" style="width:15px;height:15px;">
+        <span>Substitute Teacher</span>
+      </label>
+    </div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closeTeacherModal()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="saveTeacher()">Save</button>
@@ -504,41 +532,68 @@
 
 <!-- School Calendar Modal -->
 <div class="modal-overlay" id="school-calendar-modal">
-  <div class="modal" style="width:580px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+  <div class="modal" style="width:620px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
       <h3 style="margin:0;">&#128197; School Calendar</h3>
       <button onclick="closeCalendarModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#888;line-height:1;padding:0 4px;">&times;</button>
     </div>
 
-    <!-- Add Event Form (manager only) -->
-    <div class="manager-only" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
-      <div style="font-size:11px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Add School Event</div>
-      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-        <div class="form-group" style="margin-bottom:0;width:140px;"><label>Date</label><input type="date" id="cal-event-date"></div>
-        <div class="form-group" style="margin-bottom:0;flex:1;min-width:130px;"><label>Event Name</label><input type="text" id="cal-event-name" placeholder="e.g. LASC Anniversary"></div>
-        <div class="form-group" style="margin-bottom:0;width:115px;">
-          <label>Type</label>
-          <select id="cal-event-type">
-            <option value="event">Event</option>
-            <option value="holiday">School Holiday</option>
-            <option value="anniversary">Anniversary</option>
-          </select>
+    <!-- Tabs -->
+    <div style="display:flex;border-bottom:2px solid #e0e0e0;margin-bottom:14px;">
+      <button id="cal-tab-events" onclick="switchCalTab('events')" style="background:none;border:none;border-bottom:3px solid #1a1a2e;margin-bottom:-2px;padding:8px 18px;cursor:pointer;font-size:13px;font-weight:600;color:#1a1a2e;font-family:inherit;">Events</button>
+      <button id="cal-tab-quarters" onclick="switchCalTab('quarters')" style="background:none;border:none;border-bottom:3px solid transparent;margin-bottom:-2px;padding:8px 18px;cursor:pointer;font-size:13px;color:#666;font-family:inherit;">Quarters</button>
+    </div>
+
+    <!-- Events Tab -->
+    <div id="cal-pane-events">
+      <div class="manager-only" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Add School Event</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div class="form-group" style="margin-bottom:0;width:140px;"><label>Date</label><input type="date" id="cal-event-date"></div>
+          <div class="form-group" style="margin-bottom:0;flex:1;min-width:130px;"><label>Event Name</label><input type="text" id="cal-event-name" placeholder="e.g. LASC Anniversary"></div>
+          <div class="form-group" style="margin-bottom:0;width:115px;">
+            <label>Type</label>
+            <select id="cal-event-type">
+              <option value="event">Event</option>
+              <option value="holiday">School Holiday</option>
+              <option value="anniversary">Anniversary</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" onclick="addSchoolEvent()" style="align-self:flex-end;">+ Add</button>
         </div>
-        <button class="btn btn-primary" onclick="addSchoolEvent()" style="align-self:flex-end;">+ Add</button>
       </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div class="week-nav">
+          <button onclick="changeCalYear(-1)">&#8592;</button>
+          <span id="cal-year-label" class="week-label" style="min-width:55px;"></span>
+          <button onclick="changeCalYear(1)">&#8594;</button>
+        </div>
+        <span style="font-size:12px;color:#aaa;">US federal holidays + school events</span>
+      </div>
+      <div id="cal-events-list" style="max-height:380px;overflow-y:auto;"></div>
     </div>
 
-    <!-- Year navigation -->
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
-      <div class="week-nav">
-        <button onclick="changeCalYear(-1)">&#8592;</button>
-        <span id="cal-year-label" class="week-label" style="min-width:55px;"></span>
-        <button onclick="changeCalYear(1)">&#8594;</button>
+    <!-- Quarters Tab -->
+    <div id="cal-pane-quarters" style="display:none;">
+      <div class="manager-only" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Add Quarter</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
+          <div class="form-group" style="margin-bottom:0;width:80px;"><label>Year</label><input type="number" id="q-year" placeholder="2026" min="2020" max="2035" style="width:80px;"></div>
+          <div class="form-group" style="margin-bottom:0;width:110px;"><label>Quarter</label>
+            <select id="q-num">
+              <option value="1">Q1 (Winter)</option>
+              <option value="2">Q2 (Spring)</option>
+              <option value="3">Q3 (Summer)</option>
+              <option value="4">Q4 (Fall)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-bottom:0;width:140px;"><label>Start Date</label><input type="date" id="q-start"></div>
+          <div class="form-group" style="margin-bottom:0;width:140px;"><label>End Date</label><input type="date" id="q-end"></div>
+          <button class="btn btn-primary" onclick="addQuarter()" style="align-self:flex-end;">+ Add</button>
+        </div>
       </div>
-      <span style="font-size:12px;color:#aaa;">US federal holidays + school events</span>
+      <div id="quarters-list" style="max-height:380px;overflow-y:auto;"></div>
     </div>
-
-    <div id="cal-events-list" style="max-height:380px;overflow-y:auto;"></div>
   </div>
 </div>
 
@@ -587,6 +642,7 @@ let pendingTeacherId = window.location.hash.slice(1) || null;
 let calendarYear = new Date().getFullYear();
 let homeHoursPeriod = 'week';
 let allSessionsGlobal = [], unsubAllSessionsGlobal = null;
+let quarters=[], currentQuarter=null, scheduleQuarterYear=new Date().getFullYear(), unsubQuarters=null;
 
 // Utilities
 function getWeekStart(date) {
@@ -603,6 +659,7 @@ function formatTime(t) {
   const ap = h>=12?'pm':'am'; const hr = h%12||12;
   return m===0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2,'0')}${ap}`;
 }
+function fmtDate(s) { if(!s) return ''; const [y,m,d]=s.split('-'); return `${+m}/${+d}/${y}`; }
 // 50-min period = 1 credit hour
 function calcHours(s, e) {
   return Math.round((timeToMins(e) - timeToMins(s) + 10) / 60 * 2) / 2;
@@ -710,7 +767,18 @@ function goHome() {
 }
 
 function openTeacherDetail(teacher) {
-  currentTeacher = teacher; currentWeekStart = getWeekStart(new Date());
+  currentTeacher = teacher;
+  // Reset to current quarter and today's week
+  const today = dateToStr(new Date());
+  const todayQ = quarters.find(q => q.startDate <= today && q.endDate >= today);
+  if (todayQ) {
+    currentQuarter = todayQ;
+    scheduleQuarterYear = todayQ.year;
+  } else {
+    // No quarter contains today — keep whatever was selected, or null
+    if (!currentQuarter) scheduleQuarterYear = new Date().getFullYear();
+  }
+  currentWeekStart = getWeekStart(new Date());
   window.location.hash = teacher.id;
   document.getElementById('view-home').classList.remove('active');
   document.getElementById('view-detail').classList.add('active');
@@ -727,7 +795,7 @@ function switchDetailTab(name) {
   const idx={schedule:0,pt:1};
   document.querySelectorAll('.detail-tab')[idx[name]].classList.add('active');
   document.getElementById('dtab-'+name).classList.add('active');
-  if (name==='schedule') renderSchedule();
+  if (name==='schedule') { renderQuarterSelector(); renderSchedule(); }
   if (name==='pt')       renderPTTracker();
 }
 
@@ -737,6 +805,7 @@ function initTeacherListener() {
     snap => {
       teachers = snap.docs.map(d => ({id:d.id,...d.data()}));
       renderTeacherList();
+      if (document.getElementById('home-tab-hours').classList.contains('active')) renderAllTeachersHours();
       if (currentTeacher) {
         const updated = teachers.find(t => t.id===currentTeacher.id);
         if (updated) { currentTeacher=updated; document.getElementById('header-teacher-name').textContent=`${updated.name} (${updated.campus})`; }
@@ -784,8 +853,44 @@ function updateWeekLabel() {
   document.getElementById('week-label').textContent =
     `${currentWeekStart.getMonth()+1}/${currentWeekStart.getDate()} – ${end.getMonth()+1}/${end.getDate()}/${end.getFullYear()}`;
 }
-function changeWeek(dir) { currentWeekStart.setDate(currentWeekStart.getDate()+dir*7); renderSchedule(); }
-function goToToday() { currentWeekStart=getWeekStart(new Date()); renderSchedule(); }
+function changeWeek(dir) {
+  const next = new Date(currentWeekStart);
+  next.setDate(next.getDate() + dir * 7);
+  if (currentQuarter) {
+    const qStartWeek = getWeekStart(strToDate(currentQuarter.startDate));
+    const qEndWeek = getWeekStart(strToDate(currentQuarter.endDate));
+    if (next < qStartWeek || next > qEndWeek) return;
+  }
+  currentWeekStart = next;
+  renderSchedule();
+}
+function goToToday() {
+  const today = dateToStr(new Date());
+  const todayQ = quarters.find(q => q.startDate <= today && q.endDate >= today);
+  if (todayQ) {
+    currentQuarter = todayQ;
+    scheduleQuarterYear = todayQ.year;
+    renderQuarterSelector();
+  }
+  currentWeekStart = getWeekStart(new Date());
+  renderSchedule();
+}
+function updateWeekNavState() {
+  const prev = document.getElementById('week-prev-btn');
+  const next = document.getElementById('week-next-btn');
+  if (!prev || !next) return;
+  if (currentQuarter) {
+    const qStartWeek = getWeekStart(strToDate(currentQuarter.startDate));
+    const qEndWeek = getWeekStart(strToDate(currentQuarter.endDate));
+    prev.disabled = currentWeekStart <= qStartWeek;
+    next.disabled = currentWeekStart >= qEndWeek;
+    prev.style.opacity = prev.disabled ? '0.35' : '';
+    next.style.opacity = next.disabled ? '0.35' : '';
+  } else {
+    prev.disabled = false; next.disabled = false;
+    prev.style.opacity = ''; next.style.opacity = '';
+  }
+}
 
 function renderSchedule() {
   if (!document.getElementById('dtab-schedule').classList.contains('active')) return;
@@ -800,7 +905,13 @@ function renderSchedule() {
   for (let i=0;i<7;i++) {
     const d=new Date(currentWeekStart); d.setDate(d.getDate()+i);
     const dateStr=dateToStr(d), isToday=dateStr===today;
-    const daySessions=sessions.filter(s=>s.date===dateStr);
+    const qFilter = s => !currentQuarter || (s.date>=currentQuarter.startDate && s.date<=currentQuarter.endDate);
+    const ownSessions = sessions.filter(s=>s.date===dateStr && qFilter(s));
+    // Sessions where this teacher is the substitute (from global sessions list)
+    const subCovSessions = currentTeacher ? allSessionsGlobal.filter(s=>
+      s.date===dateStr && s.coverType==='substituted' && s.substituteId===currentTeacher.id &&
+      s.teacherId!==currentTeacher.id && qFilter(s)
+    ) : [];
     const hdrStyle=isToday?'background:#eef2ff;color:#3730a3;':'';
     const usHoliday=getHolidayName(dateStr);
     const schoolEvt=schoolEvents.find(e=>e.date===dateStr);
@@ -818,13 +929,15 @@ function renderSchedule() {
       const cls=schoolEvt.type==='anniversary'?'school-anniversary':'school-event';
       html+=`<div class="day-holiday-banner ${cls}">&#128205; ${escHtml(schoolEvt.name)}</div>`;
     }
-    daySessions.forEach(sess => {
+    // Render own sessions
+    ownSessions.forEach(sess => {
       const top=(timeToMins(sess.startTime)-GRID_START)/30*SLOT_H;
       const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
       if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
       const label = sess.type==='Regular' ? (sess.studentName ? escHtml(sess.studentName) : 'Regular') : escHtml(sess.studentName);
       const isPending = sess.type==='PT' && sess.conducted===false;
       const hrs = calcHours(sess.startTime, sess.endTime);
+      const absClass = sess.absenceType ? ' not-held' : '';
       let metaLines = '';
       if (sess.type === 'Regular') {
         if (sess.classroom) metaLines += `<div class="sb-meta">Room: ${escHtml(sess.classroom)}</div>`;
@@ -832,16 +945,38 @@ function renderSchedule() {
         if (sess.classLevel) metaLines += `<div class="sb-meta">Level: ${escHtml(sess.classLevel)}</div>`;
       }
       metaLines += `<div class="sb-meta">${formatTime(sess.startTime)}–${formatTime(sess.endTime)} · ${fmtHours(hrs)}${isPending?' · scheduled':''}</div>`;
-      html+=`<div class="session-block ${sess.type}${isPending?' pending':''}"
+      if (sess.absenceType) {
+        const leaveLbl = sess.absenceType==='paid'?'Paid':'Unpaid';
+        const coverLbl = sess.coverType==='substituted'&&sess.substituteName ? `Sub: ${escHtml(sess.substituteName)}` : 'Cancelled';
+        metaLines += `<div class="sb-meta">${leaveLbl} · ${coverLbl}</div>`;
+      }
+      html+=`<div class="session-block ${sess.type}${isPending?' pending':''}${absClass}"
         style="top:${top}px;height:${Math.max(height-2,16)}px;"
         onclick="openDetailModal('${sess.id}')">
         <div class="sb-student">${label}</div>
         ${metaLines}
       </div>`;
     });
+    // Render sub-covered sessions (this teacher is the substitute)
+    subCovSessions.forEach(sess => {
+      const top=(timeToMins(sess.startTime)-GRID_START)/30*SLOT_H;
+      const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
+      if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
+      const origTeacher = teachers.find(t=>t.id===sess.teacherId);
+      const hrs = calcHours(sess.startTime, sess.endTime);
+      const label = sess.type==='Regular' ? (sess.studentName ? escHtml(sess.studentName) : 'Regular') : escHtml(sess.studentName);
+      html+=`<div class="session-block sub-covered"
+        style="top:${top}px;height:${Math.max(height-2,16)}px;"
+        onclick="openDetailModal('${sess.id}')">
+        <div class="sb-student">▶ ${label}</div>
+        <div class="sb-meta">${formatTime(sess.startTime)}–${formatTime(sess.endTime)} · ${fmtHours(hrs)}</div>
+        <div class="sb-meta">Sub for: ${escHtml(origTeacher?origTeacher.name:'?')}</div>
+      </div>`;
+    });
     html+='</div></div>';
   }
   grid.innerHTML=html;
+  updateWeekNavState();
 }
 
 // Add Session Modal
@@ -862,6 +997,7 @@ function openAddModal() {
   addTimeSlotRow();
   document.getElementById('regular-form').style.display='';
   document.getElementById('pt-form').style.display='none';
+  if(document.getElementById('sess-student-select')) document.getElementById('sess-student-select').value='';
   document.getElementById('add-session-modal').classList.add('open');
 }
 function closeAddModal() { document.getElementById('add-session-modal').classList.remove('open'); }
@@ -871,6 +1007,7 @@ function onSessionTypeChange() {
   document.getElementById('regular-form').style.display=type==='Regular'?'':'none';
   document.getElementById('pt-form').style.display=type==='PT'?'':'none';
   document.getElementById('session-warnings').innerHTML='';
+  if (type==='PT') populatePTStudentDropdown('sess-student-select');
   validateForm();
 }
 
@@ -942,7 +1079,7 @@ function validateForm() {
           if (addDates.length===0)
             errors.push(`All selected dates are school holidays. No sessions can be added.`);
           else {
-            warnings.push(`&#128467; ${blockedDates.length} holiday date(s) will be skipped (${blockedDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${blockedDates.length>3?'…':''}). You will be asked to confirm when clicking Add.`);
+            warnings.push(`&#128467; ${blockedDates.length} holiday date(s) will be skipped (${blockedDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${blockedDates.length>3?'…':''}). You will be asked to confirm when clicking Add.`);
             infos.push(`Will create ${addDates.length*validSlots.length} session(s) across ${addDates.length} day(s).`);
           }
         } else {
@@ -954,13 +1091,13 @@ function validateForm() {
             if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
           }
           if (conflictDates.length>0)
-            errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
+            errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
         }
       }
     }
   } else {
     const date=document.getElementById('sess-date').value;
-    const stud=document.getElementById('sess-student').value.trim();
+    const stud=document.getElementById('sess-student-select').value;
     const start=document.getElementById('sess-start').value;
     const end=document.getElementById('sess-end').value;
     if (!date||!stud||!start||!end||!currentTeacher) { warnEl.innerHTML=''; return; }
@@ -980,6 +1117,26 @@ function validateForm() {
     ...warnings.map(w=>`<div class="warning-item">⚠ ${w}</div>`),
     ...infos.map(i=>`<div class="info-item">ℹ ${i}</div>`)
   ].join('');
+}
+
+function getConsecutiveBlock(date, startTime, endTime, excludeId=null) {
+  const s = timeToMins(startTime), e = timeToMins(endTime);
+  const slots = sessions
+    .filter(x => x.date===date && x.id!==excludeId)
+    .map(x => ({start:timeToMins(x.startTime), end:timeToMins(x.endTime)}));
+  slots.push({start:s, end:e});
+  slots.sort((a,b)=>a.start-b.start);
+  let maxBlock=0, blockStart=slots[0].start, blockEnd=slots[0].end;
+  for (let i=1;i<slots.length;i++) {
+    if (slots[i].start - blockEnd < 30) { // less than 30 min gap = consecutive
+      blockEnd = Math.max(blockEnd, slots[i].end);
+    } else {
+      blockStart=slots[i].start; blockEnd=slots[i].end;
+    }
+    maxBlock=Math.max(maxBlock, blockEnd-blockStart);
+  }
+  maxBlock=Math.max(maxBlock, blockEnd-blockStart);
+  return maxBlock;
 }
 
 function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null) {
@@ -1002,7 +1159,67 @@ function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null
     if (workedDates.has(dateToStr(d))) streak++; else streak=0;
     if (streak>=7) { warnings.push('Would work 7 or more consecutive days.'); break; }
   }
+  const maxBlock = getConsecutiveBlock(date, startTime, endTime, excludeId);
+  if (maxBlock >= 5*60) {
+    warnings.push(`Would have ${(maxBlock/60).toFixed(1)}+ consecutive teaching hours without a 30-minute break.`);
+  }
   return warnings;
+}
+
+function populatePTStudentDropdown(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel) return;
+  const names = ptContracts.map(c=>c.studentName).sort();
+  const noMsg = document.getElementById('pt-no-students-msg');
+  if (names.length === 0) {
+    sel.innerHTML = '<option value="">— No registered students —</option>';
+    sel.disabled = true;
+    if (noMsg) noMsg.style.display='';
+  } else {
+    sel.disabled = false;
+    if (noMsg) noMsg.style.display='none';
+    const current = sel.value;
+    sel.innerHTML = '<option value="">-- Select student --</option>' +
+      names.map(n=>`<option value="${escHtml(n)}" ${n===current?'selected':''}>${escHtml(n)}</option>`).join('');
+  }
+}
+
+function openAddPTFromTracker() {
+  if (currentRole !== 'manager') return;
+  document.getElementById('sess-type').value='PT';
+  onSessionTypeChange();
+  populatePTStudentDropdown('sess-student-select');
+  document.getElementById('sess-date').value=dateToStr(new Date());
+  document.getElementById('sess-start').value='09:00';
+  document.getElementById('sess-end').value='10:00';
+  document.getElementById('sess-notes').value='';
+  document.getElementById('session-warnings').innerHTML='';
+  document.getElementById('regular-form').style.display='none';
+  document.getElementById('pt-form').style.display='';
+  document.getElementById('add-session-modal').classList.add('open');
+}
+
+async function deleteHolidaySessions() {
+  if (currentRole !== 'manager') return;
+  const holidaySessions = sessions.filter(s => isDateBlocked(s.date));
+  if (holidaySessions.length === 0) {
+    showToast('No sessions found on holidays.', 'ok');
+    return;
+  }
+  const grouped = {};
+  holidaySessions.forEach(s => { if(!grouped[s.date]) grouped[s.date]=[]; grouped[s.date].push(s); });
+  const dateList = Object.keys(grouped).sort().map(d => {
+    const hName = getHolidayName(d) || schoolEvents.find(e=>e.date===d&&(e.type==='holiday'||e.type==='anniversary'))?.name || 'School Holiday';
+    return `• ${fmtDate(d)} (${hName}): ${grouped[d].length} session(s)`;
+  }).join('\n');
+  const ok = confirm(`Found ${holidaySessions.length} session(s) on holidays:\n\n${dateList}\n\nDelete all of these sessions?`);
+  if (!ok) return;
+  try {
+    const batch = db.batch();
+    holidaySessions.forEach(s => batch.delete(db.collection('sessions').doc(s.id)));
+    await batch.commit();
+    showToast(`${holidaySessions.length} holiday session(s) deleted.`, 'ok');
+  } catch(e) { showToast('Error deleting sessions.', 'error'); }
 }
 
 async function addSession() {
@@ -1031,7 +1248,7 @@ async function addSession() {
     if (blockedDates.length>0) {
       if (effectiveDates.length===0) return showToast('All dates are school holidays. No sessions can be added.','error');
       const confirmed=confirm(
-        `${blockedDates.length} holiday date(s) are included:\n${blockedDates.slice(0,5).map(d=>d.slice(5)).join(', ')}${blockedDates.length>5?'…':''}\n\nSkip holidays and add ${effectiveDates.length} day(s) (${effectiveDates.length*validSlots.length} sessions)?`
+        `${blockedDates.length} holiday date(s) are included:\n${blockedDates.slice(0,5).map(d=>fmtDate(d)).join(', ')}${blockedDates.length>5?'…':''}\n\nSkip holidays and add ${effectiveDates.length} day(s) (${effectiveDates.length*validSlots.length} sessions)?`
       );
       if (!confirmed) return;
     }
@@ -1040,7 +1257,19 @@ async function addSession() {
     for (const date of effectiveDates) for (const ts of validSlots) {
       if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
     }
-    if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>d.slice(5)).join(', ')}${conflictDates.length>3?'…':''}`, 'error');
+    if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?'…':''}`, 'error');
+    // Check rules for all effective dates
+    const ruleViolations = new Set();
+    for (const date of effectiveDates) {
+      for (const ts of validSlots) {
+        const w = getRuleWarnings({date, startTime:ts.start, endTime:ts.end, type:'Regular', teacherId:currentTeacher.id});
+        w.forEach(v => ruleViolations.add(v));
+      }
+    }
+    if (ruleViolations.size > 0) {
+      const ok = confirm(`⚠ Schedule Warning\n\n${[...ruleViolations].map(w=>'• '+w).join('\n')}\n\nDo you want to proceed anyway?`);
+      if (!ok) return;
+    }
     try {
       const regClassroom=document.getElementById('reg-classroom').value.trim();
       const regClassCode=document.getElementById('reg-class-code').value.trim();
@@ -1062,17 +1291,22 @@ async function addSession() {
     } catch(e) { console.error(e); showToast('Error saving sessions.','error'); }
 
   } else {
-    const stud=document.getElementById('sess-student').value.trim();
+    const stud=document.getElementById('sess-student-select').value;
     const date=document.getElementById('sess-date').value;
     const start=document.getElementById('sess-start').value;
     const end=document.getElementById('sess-end').value;
-    if (!stud) return showToast('Please enter a student name.','error');
+    if (!stud) return showToast('Please select a registered student.','error');
     if (!date) return showToast('Please select a date.','error');
     if (!start||!end) return showToast('Please set start and end times.','error');
     if (timeToMins(end)<=timeToMins(start)) return showToast('End time must be after start time.','error');
     const overlaps=getOverlaps(date,start,end);
     if (overlaps.length>0) return showToast(`Cannot add: overlaps with ${overlaps[0].type} session (${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}).`,'error');
     if (isDateBlocked(date)) return showToast('Cannot add: this date is a school holiday. Mark it as School Open in School Calendar first.','error');
+    const ptRuleWarnings = getRuleWarnings({date, startTime:start, endTime:end, type:'PT', teacherId:currentTeacher.id});
+    if (ptRuleWarnings.length > 0) {
+      const ok = confirm(`⚠ Schedule Warning\n\n${ptRuleWarnings.map(w=>'• '+w).join('\n')}\n\nDo you want to proceed anyway?`);
+      if (!ok) return;
+    }
     try {
       await db.collection('sessions').add({
         teacherId:currentTeacher.id, studentName:stud, type:'PT',
@@ -1093,27 +1327,63 @@ function openDetailModal(id) {
   const d=strToDate(s.date);
   const dayName=DAYS[((d.getDay()+6)%7)];
 
+  const absLabel = s.absenceType ? `<span class="absence-badge">${s.absenceType==='paid'?'Paid':'Unpaid'} · ${s.coverType==='substituted'&&s.substituteName?'Sub: '+escHtml(s.substituteName):'Cancelled'}</span>` : '';
   document.getElementById('session-detail-content').innerHTML=`
     ${s.type==='Regular'?`<div class="modal-row"><strong>Class</strong>${escHtml(s.studentName||'Regular')}</div>`:''}
     ${s.type==='Regular'?`<div class="modal-row"><strong>Classroom</strong>${escHtml(s.classroom||'—')}</div>`:''}
     ${s.type==='Regular'?`<div class="modal-row"><strong>Code</strong>${escHtml(s.classCode||'N/A')}</div>`:''}
     ${s.type==='Regular'?`<div class="modal-row"><strong>Level</strong>${escHtml(s.classLevel||'—')}</div>`:''}
     ${s.type!=='Regular'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
-    <div class="modal-row"><strong>Date</strong>${s.date} (${dayName})</div>
+    <div class="modal-row"><strong>Date</strong>${fmtDate(s.date)} (${dayName})</div>
     <div class="modal-row"><strong>Time</strong>${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime))})</div>
-    <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}</div>
+    <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}${absLabel}</div>
     ${s.notes?`<div class="modal-row"><strong>Notes</strong>${escHtml(s.notes)}</div>`:''}
   `;
 
   let actionsHtml = '';
   if (currentRole === 'manager') {
+    const campus = currentTeacher ? currentTeacher.campus : '';
+    // Same-campus teachers first; if none, show all teachers as fallback
+    let sameTeachers = teachers.filter(t => t.campus===campus && t.id!==s.teacherId);
+    const allOtherTeachers = teachers.filter(t => t.id!==s.teacherId);
+    if (sameTeachers.length === 0) sameTeachers = allOtherTeachers;
+    const regularTeachers = sameTeachers.filter(t => !t.isSubstitute);
+    const subTeachers = sameTeachers.filter(t => t.isSubstitute);
+    const regularOpts = regularTeachers.map(t=>`<option value="t:${t.id}">${escHtml(t.name)}${t.campus&&t.campus!==campus?' ('+escHtml(t.campus)+')':''}</option>`).join('');
+    const subTeacherOpts = subTeachers.map(t=>`<option value="t:${t.id}">${escHtml(t.name)}${t.campus&&t.campus!==campus?' ('+escHtml(t.campus)+')':''}</option>`).join('');
+    const subDropdown = `<select id="abs-sub-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;display:none;">
+      <option value="">— Select teacher —</option>
+      ${regularOpts}${subTeacherOpts?`<optgroup label="Substitute">${subTeacherOpts}</optgroup>`:''}
+    </select>`;
+    // Pre-select if already set
+    const preSubVal = s.substituteId && teachers.find(t=>t.id===s.substituteId) ? `t:${s.substituteId}` : '';
+    const preLeave = s.absenceType || 'paid';
+    const preCover = s.coverType || 'substituted';
+    const absenceSection = `
+      <div class="session-action-group" style="margin-top:10px;">
+        <div class="session-action-group-label">${s.absenceType?'Update Not-Held Status':'Mark Not Held'}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+          <select id="abs-leave-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;">
+            <option value="paid" ${preLeave==='paid'?'selected':''}>Paid Leave</option>
+            <option value="unpaid" ${preLeave==='unpaid'?'selected':''}>Unpaid Leave</option>
+          </select>
+          <select id="abs-cover-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;" onchange="toggleAbsSubDrop()">
+            <option value="cancelled" ${preCover==='cancelled'?'selected':''}>Cancelled</option>
+            <option value="substituted" ${preCover==='substituted'?'selected':''}>Substituted</option>
+          </select>
+          ${subDropdown}
+          <button class="btn btn-sm" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;" onclick="saveAbsence('${id}')">Save</button>
+          ${s.absenceType?`<button class="btn btn-secondary btn-sm" onclick="clearAbsence('${id}')">Clear</button>`:''}
+        </div>
+      </div>`;
     if (s.type === 'Regular') {
       const recurring = getRecurringSessions(s);
       const recCount = recurring.length;
       const recLabel = `All "${escHtml(s.studentName)}" on ${dayName}s (${recCount})`;
       actionsHtml = `
         <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;">
-          <div class="session-action-group">
+          ${absenceSection}
+          <div class="session-action-group" style="margin-top:10px;">
             <div class="session-action-group-label">Edit</div>
             <div class="session-action-btns">
               <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit this session</button>
@@ -1130,14 +1400,26 @@ function openDetailModal(id) {
         </div>`;
     } else {
       actionsHtml = `
-        <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
-          <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit</button>
-          <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete</button>
+        <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;">
+          ${absenceSection}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete</button>
+          </div>
         </div>`;
     }
   }
   document.getElementById('session-action-section').innerHTML = actionsHtml;
   document.getElementById('session-detail-modal').classList.add('open');
+  // Initialize sub dropdown visibility and pre-select
+  toggleAbsSubDrop();
+  if (s.substituteId) {
+    const sel = document.getElementById('abs-sub-sel');
+    if (sel) {
+      const tOpt = sel.querySelector(`option[value="t:${s.substituteId}"]`);
+      if (tOpt) tOpt.selected = true;
+    }
+  }
 }
 
 function closeDetailModal() {
@@ -1294,7 +1576,7 @@ function renderHoursReport() {
   if (from>to) { el.innerHTML='<div class="error-item">⛔ From date must be on or before To date.</div>'; return; }
 
   const labelEl=document.getElementById('hours-range-label');
-  if (labelEl) labelEl.textContent=from===to?from:`${from} – ${to}`;
+  if (labelEl) labelEl.textContent=from===to?fmtDate(from):`${fmtDate(from)} – ${fmtDate(to)}`;
 
   const inRange=s=>s.date>=from&&s.date<=to;
   const regularSessions=sessions.filter(s=>s.type==='Regular'&&inRange(s));
@@ -1489,7 +1771,7 @@ function renderPTTracker() {
         }
         html+=`<tr class="${rowCls}">
           <td style="color:#aaa;">${idx+1}</td>
-          <td>${sess.date}</td>
+          <td>${fmtDate(sess.date)}</td>
           <td>${formatTime(sess.startTime)} – ${formatTime(sess.endTime)}</td>
           <td>${fmtHours(dur)}</td>
           <td>${statusCell}</td>
@@ -1590,6 +1872,11 @@ async function addPTFromMini() {
     warnEl.innerHTML=`<div class="error-item">⛔ This date is a school holiday. Go to School Calendar → Mark School Open to allow sessions.</div>`;
     return;
   }
+  const miniRuleWarnings = getRuleWarnings({date, startTime:start, endTime:end, type:'PT', teacherId:currentTeacher.id});
+  if (miniRuleWarnings.length > 0) {
+    const ok = confirm(`⚠ Schedule Warning\n\n${miniRuleWarnings.map(w=>'• '+w).join('\n')}\n\nProceed with adding this PT session?`);
+    if (!ok) return;
+  }
   warnEl.innerHTML='';
   try {
     await db.collection('sessions').add({
@@ -1613,13 +1900,221 @@ function initSchoolEventsListener() {
   },err=>console.error('school_events error:',err));
 }
 
+
+// Absence marking
+function toggleAbsSubDrop() {
+  const coverSel = document.getElementById('abs-cover-sel');
+  const subSel = document.getElementById('abs-sub-sel');
+  if (!coverSel || !subSel) return;
+  subSel.style.display = coverSel.value === 'substituted' ? '' : 'none';
+}
+
+async function saveAbsence(id) {
+  const leaveSel = document.getElementById('abs-leave-sel');
+  const coverSel = document.getElementById('abs-cover-sel');
+  const subSel = document.getElementById('abs-sub-sel');
+  if (!leaveSel || !coverSel) return;
+  const leaveType = leaveSel.value;
+  const coverType = coverSel.value;
+  const rawSubVal = subSel ? subSel.value : '';
+  let subId = null, subName = null;
+  if (coverType === 'substituted' && rawSubVal) {
+    const realId = rawSubVal.replace(/^t:/, '');
+    const t = teachers.find(x => x.id === realId);
+    if (t) { subId = t.id; subName = t.name; }
+  }
+  const del = firebase.firestore.FieldValue.delete();
+  try {
+    await db.collection('sessions').doc(id).update({
+      absenceType: leaveType,
+      coverType,
+      substituteId: subId || del,
+      substituteName: subName || del
+    });
+    closeDetailModal();
+    showToast('Not-held status saved.', 'ok');
+  } catch(e) { showToast('Error saving absence.', 'error'); }
+}
+
+async function clearAbsence(id) {
+  try {
+    await db.collection('sessions').doc(id).update({
+      absenceType: firebase.firestore.FieldValue.delete(),
+      coverType: firebase.firestore.FieldValue.delete(),
+      substituteId: firebase.firestore.FieldValue.delete(),
+      substituteName: firebase.firestore.FieldValue.delete()
+    });
+    closeDetailModal();
+    showToast('Not-held status cleared.', 'ok');
+  } catch(e) { showToast('Error clearing absence.', 'error'); }
+}
+
+// Quarter System
+function initQuartersListener() {
+  if (unsubQuarters) return;
+  unsubQuarters = db.collection('quarters').onSnapshot(snap => {
+    quarters = snap.docs.map(d => ({id:d.id,...d.data()}));
+    quarters.sort((a,b) => a.year !== b.year ? a.year - b.year : a.quarter - b.quarter);
+    detectCurrentQuarter();
+    renderQuarterSelector();
+    renderCalendarQuarters();
+  }, err => console.error('quarters error:',err));
+}
+
+const Q_LABELS = ['','Winter','Spring','Summer','Fall'];
+
+function detectCurrentQuarter() {
+  const today = dateToStr(new Date());
+  const found = quarters.find(q => q.startDate <= today && q.endDate >= today);
+  if (found) {
+    // Always sync to current quarter on initial load or if not yet set
+    if (!currentQuarter) {
+      currentQuarter = found;
+      scheduleQuarterYear = found.year;
+      currentWeekStart = getWeekStart(new Date()); // start at today's week within the quarter
+    }
+  }
+}
+
+function selectQuarter(year, q) {
+  if (year === null) {
+    currentQuarter = null;
+    currentWeekStart = getWeekStart(new Date());
+    renderQuarterSelector();
+    renderSchedule();
+    return;
+  }
+  const found = quarters.find(x => x.year === year && x.quarter === q);
+  if (found) {
+    currentQuarter = found;
+    scheduleQuarterYear = year;
+    currentWeekStart = getWeekStart(strToDate(found.startDate));
+  } else {
+    currentQuarter = null;
+    scheduleQuarterYear = year;
+  }
+  renderQuarterSelector();
+  renderSchedule();
+}
+
+function changeScheduleQuarterYear(dir) {
+  scheduleQuarterYear += dir;
+  renderQuarterSelector();
+}
+
+function renderQuarterSelector() {
+  const el = document.getElementById('quarter-selector');
+  if (!el) return;
+  const yr = scheduleQuarterYear;
+  const yrQuarters = quarters.filter(q => q.year === yr);
+
+  // Top row: label + year nav
+  let html = `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+    <span style="font-size:11px;font-weight:700;color:#888;text-transform:uppercase;letter-spacing:0.6px;">Quarter</span>
+    <div class="week-nav" style="margin-left:auto;">
+      <button onclick="changeScheduleQuarterYear(-1)">&#8592;</button>
+      <span class="week-label" style="min-width:55px;font-size:15px;">${yr}</span>
+      <button onclick="changeScheduleQuarterYear(1)">&#8594;</button>
+    </div>
+  </div>`;
+
+  // Quarter buttons row
+  html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">`;
+  [1,2,3,4].forEach(q => {
+    const qData = yrQuarters.find(x => x.quarter === q);
+    const isActive = currentQuarter && currentQuarter.year === yr && currentQuarter.quarter === q;
+    const label = `Q${q}<span style="font-size:11px;font-weight:400;margin-left:3px;">${Q_LABELS[q]}</span>`;
+    if (qData) {
+      html += `<button onclick="selectQuarter(${yr},${q})" style="padding:8px 18px;border:2px solid ${isActive?'#1a1a2e':'#d0d0d0'};background:${isActive?'#1a1a2e':'white'};color:${isActive?'white':'#333'};border-radius:6px;cursor:pointer;font-size:14px;font-weight:600;font-family:inherit;transition:all 0.15s;">${label}</button>`;
+    } else {
+      html += `<button disabled style="padding:8px 18px;border:2px solid #e8e8e8;background:#fafafa;color:#bbb;border-radius:6px;cursor:not-allowed;font-size:14px;font-weight:600;font-family:inherit;">${label}</button>`;
+    }
+  });
+  html += `<button onclick="selectQuarter(null)" style="padding:8px 16px;border:2px solid ${!currentQuarter?'#1a1a2e':'#d0d0d0'};background:${!currentQuarter?'#1a1a2e':'white'};color:${!currentQuarter?'white':'#666'};border-radius:6px;cursor:pointer;font-size:13px;font-family:inherit;">All</button>`;
+  html += `</div>`;
+
+  // Quarter info subtitle
+  if (currentQuarter) {
+    html += `<div style="margin-top:8px;font-size:12px;color:#888;">
+      <span style="font-weight:600;color:#1a1a2e;">Q${currentQuarter.quarter} ${currentQuarter.year}</span>
+      <span style="margin-left:4px;">${Q_LABELS[currentQuarter.quarter]}</span>
+      <span style="margin-left:8px;color:#aaa;">&#x2022;</span>
+      <span style="margin-left:8px;">${fmtDate(currentQuarter.startDate)} – ${fmtDate(currentQuarter.endDate)}</span>
+    </div>`;
+  } else if (quarters.length === 0) {
+    html += `<div style="margin-top:8px;font-size:12px;color:#aaa;">No quarters defined yet. Go to School Calendar → Quarters tab to add one.</div>`;
+  }
+
+  el.innerHTML = html;
+}
+
+async function addQuarter() {
+  if (currentRole !== 'manager') return;
+  const year = parseInt(document.getElementById('q-year').value);
+  const q = parseInt(document.getElementById('q-num').value);
+  const start = document.getElementById('q-start').value;
+  const end = document.getElementById('q-end').value;
+  if (!year||!q||!start||!end) return showToast('Please fill all quarter fields.','error');
+  if (end < start) return showToast('End date must be after start date.','error');
+  const exists = quarters.find(x => x.year===year && x.quarter===q);
+  if (exists) return showToast(`Q${q} ${year} already exists.`,'error');
+  try {
+    await db.collection('quarters').add({
+      year, quarter:q, startDate:start, endDate:end,
+      name:`Q${q} ${year} (${Q_LABELS[q]})`,
+      createdAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('Quarter added!','ok');
+  } catch(e) { showToast('Error adding quarter.','error'); }
+}
+
+async function deleteQuarter(id) {
+  if (!confirm('Delete this quarter?')) return;
+  try { await db.collection('quarters').doc(id).delete(); showToast('Quarter deleted.','ok'); }
+  catch(e) { showToast('Error deleting quarter.','error'); }
+}
+
+function renderCalendarQuarters() {
+  const el = document.getElementById('quarters-list');
+  if (!el) return;
+  const yrs = [...new Set(quarters.map(q=>q.year))].sort((a,b)=>b-a);
+  if (quarters.length === 0) {
+    el.innerHTML = '<div style="color:#aaa;font-size:13px;padding:8px 0;">No quarters defined yet.</div>';
+    return;
+  }
+  let html = '';
+  yrs.forEach(yr => {
+    const yrQ = quarters.filter(q=>q.year===yr).sort((a,b)=>a.quarter-b.quarter);
+    yrQ.forEach(q => {
+      html += `<div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f0f0f0;font-size:13px;">
+        <span style="min-width:70px;font-weight:600;color:#1a1a2e;">Q${q.quarter} ${q.year}</span>
+        <span style="flex:1;color:#555;">${Q_LABELS[q.quarter]}</span>
+        <span style="color:#888;font-size:12px;">${fmtDate(q.startDate)} – ${fmtDate(q.endDate)}</span>
+        ${currentRole==='manager'?`<button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 7px;" onclick="deleteQuarter('${q.id}')">Del</button>`:''}
+      </div>`;
+    });
+  });
+  el.innerHTML = html;
+}
+
+function switchCalTab(tab) {
+  const isEvents = tab === 'events';
+  document.getElementById('cal-pane-events').style.display = isEvents ? '' : 'none';
+  document.getElementById('cal-pane-quarters').style.display = isEvents ? 'none' : '';
+  document.getElementById('cal-tab-events').style.cssText = `background:none;border:none;border-bottom:3px solid ${isEvents?'#1a1a2e':'transparent'};margin-bottom:-2px;padding:8px 18px;cursor:pointer;font-size:13px;font-weight:${isEvents?'600':'400'};color:${isEvents?'#1a1a2e':'#666'};font-family:inherit;`;
+  document.getElementById('cal-tab-quarters').style.cssText = `background:none;border:none;border-bottom:3px solid ${!isEvents?'#1a1a2e':'transparent'};margin-bottom:-2px;padding:8px 18px;cursor:pointer;font-size:13px;font-weight:${!isEvents?'600':'400'};color:${!isEvents?'#1a1a2e':'#666'};font-family:inherit;`;
+}
+
 function openCalendarModal() {
   calendarYear=new Date().getFullYear();
   document.getElementById('cal-year-label').textContent=calendarYear;
   document.getElementById('cal-event-date').value=dateToStr(new Date());
   document.getElementById('cal-event-name').value='';
   document.getElementById('cal-event-type').value='event';
+  document.getElementById('q-year').value=new Date().getFullYear();
   renderCalendarEvents();
+  renderCalendarQuarters();
+  switchCalTab('events');
   document.getElementById('school-calendar-modal').classList.add('open');
 }
 
@@ -1717,22 +2212,26 @@ function renderTeacherList() {
   const grouped={};
   teachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
   const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
-  list.innerHTML=campuses.map(campus=>`
-    <div class="campus-section">
-      <div class="campus-section-header">${escHtml(campus)}</div>
-      <div class="teacher-grid">
-        ${grouped[campus].map(t=>`
-          <div class="teacher-card">
-            <div class="teacher-card-info" data-teacher-id="${t.id}" onclick="openTeacherDetailById(this.dataset.teacherId)">
-              <div class="teacher-card-name">${escHtml(t.name)}</div>
-            </div>
-            <div class="teacher-card-actions manager-only">
-              <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editTeacher('${t.id}')">Edit</button>
-              <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeTeacher('${t.id}')">Del</button>
-            </div>
-          </div>`).join('')}
+  function teacherCard(t) {
+    return `<div class="teacher-card">
+      <div class="teacher-card-info" data-teacher-id="${t.id}" onclick="openTeacherDetailById(this.dataset.teacherId)">
+        <div class="teacher-card-name">${escHtml(t.name)}</div>
       </div>
-    </div>`).join('');
+      <div class="teacher-card-actions manager-only">
+        <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editTeacher('${t.id}')">Edit</button>
+        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeTeacher('${t.id}')">Del</button>
+      </div>
+    </div>`;
+  }
+  list.innerHTML=campuses.map(campus=>{
+    const regular=grouped[campus].filter(t=>!t.isSubstitute);
+    const subs=grouped[campus].filter(t=>t.isSubstitute);
+    let inner=`<div class="teacher-grid">${regular.map(teacherCard).join('')}</div>`;
+    if (subs.length>0) {
+      inner+=`<div class="campus-sub-label">Substitute</div><div class="teacher-grid">${subs.map(teacherCard).join('')}</div>`;
+    }
+    return `<div class="campus-section"><div class="campus-section-header">${escHtml(campus)}</div>${inner}</div>`;
+  }).join('');
 }
 
 function openTeacherDetailById(id) {
@@ -1745,6 +2244,7 @@ function openAddTeacherModal() {
   editingTeacherId=null;
   document.getElementById('teacher-name').value='';
   document.getElementById('teacher-campus').value='IRV';
+  document.getElementById('teacher-is-substitute').checked=false;
   document.getElementById('teacher-modal-title').textContent='Add Teacher';
   document.getElementById('teacher-modal').classList.add('open');
 }
@@ -1757,16 +2257,18 @@ function editTeacher(id) {
   editingTeacherId=id;
   document.getElementById('teacher-name').value=t.name;
   document.getElementById('teacher-campus').value=t.campus;
+  document.getElementById('teacher-is-substitute').checked=!!t.isSubstitute;
   document.getElementById('teacher-modal-title').textContent='Edit Teacher';
   document.getElementById('teacher-modal').classList.add('open');
 }
 async function saveTeacher() {
   const name=document.getElementById('teacher-name').value.trim();
   const campus=document.getElementById('teacher-campus').value;
+  const isSubstitute=document.getElementById('teacher-is-substitute').checked;
   if (!name) return showToast('Please enter a teacher name.','error');
   try {
-    if (editingTeacherId) { await db.collection('teachers').doc(editingTeacherId).update({name,campus}); showToast('Teacher updated.','ok'); }
-    else { await db.collection('teachers').add({name,campus}); showToast('Teacher added!','ok'); }
+    if (editingTeacherId) { await db.collection('teachers').doc(editingTeacherId).update({name,campus,isSubstitute}); showToast('Teacher updated.','ok'); }
+    else { await db.collection('teachers').add({name,campus,isSubstitute}); showToast('Teacher added!','ok'); }
     closeTeacherModal();
   } catch(e) { showToast('Error saving teacher.','error'); }
 }
@@ -1861,7 +2363,7 @@ function buildPrintHTML(teacherName, students, studentSessions) {
         var statusText=ok?'&#10003; Done':missed?('&#10007; Not held: '+escHtml(sess.missedReason)):'Scheduled';
         rows+='<tr style="'+rs+'">';
         rows+='<td style="'+td+'">'+(idx+1)+'</td>';
-        rows+='<td style="'+td+'">'+sess.date+'</td>';
+        rows+='<td style="'+td+'">'+fmtDate(sess.date)+'</td>';
         rows+='<td style="'+td+'">'+formatTime(sess.startTime)+' &ndash; '+formatTime(sess.endTime)+'</td>';
         rows+='<td style="'+td+'">'+fmtHours(dur)+'</td>';
         rows+='<td style="'+td+'">'+statusText+'</td>';
@@ -1972,7 +2474,7 @@ function renderAllTeachersHours() {
   if (from>to) { el.innerHTML='<div class="error-item">&#9940; From date must be on or before To date.</div>'; return; }
 
   const labelEl=document.getElementById('home-hours-range-label');
-  if (labelEl) labelEl.textContent=from===to?from:`${from} – ${to}`;
+  if (labelEl) labelEl.textContent=from===to?fmtDate(from):`${fmtDate(from)} – ${fmtDate(to)}`;
 
   if (teachers.length===0) { el.innerHTML='<div class="empty-state">No teachers yet.</div>'; return; }
 
@@ -1986,30 +2488,51 @@ function renderAllTeachersHours() {
 
   let html='';
 
-  campuses.forEach(campus=>{
-    html+=`<div class="hours-section-title">${escHtml(campus)}</div>`;
-    html+=`<table class="hours-table"><thead><tr>
-      <th>Teacher</th><th>Regular (hrs)</th><th>PT Conducted (hrs)</th><th>PT Not Held</th><th>PT Scheduled</th><th>Total (hrs)</th>
-    </tr></thead><tbody>`;
-    grouped[campus].forEach(t=>{
+  function hoursTableRows(teacherList) {
+    let rows='';
+    teacherList.forEach(t=>{
       const tSess=inRangeSessions.filter(s=>s.teacherId===t.id);
       const regSess=tSess.filter(s=>s.type==='Regular');
       const ptSess=tSess.filter(s=>s.type==='PT');
+      // Regular: only sessions with no absence (or absenceType not set)
+      const regHeld=regSess.filter(s=>!s.absenceType);
+      const regPaid=regSess.filter(s=>s.absenceType==='paid');
+      // PT as before
       const ptCond=ptSess.filter(s=>s.conducted!==false);
       const ptNotHeld=ptSess.filter(s=>s.conducted===false&&!!s.missedReason);
       const ptSched=ptSess.filter(s=>s.conducted===false&&!s.missedReason);
-      const regHrs=regSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      const regHrs=regHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      const paidHrs=regPaid.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
       const ptCondHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-      const total=regHrs+ptCondHrs;
-      html+=`<tr>
+      // Sub covered: sessions of other teachers where coverType==='substituted' and substituteId===this teacher's id
+      const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
+      const subHrs=subSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      const total=regHrs+paidHrs+ptCondHrs+subHrs;
+      rows+=`<tr>
         <td><button class="btn-student-link" onclick="openTeacherDetailById('${t.id}')">${escHtml(t.name)}</button></td>
-        <td>${fmtHours(regHrs)} <span style="color:#aaa;font-size:11px;">(${regSess.length})</span></td>
+        <td>${fmtHours(regHrs)} <span style="color:#aaa;font-size:11px;">(${regHeld.length})</span></td>
+        <td style="color:${paidHrs>0?'#92400e':'#ddd'};">${paidHrs>0?fmtHours(paidHrs)+` <span style="font-size:11px;">(${regPaid.length})</span>`:'—'}</td>
         <td>${fmtHours(ptCondHrs)} <span style="color:#aaa;font-size:11px;">(${ptCond.length})</span></td>
         <td style="color:${ptNotHeld.length>0?'#c2410c':'#ddd'};">${ptNotHeld.length>0?ptNotHeld.length:'—'}</td>
         <td style="color:${ptSched.length>0?'#6b7280':'#ddd'};">${ptSched.length>0?ptSched.length:'—'}</td>
+        <td style="color:${subHrs>0?'#3730a3':'#ddd'};">${subHrs>0?fmtHours(subHrs)+` <span style="font-size:11px;">(${subSess.length})</span>`:'—'}</td>
         <td><strong>${fmtHours(total)}</strong></td>
       </tr>`;
     });
+    return rows;
+  }
+
+  campuses.forEach(campus=>{
+    const regular=grouped[campus].filter(t=>!t.isSubstitute);
+    const subs=grouped[campus].filter(t=>t.isSubstitute);
+    html+=`<div class="hours-section-title">${escHtml(campus)}</div>`;
+    html+=`<table class="hours-table"><thead><tr>
+      <th>Teacher</th><th>Regular (hrs)</th><th>Paid Leave (hrs)</th><th>PT Conducted (hrs)</th><th>PT Not Held</th><th>PT Scheduled</th><th>Sub Covered (hrs)</th><th>Total (hrs)</th>
+    </tr></thead><tbody>${hoursTableRows(regular)}`;
+    if (subs.length>0) {
+      html+=`<tr><td colspan="8" style="padding:4px 12px;background:#f5f3ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#8b5cf6;border-top:1px solid #ede9fe;">Substitute</td></tr>`;
+      html+=hoursTableRows(subs);
+    }
     html+=`</tbody></table>`;
   });
 
@@ -2084,6 +2607,7 @@ firebase.auth().onAuthStateChanged(async user => {
     if (role === 'staff') { window.location.replace('inventory.html'); return; }
     initSchoolEventsListener();
     initAllSessionsListener();
+    initQuartersListener();
     document.body.classList.add('role-' + role);
     document.getElementById('user-email-display').textContent = user.email;
     const badge = document.getElementById('role-badge');

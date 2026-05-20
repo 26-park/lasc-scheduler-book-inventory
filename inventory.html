@@ -59,15 +59,6 @@
     .branch-btn.active { background: #1a1a2e; color: white; border-color: #1a1a2e; }
     .branch-btn:hover:not(.active) { background: #f0f0f0; }
 
-    /* Stock 3-column layout */
-    .stock-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-    @media (max-width: 960px) { .stock-grid { grid-template-columns: 1fr; } }
-    .stock-card { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 14px 16px; }
-    .stock-card h2 { font-size: 13px; font-weight: 700; margin-bottom: 10px; color: #1a1a2e; text-transform: uppercase; letter-spacing: 0.5px; }
-    .stock-card .form-group label { font-size: 10px; }
-    .stock-card .form-group input, .stock-card .form-group select { padding: 5px 8px; font-size: 12px; }
-    .stock-card .btn { font-size: 12px; padding: 6px 12px; width: 100%; margin-top: 6px; }
-
     /* Users management */
     .user-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid #f2f2f2; font-size: 13px; }
     .user-row:last-child { border-bottom: none; }
@@ -118,7 +109,6 @@
 <nav>
   <button class="nav-tab active" onclick="switchTab('inventory')">Inventory</button>
   <button class="nav-tab" onclick="switchTab('sell')">Sell</button>
-  <button class="nav-tab manager-only" onclick="switchTab('stock')">Stock</button>
   <button class="nav-tab" onclick="switchTab('orders')">Orders</button>
   <button class="nav-tab" onclick="switchTab('history')">History</button>
   <button class="nav-tab" onclick="switchTab('books')">Books</button>
@@ -231,101 +221,6 @@
           <button class="btn btn-primary" onclick="processSell()">Complete Sale</button>
           <button class="btn btn-secondary" onclick="resetSellForm()">Clear</button>
         </div>
-      </div>
-    </div>
-  </main>
-</div>
-
-<!-- ======== STOCK (In / Out / Transfer) ======== -->
-<div id="view-stock" class="view">
-  <main>
-    <div class="stock-grid">
-      <!-- Stock In -->
-      <div class="stock-card manager-only">
-        <h2>Stock In</h2>
-        <div class="form-group">
-          <label>Book</label>
-          <select id="si-isbn"><option value="">— select —</option></select>
-        </div>
-        <div class="form-group">
-          <label>Branch</label>
-          <select id="si-branch">
-            <option value="LA">LA</option><option value="RH">RH</option><option value="IRV">IRV</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Qty</label>
-          <input type="number" id="si-qty" value="1" min="1">
-        </div>
-        <div class="form-group">
-          <label>Source</label>
-          <input type="text" id="si-source" placeholder="Publisher, Amazon…">
-        </div>
-        <div class="form-group">
-          <label>Note</label>
-          <input type="text" id="si-note" placeholder="Optional">
-        </div>
-        <div id="si-warn" class="warn-box" style="display:none;"></div>
-        <button class="btn btn-primary" onclick="processStockIn()">Add Stock</button>
-      </div>
-
-      <!-- Stock Out -->
-      <div class="stock-card manager-only">
-        <h2>Stock Out</h2>
-        <div class="info-box" style="font-size:11px;padding:5px 10px;margin-bottom:8px;">Lost, damaged, or removed — not sold.</div>
-        <div class="form-group">
-          <label>Book</label>
-          <select id="so-isbn" onchange="onStockOutBookChange()"><option value="">— select —</option></select>
-        </div>
-        <div class="form-group">
-          <label>Branch</label>
-          <select id="so-branch" onchange="onStockOutBookChange()">
-            <option value="LA">LA</option><option value="RH">RH</option><option value="IRV">IRV</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Qty</label>
-          <input type="number" id="so-qty" value="1" min="1">
-        </div>
-        <div class="form-group">
-          <label>Reason / Note</label>
-          <input type="text" id="so-note" placeholder="e.g. Damaged">
-        </div>
-        <div id="so-stock-info" class="info-box" style="display:none;font-size:11px;padding:5px 10px;"></div>
-        <div id="so-warn" class="warn-box" style="display:none;"></div>
-        <button class="btn btn-danger" onclick="processStockOut()">Remove Stock</button>
-      </div>
-
-      <!-- Transfer -->
-      <div class="stock-card manager-only">
-        <h2>Transfer</h2>
-        <div class="form-group">
-          <label>Book</label>
-          <select id="tr-isbn" onchange="onTransferBookChange()"><option value="">— select —</option></select>
-        </div>
-        <div class="form-group">
-          <label>From</label>
-          <select id="tr-from" onchange="onTransferBookChange()">
-            <option value="LA">LA</option><option value="RH">RH</option><option value="IRV">IRV</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>To</label>
-          <select id="tr-to">
-            <option value="RH">RH</option><option value="IRV">IRV</option><option value="LA">LA</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label>Qty</label>
-          <input type="number" id="tr-qty" value="1" min="1">
-        </div>
-        <div class="form-group">
-          <label>Note</label>
-          <input type="text" id="tr-note" placeholder="Optional">
-        </div>
-        <div id="tr-stock-info" class="info-box" style="display:none;font-size:11px;padding:5px 10px;"></div>
-        <div id="tr-warn" class="warn-box" style="display:none;"></div>
-        <button class="btn btn-primary" onclick="processTransfer()">Transfer</button>
       </div>
     </div>
   </main>
@@ -508,6 +403,67 @@
   </main>
 </div>
 
+<!-- Adjust Stock Modal -->
+<div class="modal-overlay" id="modal-adjust">
+  <div class="modal" style="width:360px;">
+    <h3>Adjust Stock</h3>
+    <div id="ma-book-info" style="font-size:13px;font-weight:600;margin-bottom:4px;"></div>
+    <div style="font-size:12px;color:#666;margin-bottom:12px;">Current stock: <strong id="ma-current"></strong></div>
+    <div class="form-group">
+      <label>Adjustment <span style="font-weight:400;color:#888;">(+ to add, − to remove)</span></label>
+      <input type="number" id="ma-delta" placeholder="e.g. 3 or -2">
+    </div>
+    <div class="form-group">
+      <label>Note <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input type="text" id="ma-note" placeholder="e.g. Received from publisher / Damaged">
+    </div>
+    <div id="ma-warn" class="warn-box" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closeAdjustModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="processAdjust()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer Modal -->
+<div class="modal-overlay" id="modal-transfer">
+  <div class="modal" style="width:380px;">
+    <h3>Transfer Stock</h3>
+    <div class="form-group">
+      <label>Book</label>
+      <select id="mt-isbn" onchange="onTransferModalChange()"><option value="">— select —</option></select>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group">
+        <label>From</label>
+        <select id="mt-from" onchange="onTransferModalChange()">
+          <option value="LA">LA</option><option value="RH">RH</option><option value="IRV">IRV</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>To</label>
+        <select id="mt-to">
+          <option value="RH">RH</option><option value="IRV">IRV</option><option value="LA">LA</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Qty</label>
+      <input type="number" id="mt-qty" value="1" min="1">
+    </div>
+    <div class="form-group">
+      <label>Note <span style="font-weight:400;color:#888;">(optional)</span></label>
+      <input type="text" id="mt-note" placeholder="Optional">
+    </div>
+    <div id="mt-stock-info" class="info-box" style="display:none;font-size:11px;padding:5px 10px;"></div>
+    <div id="mt-warn" class="warn-box" style="display:none;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closeTransferModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="processTransfer()">Transfer</button>
+    </div>
+  </div>
+</div>
+
 <!-- Receive Order Modal -->
 <div class="modal-overlay" id="receive-modal">
   <div class="modal" style="width:380px;">
@@ -623,12 +579,17 @@ function renderCurrentTab() {
   else if (currentTab === 'users') loadUsers();
 }
 
+function switchTabSafe(tab) {
+  if (tab === 'stock') tab = 'inventory';
+  switchTab(tab);
+}
+
 function setBranch(b) {
   currentBranch = b;
   document.querySelectorAll('.branch-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.branch === b);
   });
-  document.querySelectorAll('#sell-branch, #si-branch, #so-branch, #ord-branch').forEach(sel => {
+  document.querySelectorAll('#sell-branch, #ord-branch').forEach(sel => {
     if (b !== 'ALL') sel.value = b;
   });
   if (b !== 'ALL') updateSellBookInfo();
@@ -660,10 +621,11 @@ function renderInventory() {
   } else {
     document.getElementById('inv-thead-row').innerHTML =
       `<th>ISBN</th><th>Title</th>${costTh}<th style="text-align:right;">Price</th>` +
-      `<th style="text-align:right;">Stock</th>`;
+      `<th style="text-align:right;">Stock</th>` +
+      (isMgr ? `<th></th>` : '');
   }
 
-  const colCount = isAll ? (isMgr ? 8 : 7) : (isMgr ? 5 : 4);
+  const colCount = isAll ? (isMgr ? 8 : 7) : (isMgr ? 6 : 4);
 
   if (!rows.length) {
     document.getElementById('inv-tbody').innerHTML = `<tr><td colspan="${colCount}" class="empty-state">No books in stock.</td></tr>`;
@@ -690,12 +652,20 @@ function renderInventory() {
       branchCells = `<td style="text-align:right;"><span class="${cls}">${s}</span>${p > 0 ? ` <span class="pending-badge">(+${p})</span>` : ''}</td>`;
     }
 
+    const actionCell = (!isAll && isMgr)
+      ? `<td style="padding:4px 8px;"><div style="display:flex;gap:4px;">
+          <button class="btn btn-secondary btn-sm" onclick="openAdjustModal('${esc(book.isbn)}')">Adjust</button>
+          <button class="btn btn-secondary btn-sm" onclick="openTransferModal('${esc(book.isbn)}')">Transfer</button>
+        </div></td>`
+      : '';
+
     html += `<tr>
       <td style="font-size:11px;color:#888;">${esc(book.isbn)}</td>
       <td>${esc(book.title)}</td>
       ${costTd(book)}
       <td style="text-align:right;">${fmtMoney(book.sellingPrice)}</td>
       ${branchCells}
+      ${actionCell}
     </tr>`;
   });
   document.getElementById('inv-tbody').innerHTML = html;
@@ -707,7 +677,7 @@ function renderInventory() {
 function populateBookSelects() {
   const opts = '<option value="">— select —</option>' +
     books.map(b => `<option value="${esc(b.isbn)}">${esc(b.title)} (${esc(b.isbn)})</option>`).join('');
-  ['sell-isbn','si-isbn','so-isbn','tr-isbn','ord-isbn'].forEach(id => {
+  ['sell-isbn','ord-isbn'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.innerHTML = opts;
   });
@@ -943,95 +913,99 @@ async function processSell() {
 }
 
 // ==========================================
-// STOCK IN
+// STOCK ADJUST (replaces Stock In / Stock Out)
 // ==========================================
-async function processStockIn() {
-  const isbn = document.getElementById('si-isbn').value;
-  const branch = document.getElementById('si-branch').value;
-  const qty = parseInt(document.getElementById('si-qty').value);
-  const note = document.getElementById('si-note').value.trim();
-  const source = document.getElementById('si-source').value.trim();
-  const warnEl = document.getElementById('si-warn');
+let adjustModalIsbn = null, adjustModalBranch = null;
 
+function openAdjustModal(isbn) {
   const book = books.find(b => b.isbn === isbn);
-  if (!book) { warnEl.textContent = 'Please select a book.'; warnEl.style.display = ''; return; }
-  if (!qty || qty < 1) { warnEl.textContent = 'Invalid quantity.'; warnEl.style.display = ''; return; }
-
-  try {
-    await updateStock(isbn, book.title, branch, qty);
-    const lastId = await getNextId('stock_history');
-    await db.collection('stock_history').add({
-      id: lastId, isbn, title: book.title, branch, quantity: qty,
-      note, orderSource: source, createdAt: nowLA()
-    });
-    showToast(`Restocked: ${book.title} +${qty} at ${branch}`, 'ok');
-    document.getElementById('si-qty').value = '1';
-    document.getElementById('si-note').value = '';
-    document.getElementById('si-source').value = '';
-    warnEl.style.display = 'none';
-    if (currentTab === 'inventory') renderInventory();
-  } catch(e) {
-    console.error(e);
-    showToast('Error adding stock.', 'error');
-  }
+  if (!book) return;
+  adjustModalIsbn = isbn;
+  adjustModalBranch = currentBranch;
+  const stock = getStock(isbn, currentBranch);
+  document.getElementById('ma-book-info').textContent = `${book.title} — ${currentBranch}`;
+  document.getElementById('ma-current').textContent = stock;
+  document.getElementById('ma-delta').value = '';
+  document.getElementById('ma-note').value = '';
+  document.getElementById('ma-warn').style.display = 'none';
+  document.getElementById('modal-adjust').classList.add('open');
 }
 
-// ==========================================
-// STOCK OUT
-// ==========================================
-function onStockOutBookChange() {
-  const isbn = document.getElementById('so-isbn').value;
-  const branch = document.getElementById('so-branch').value;
-  const el = document.getElementById('so-stock-info');
-  if (isbn && branch) {
-    const s = getStock(isbn, branch);
-    el.textContent = `Current stock at ${branch}: ${s}`;
-    el.style.display = '';
-  } else {
-    el.style.display = 'none';
-  }
+function closeAdjustModal() {
+  document.getElementById('modal-adjust').classList.remove('open');
+  adjustModalIsbn = null;
+  adjustModalBranch = null;
 }
 
-async function processStockOut() {
-  const isbn = document.getElementById('so-isbn').value;
-  const branch = document.getElementById('so-branch').value;
-  const qty = parseInt(document.getElementById('so-qty').value);
-  const note = document.getElementById('so-note').value.trim();
-  const warnEl = document.getElementById('so-warn');
+async function processAdjust() {
+  const isbn = adjustModalIsbn;
+  const branch = adjustModalBranch;
+  const delta = parseInt(document.getElementById('ma-delta').value);
+  const note = document.getElementById('ma-note').value.trim();
+  const warnEl = document.getElementById('ma-warn');
+
+  if (!delta || delta === 0) { warnEl.textContent = 'Enter a non-zero adjustment amount.'; warnEl.style.display = ''; return; }
 
   const book = books.find(b => b.isbn === isbn);
-  if (!book) { warnEl.textContent = 'Please select a book.'; warnEl.style.display = ''; return; }
-  if (!qty || qty < 1) { warnEl.textContent = 'Invalid quantity.'; warnEl.style.display = ''; return; }
+  if (!book) return;
 
-  const current = getStock(isbn, branch);
-  if (current < qty) { warnEl.textContent = `Insufficient stock at ${branch}. Current: ${current}`; warnEl.style.display = ''; return; }
+  if (delta < 0) {
+    const current = getStock(isbn, branch);
+    if (current + delta < 0) { warnEl.textContent = `Not enough stock at ${branch}. Current: ${current}`; warnEl.style.display = ''; return; }
+  }
 
   try {
-    await updateStock(isbn, book.title, branch, -qty);
-    const lastId = await getNextId('stock_out');
-    await db.collection('stock_out').add({
-      id: lastId, isbn, title: book.title, branch, quantity: qty,
-      note, createdAt: nowLA()
-    });
-    showToast(`Removed: ${book.title} -${qty} at ${branch}`, 'ok');
-    document.getElementById('so-qty').value = '1';
-    document.getElementById('so-note').value = '';
-    warnEl.style.display = 'none';
-    onStockOutBookChange();
-    if (currentTab === 'inventory') renderInventory();
+    await updateStock(isbn, book.title, branch, delta);
+    if (delta > 0) {
+      const histId = await getNextId('stock_history');
+      await db.collection('stock_history').add({
+        id: histId, isbn, title: book.title, branch, quantity: delta,
+        note, orderSource: '', createdAt: nowLA()
+      });
+      showToast(`Restocked: ${book.title} +${delta} at ${branch}`, 'ok');
+    } else {
+      const histId = await getNextId('stock_out');
+      await db.collection('stock_out').add({
+        id: histId, isbn, title: book.title, branch, quantity: Math.abs(delta),
+        note, createdAt: nowLA()
+      });
+      showToast(`Removed: ${book.title} ${delta} at ${branch}`, 'ok');
+    }
+    closeAdjustModal();
+    renderInventory();
   } catch(e) {
     console.error(e);
-    showToast('Error removing stock.', 'error');
+    showToast('Error adjusting stock.', 'error');
   }
 }
 
 // ==========================================
 // TRANSFER
 // ==========================================
-function onTransferBookChange() {
-  const isbn = document.getElementById('tr-isbn').value;
-  const branch = document.getElementById('tr-from').value;
-  const el = document.getElementById('tr-stock-info');
+function openTransferModal(isbn) {
+  const opts = '<option value="">— select —</option>' +
+    books.map(b => `<option value="${esc(b.isbn)}" ${b.isbn === isbn ? 'selected' : ''}>${esc(b.title)} (${esc(b.isbn)})</option>`).join('');
+  document.getElementById('mt-isbn').innerHTML = opts;
+  if (currentBranch !== 'ALL') {
+    document.getElementById('mt-from').value = currentBranch;
+    const toOptions = ['LA','RH','IRV'].filter(b => b !== currentBranch);
+    document.getElementById('mt-to').value = toOptions[0];
+  }
+  document.getElementById('mt-qty').value = '1';
+  document.getElementById('mt-note').value = '';
+  document.getElementById('mt-warn').style.display = 'none';
+  onTransferModalChange();
+  document.getElementById('modal-transfer').classList.add('open');
+}
+
+function closeTransferModal() {
+  document.getElementById('modal-transfer').classList.remove('open');
+}
+
+function onTransferModalChange() {
+  const isbn = document.getElementById('mt-isbn').value;
+  const branch = document.getElementById('mt-from').value;
+  const el = document.getElementById('mt-stock-info');
   if (isbn && branch) {
     const s = getStock(isbn, branch);
     el.textContent = `Stock at ${branch}: ${s}`;
@@ -1042,12 +1016,12 @@ function onTransferBookChange() {
 }
 
 async function processTransfer() {
-  const isbn = document.getElementById('tr-isbn').value;
-  const fromBranch = document.getElementById('tr-from').value;
-  const toBranch = document.getElementById('tr-to').value;
-  const qty = parseInt(document.getElementById('tr-qty').value);
-  const note = document.getElementById('tr-note').value.trim();
-  const warnEl = document.getElementById('tr-warn');
+  const isbn = document.getElementById('mt-isbn').value;
+  const fromBranch = document.getElementById('mt-from').value;
+  const toBranch = document.getElementById('mt-to').value;
+  const qty = parseInt(document.getElementById('mt-qty').value);
+  const note = document.getElementById('mt-note').value.trim();
+  const warnEl = document.getElementById('mt-warn');
 
   if (fromBranch === toBranch) { warnEl.textContent = 'From and To branch must be different.'; warnEl.style.display = ''; return; }
   const book = books.find(b => b.isbn === isbn);
@@ -1066,11 +1040,8 @@ async function processTransfer() {
       note, createdAt: nowLA()
     });
     showToast(`Transferred: ${book.title} ×${qty} ${fromBranch} → ${toBranch}`, 'ok');
-    document.getElementById('tr-qty').value = '1';
-    document.getElementById('tr-note').value = '';
-    warnEl.style.display = 'none';
-    onTransferBookChange();
-    if (currentTab === 'inventory') renderInventory();
+    closeTransferModal();
+    renderInventory();
   } catch(e) {
     console.error(e);
     showToast('Error processing transfer.', 'error');
@@ -1563,6 +1534,12 @@ function downloadCSV(csv, filename) {
 // Close modals on outside click
 document.getElementById('receive-modal').addEventListener('click', function(e) {
   if (e.target === this) closeReceiveModal();
+});
+document.getElementById('modal-adjust').addEventListener('click', function(e) {
+  if (e.target === this) closeAdjustModal();
+});
+document.getElementById('modal-transfer').addEventListener('click', function(e) {
+  if (e.target === this) closeTransferModal();
 });
 
 // ==========================================

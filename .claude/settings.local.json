@@ -29,7 +29,11 @@
       "Bash(pip install *)",
       "Bash(ls *.json)",
       "Bash(ls serviceAccount*)",
-      "Bash(cat firebase.json)"
+      "Bash(cat firebase.json)",
+      "Bash(dir C:\\\\lasc-scheduler\\\\*.html C:\\\\lasc-scheduler\\\\*.js C:\\\\lasc-scheduler\\\\*.css /b)",
+      "PowerShell(Get-ChildItem *)",
+      "PowerShell(Get-ChildItem \"C:\\\\lasc-scheduler\" | Where-Object { $_.Extension -in '.html','.js','.css' } | Select-Object Name)",
+      "Bash(firebase firestore:delete *)"
     ]
   }
 }

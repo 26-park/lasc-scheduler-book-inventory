@@ -49,6 +49,14 @@ service cloud.firestore {
       allow read: if isLASCUser();
       allow write: if isManager();
     }
+    match /quarters/{doc} {
+      allow read: if isLASCUser();
+      allow write: if isManager();
+    }
+    match /substitutes/{doc} {
+      allow read: if isLASCUser();
+      allow write: if isManager();
+    }
 
     // Book catalog — manager writes only
     match /books/{doc} {
