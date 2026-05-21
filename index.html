@@ -190,14 +190,14 @@
   <div class="user-info" id="user-info" style="display:none;">
     <span class="user-email" id="user-email-display"></span>
     <span class="role-badge" id="role-badge"></span>
-    <button class="btn-signout manager-only" onclick="location.href='inventory.html?tab=users'">Manage Users</button>
+    <button class="btn-signout manager-only" onclick="location.href='/inventory?tab=users'">Manage Users</button>
     <button class="btn-signout" onclick="doSignOut()">Sign out</button>
   </div>
 </header>
 
 <nav class="page-nav">
-  <a class="page-nav-tab active" href="index.html">Scheduler</a>
-  <a class="page-nav-tab" href="inventory.html">Inventory</a>
+  <a class="page-nav-tab active" href="/">Scheduler</a>
+  <a class="page-nav-tab" href="/inventory">Inventory</a>
 </nav>
 <div id="teacher-context-bar"><span id="header-teacher-name"></span></div>
 
@@ -2604,7 +2604,7 @@ firebase.auth().onAuthStateChanged(async user => {
       }
     } catch(e) {}
     currentRole = role;
-    if (role === 'staff') { window.location.replace('inventory.html'); return; }
+    if (role === 'staff') { window.location.replace('/inventory'); return; }
     initSchoolEventsListener();
     initAllSessionsListener();
     initQuartersListener();
