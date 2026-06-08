@@ -35,15 +35,24 @@ service cloud.firestore {
     // Scheduler — manager writes only
     match /teachers/{doc} {
       allow read: if isLASCUser();
-      allow write: if isManager();
+      allow update: if isLASCUser();
+      allow create, delete: if isManager();
     }
     match /sessions/{doc} {
       allow read: if isLASCUser();
-      allow write: if isManager();
+      allow create: if isManager() || (isLASCUser() && request.resource.data.type == 'PT');
+      allow update: if isManager() || (isLASCUser() && resource.data.type == 'PT');
+      allow delete: if isManager();
     }
     match /pt_contracts/{doc} {
       allow read: if isLASCUser();
-      allow write: if isManager();
+      allow create, update: if isLASCUser();
+      allow delete: if isManager();
+    }
+    match /students/{doc} {
+      allow read: if isLASCUser();
+      allow create, update: if isLASCUser();
+      allow delete: if isManager();
     }
     match /school_events/{doc} {
       allow read: if isLASCUser();
@@ -56,6 +65,12 @@ service cloud.firestore {
     match /substitutes/{doc} {
       allow read: if isLASCUser();
       allow write: if isManager();
+    }
+
+    // Scheduler audit log — any LASC user can read/create, only managers can update/delete
+    match /scheduler_audit/{doc} {
+      allow read, create: if isLASCUser();
+      allow update, delete: if isManager();
     }
 
     // Book catalog — manager writes only
