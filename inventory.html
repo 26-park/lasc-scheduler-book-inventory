@@ -102,7 +102,7 @@
 </header>
 
 <nav class="page-nav">
-  <a class="page-nav-tab manager-only" href="/">Scheduler</a>
+  <a class="page-nav-tab" href="/">Scheduler</a>
   <a class="page-nav-tab active" href="/inventory">Inventory</a>
 </nav>
 
@@ -113,6 +113,20 @@
   <button class="nav-tab" onclick="switchTab('history')">History</button>
   <button class="nav-tab" onclick="switchTab('books')">Books</button>
 </nav>
+
+<script>
+(function() {
+  var saved = new URLSearchParams(location.search).get('tab') || localStorage.getItem('inventory_tab');
+  if (saved && saved !== 'inventory') {
+    document.querySelector('.nav-tab.active').classList.remove('active');
+    var btn = document.querySelector('.nav-tab[onclick="switchTab(\'' + saved + '\')"]');
+    if (btn) btn.classList.add('active');
+    document.getElementById('view-inventory').classList.remove('active');
+    var view = document.getElementById('view-' + saved);
+    if (view) view.classList.add('active');
+  }
+})();
+</script>
 
 <!-- ======== INVENTORY ======== -->
 <div id="view-inventory" class="view active">
@@ -197,9 +211,13 @@
             <label>Discount ($)</label>
             <input type="number" id="sell-discount" value="0" min="0" step="0.01" oninput="updateCartTotal()">
           </div>
-          <div class="form-group" style="grid-column:1/-1;">
+          <div class="form-group">
             <label>Note</label>
             <input type="text" id="sell-note" placeholder="Optional">
+          </div>
+          <div class="form-group">
+            <label>Date <span style="font-weight:400;color:#888;">(leave blank for today)</span></label>
+            <input type="date" id="sell-date">
           </div>
         </div>
 
@@ -464,6 +482,18 @@
   </div>
 </div>
 
+<!-- Edit History Record Modal -->
+<div class="modal-overlay" id="edit-hist-modal" onclick="if(event.target===this)closeEditHistModal()">
+  <div class="modal" style="width:360px;">
+    <h3>Edit Record</h3>
+    <div id="edit-hist-fields"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="closeEditHistModal()">Cancel</button>
+      <button class="btn btn-primary btn-sm" onclick="saveHistoryEdit()">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Receive Order Modal -->
 <div class="modal-overlay" id="receive-modal">
   <div class="modal" style="width:380px;">
@@ -507,6 +537,7 @@ function getQuarter(dateStr) {
 }
 
 function fmtMoney(v) { return '$' + Number(v||0).toFixed(2); }
+function fmtDate(s) { if(!s) return ''; const p=s.substring(0,10).split('-'); if(p.length<3) return s.substring(0,10); return `${p[1].padStart(2,'0')}/${p[2].padStart(2,'0')}/${p[0]}`; }
 function nowLA() {
   return new Date().toLocaleString('sv-SE', {timeZone:'America/Los_Angeles'}).replace('T',' ').substring(0,16);
 }
@@ -568,6 +599,7 @@ function switchTab(tab) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   document.getElementById('view-' + tab).classList.add('active');
   currentTab = tab;
+  localStorage.setItem('inventory_tab', tab);
   renderCurrentTab();
 }
 
@@ -577,11 +609,6 @@ function renderCurrentTab() {
   else if (currentTab === 'history') loadHistory();
   else if (currentTab === 'books') renderBooks();
   else if (currentTab === 'users') loadUsers();
-}
-
-function switchTabSafe(tab) {
-  if (tab === 'stock') tab = 'inventory';
-  switchTab(tab);
 }
 
 function setBranch(b) {
@@ -851,6 +878,7 @@ function resetSellForm() {
   document.getElementById('sell-student').value = '';
   document.getElementById('sell-discount').value = '0';
   document.getElementById('sell-note').value = '';
+  document.getElementById('sell-date').value = '';
   document.getElementById('sell-book-info').style.display = 'none';
   document.getElementById('cart-section').style.display = 'none';
   document.getElementById('cart-total-row').textContent = '';
@@ -882,7 +910,8 @@ async function processSell() {
   const isTeacher = paymentRows.length === 1 && paymentRows[0].method === 'Teacher';
   const paymentSummary = isTeacher ? 'Teacher' : paymentRows.map(r => `${r.method}:$${r.amount}`).join(', ');
   const txnId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  const soldAt = nowLA();
+  const sellDateVal = document.getElementById('sell-date').value;
+  const soldAt = sellDateVal ? sellDateVal + ' 00:00' : nowLA();
 
   try {
     let discountRemaining = discount;
@@ -896,7 +925,8 @@ async function processSell() {
         id: lastId, txnId, isbn: item.isbn, title: item.title, branch,
         quantity: item.qty, sellingPrice: itemSubtotal,
         discount: 0, txnDiscount: discount, totalPaid: itemPaid,
-        student, paymentSummary, note, soldAt
+        student, paymentSummary, note, soldAt,
+        createdBy: currentUser ? currentUser.email : ''
       });
     }
     const cartDesc = cartItems.length === 1
@@ -960,14 +990,16 @@ async function processAdjust() {
       const histId = await getNextId('stock_history');
       await db.collection('stock_history').add({
         id: histId, isbn, title: book.title, branch, quantity: delta,
-        note, orderSource: '', createdAt: nowLA()
+        note, orderSource: '', createdAt: nowLA(),
+        createdBy: currentUser ? currentUser.email : ''
       });
       showToast(`Restocked: ${book.title} +${delta} at ${branch}`, 'ok');
     } else {
       const histId = await getNextId('stock_out');
       await db.collection('stock_out').add({
         id: histId, isbn, title: book.title, branch, quantity: Math.abs(delta),
-        note, createdAt: nowLA()
+        note, createdAt: nowLA(),
+        createdBy: currentUser ? currentUser.email : ''
       });
       showToast(`Removed: ${book.title} ${delta} at ${branch}`, 'ok');
     }
@@ -1037,7 +1069,8 @@ async function processTransfer() {
     const lastId = await getNextId('transfers');
     await db.collection('transfers').add({
       id: lastId, isbn, title: book.title, fromBranch, toBranch, quantity: qty,
-      note, createdAt: nowLA()
+      note, createdAt: nowLA(),
+      createdBy: currentUser ? currentUser.email : ''
     });
     showToast(`Transferred: ${book.title} ×${qty} ${fromBranch} → ${toBranch}`, 'ok');
     closeTransferModal();
@@ -1098,7 +1131,7 @@ function renderOrders() {
 
   document.getElementById('orders-tbody').innerHTML = rows.map(o => {
     const badgeCls = o.status === 'pending' ? 'badge-pending' : (o.status === 'received' ? 'badge-received' : 'badge-cancelled');
-    const actions = o.status === 'pending'
+    const actions = currentRole !== 'manager' ? '' : o.status === 'pending'
       ? `<button class="btn btn-success btn-sm" onclick="openReceiveModal('${o.id}')">Receive</button>
          <button class="btn btn-secondary btn-sm" onclick="cancelOrder('${o.id}')">Cancel</button>`
       : (o.status === 'cancelled'
@@ -1157,7 +1190,8 @@ async function confirmReceive() {
     const histId = await getNextId('stock_history');
     await db.collection('stock_history').add({
       id: histId, isbn: order.isbn, title, branch: order.branch,
-      quantity: qtyToRecv, note: stockNote, orderSource: order.orderSource||'', createdAt: nowLA()
+      quantity: qtyToRecv, note: stockNote, orderSource: order.orderSource||'', createdAt: nowLA(),
+      createdBy: currentUser ? currentUser.email : ''
     });
 
     await db.collection('pending_orders').doc(receivingOrderId).update({ quantity: qtyToRecv, status: 'received' });
@@ -1211,6 +1245,7 @@ function switchHistoryTab(tab) {
   document.querySelectorAll('[id^="htab-"]').forEach(b => b.classList.remove('active'));
   document.getElementById('htab-' + tab).classList.add('active');
   currentHistTab = tab;
+  localStorage.setItem('inventory_hist_tab', tab);
   loadHistory();
 }
 
@@ -1252,7 +1287,7 @@ async function loadHistory() {
 
   const dateField = currentHistTab === 'sales' ? 'soldAt' : 'createdAt';
   const snap = await db.collection(coll).orderBy(dateField, 'desc').limit(2000).get();
-  let rows = snap.docs.map(d => d.data());
+  let rows = snap.docs.map(d => ({_docId: d.id, ...d.data()}));
 
   if (branch !== 'ALL') {
     if (currentHistTab === 'transfers') rows = rows.filter(r => r.fromBranch === branch || r.toBranch === branch);
@@ -1275,13 +1310,20 @@ async function loadHistory() {
   renderHistoryTable(rows);
 }
 
+function fmtBy(email) {
+  if (!email) return '';
+  const at = email.indexOf('@');
+  return at > 0 ? email.substring(0, at) : email;
+}
+
 function renderHistoryTable(rows) {
   const theadRow = document.getElementById('hist-thead-row');
   const tbody = document.getElementById('hist-tbody');
   const summEl = document.getElementById('hist-summary');
 
+  const mgr = currentRole === 'manager';
   if (currentHistTab === 'sales') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th>Student</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Discount</th><th style="text-align:right;">Paid</th><th>Payment</th><th>Note</th><th>Date</th>';
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th>Student</th><th style="text-align:right;">Qty</th><th style="text-align:right;">Price</th><th style="text-align:right;">Discount</th><th style="text-align:right;">Paid</th><th>Payment</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
 
     const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
     const totalRev = rows.reduce((s,r) => s + Number(r.totalPaid||0), 0);
@@ -1322,7 +1364,9 @@ function renderHistoryTable(rows) {
           <td style="text-align:right;font-weight:600;">${isMulti ? '' : fmtMoney(r.totalPaid)}</td>
           <td style="font-size:11px;">${isMulti ? '' : esc(r.paymentSummary||'')}</td>
           <td>${isFirst || !isMulti ? esc(r.note||'') : ''}</td>
-          <td style="font-size:11px;color:#888;">${isFirst || !isMulti ? esc((r.soldAt||'').substring(0,10)) : ''}</td>
+          <td style="font-size:11px;color:#888;">${isFirst || !isMulti ? fmtDate((r.soldAt||'').substring(0,10)) : ''}</td>
+          <td style="font-size:11px;color:#888;">${isFirst || !isMulti ? esc(fmtBy(r.createdBy||'')) : ''}</td>
+          ${mgr ? `<td style="white-space:nowrap;">${isFirst||!isMulti ? `<button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','sales')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','sales')">Del</button>` : ''}</td>` : ''}
         </tr>`;
 
         if (isLast) {
@@ -1337,7 +1381,7 @@ function renderHistoryTable(rows) {
             <td style="text-align:right;padding:5px 8px;color:#dc2626;">${grpDisc ? fmtMoney(grpDisc) : '—'}</td>
             <td style="text-align:right;font-weight:700;padding:5px 8px;">${fmtMoney(grpPaid)}</td>
             <td style="font-size:11px;padding:5px 8px;">${esc(r.paymentSummary||'')}</td>
-            <td colspan="2" style="padding:5px 8px;"></td>
+            <td colspan="3" style="padding:5px 8px;"></td>
           </tr>`;
         }
       });
@@ -1345,38 +1389,150 @@ function renderHistoryTable(rows) {
     }
 
   } else if (currentHistTab === 'stockin') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th style="text-align:right;">Qty</th><th>Source</th><th>Note</th><th>Date</th>';
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th style="text-align:right;">Qty</th><th>Source</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map(r => `<tr>
       <td style="color:#888;font-size:11px;">${esc(r.id||'')}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td style="text-align:right;">${r.quantity}</td>
       <td>${esc(r.orderSource||'')}</td><td>${esc(r.note||'')}</td>
-      <td style="font-size:11px;color:#888;">${esc((r.createdAt||'').substring(0,10))}</td>
-    </tr>`).join('') : '<tr><td colspan="7" class="empty-state">No stock-in records.</td></tr>';
+      <td style="font-size:11px;color:#888;">${fmtDate((r.createdAt||'').substring(0,10))}</td>
+      <td style="font-size:11px;color:#888;">${esc(fmtBy(r.createdBy||''))}</td>
+      ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','stockin')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','stockin')">Del</button></td>`:''}
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No stock-in records.</td></tr>';
 
   } else if (currentHistTab === 'stockout') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th style="text-align:right;">Qty</th><th>Note</th><th>Date</th>';
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th style="text-align:right;">Qty</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map(r => `<tr>
       <td style="color:#888;font-size:11px;">${esc(r.id||'')}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td style="text-align:right;">${r.quantity}</td>
       <td>${esc(r.note||'')}</td>
-      <td style="font-size:11px;color:#888;">${esc((r.createdAt||'').substring(0,10))}</td>
-    </tr>`).join('') : '<tr><td colspan="6" class="empty-state">No stock-out records.</td></tr>';
+      <td style="font-size:11px;color:#888;">${fmtDate((r.createdAt||'').substring(0,10))}</td>
+      <td style="font-size:11px;color:#888;">${esc(fmtBy(r.createdBy||''))}</td>
+      ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','stockout')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','stockout')">Del</button></td>`:''}
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?8:7)+'" class="empty-state">No stock-out records.</td></tr>';
 
   } else if (currentHistTab === 'transfers') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th style="text-align:right;">Qty</th><th>Note</th><th>Date</th>';
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th style="text-align:right;">Qty</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map(r => `<tr>
       <td style="color:#888;font-size:11px;">${esc(r.id||'')}</td>
       <td>${esc(r.title)}</td><td>${esc(r.fromBranch)}</td><td>${esc(r.toBranch)}</td>
       <td style="text-align:right;">${r.quantity}</td>
       <td>${esc(r.note||'')}</td>
-      <td style="font-size:11px;color:#888;">${esc((r.createdAt||'').substring(0,10))}</td>
-    </tr>`).join('') : '<tr><td colspan="7" class="empty-state">No transfer records.</td></tr>';
+      <td style="font-size:11px;color:#888;">${fmtDate((r.createdAt||'').substring(0,10))}</td>
+      <td style="font-size:11px;color:#888;">${esc(fmtBy(r.createdBy||''))}</td>
+      ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','transfers')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','transfers')">Del</button></td>`:''}
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No transfer records.</td></tr>';
   }
+}
+
+// History Edit / Delete
+const _histCollMap = { sales:'sales', stockin:'stock_history', stockout:'stock_out', transfers:'transfers' };
+let _editHistDocId = null, _editHistTab = null;
+
+function editHistoryRecord(docId, tab) {
+  _editHistDocId = docId; _editHistTab = tab;
+  const r = historyData.find(x => x._docId === docId);
+  if (!r) return;
+  const fg = (label, inner) => `<div class="form-group" style="margin-bottom:10px;"><label>${label}</label>${inner}</div>`;
+  const ti = (id, val) => `<input type="text" id="${id}" value="${esc(val||'')}">`;
+  const ni = (id, val) => `<input type="number" id="${id}" value="${val||0}" min="0" step="any" style="width:100%;">`;
+  const brSel = (id, val) => `<select id="${id}" style="width:100%;"><option value="LA"${val==='LA'?' selected':''}>LA</option><option value="RH"${val==='RH'?' selected':''}>RH</option><option value="IRV"${val==='IRV'?' selected':''}>IRV</option></select>`;
+  const di = (id, val) => `<input type="date" id="${id}" value="${(val||'').substring(0,10)}" style="width:100%;">`;
+  const bookSel = (id, curIsbn, curTitle) => {
+    const matchIsbn = curIsbn || (books.find(b => b.title === curTitle)?.isbn || '');
+    const opts = '<option value="">— select book —</option>' +
+      books.map(b => `<option value="${esc(b.isbn)}"${b.isbn === matchIsbn ? ' selected' : ''}>${esc(b.title)}${b.isbn ? ' (' + esc(b.isbn) + ')' : ''}</option>`).join('');
+    return `<select id="${id}" style="width:100%;">${opts}</select>`;
+  };
+  let fields = '';
+  if (tab === 'sales') {
+    fields =
+      fg('Title', bookSel('eh-title', r.isbn, r.title)) +
+      fg('Branch', brSel('eh-branch', r.branch)) +
+      fg('Student', ti('eh-student', r.student)) +
+      fg('Qty', ni('eh-qty', r.quantity)) +
+      fg('Price', ni('eh-price', r.sellingPrice)) +
+      fg('Discount', ni('eh-discount', r.txnDiscount||r.discount||0)) +
+      fg('Paid', ni('eh-paid', r.totalPaid)) +
+      fg('Payment', ti('eh-payment', r.paymentSummary)) +
+      fg('Note', ti('eh-note', r.note)) +
+      fg('Date', di('eh-date', r.soldAt));
+  } else if (tab === 'stockin') {
+    fields =
+      fg('Title', bookSel('eh-title', r.isbn, r.title)) +
+      fg('Branch', brSel('eh-branch', r.branch)) +
+      fg('Qty', ni('eh-qty', r.quantity)) +
+      fg('Source', ti('eh-source', r.orderSource)) +
+      fg('Note', ti('eh-note', r.note)) +
+      fg('Date', di('eh-date', r.createdAt));
+  } else if (tab === 'stockout') {
+    fields =
+      fg('Title', bookSel('eh-title', r.isbn, r.title)) +
+      fg('Branch', brSel('eh-branch', r.branch)) +
+      fg('Qty', ni('eh-qty', r.quantity)) +
+      fg('Note', ti('eh-note', r.note)) +
+      fg('Date', di('eh-date', r.createdAt));
+  } else if (tab === 'transfers') {
+    fields =
+      fg('Title', bookSel('eh-title', r.isbn, r.title)) +
+      fg('From', brSel('eh-from', r.fromBranch)) +
+      fg('To', brSel('eh-to', r.toBranch)) +
+      fg('Qty', ni('eh-qty', r.quantity)) +
+      fg('Note', ti('eh-note', r.note)) +
+      fg('Date', di('eh-date', r.createdAt));
+  }
+  document.getElementById('edit-hist-fields').innerHTML = fields;
+  document.getElementById('edit-hist-modal').classList.add('open');
+}
+function closeEditHistModal() {
+  document.getElementById('edit-hist-modal').classList.remove('open');
+  _editHistDocId = null; _editHistTab = null;
+}
+async function saveHistoryEdit() {
+  if (!_editHistDocId || !_editHistTab) return;
+  const coll = _histCollMap[_editHistTab];
+  const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
+  const update = {};
+  if (g('eh-title') !== null) {
+    const selIsbn = g('eh-title');
+    const book = books.find(b => b.isbn === selIsbn);
+    if (book) { update.title = book.title; update.isbn = book.isbn; }
+  }
+  if (g('eh-qty')     !== null) update.quantity      = Number(g('eh-qty')) || 0;
+  if (g('eh-note')    !== null) update.note          = g('eh-note').trim();
+  if (g('eh-source')  !== null) update.orderSource   = g('eh-source').trim();
+  if (g('eh-student') !== null) update.student       = g('eh-student').trim();
+  if (g('eh-branch')  !== null) update.branch        = g('eh-branch');
+  if (g('eh-from')    !== null) update.fromBranch    = g('eh-from');
+  if (g('eh-to')      !== null) update.toBranch      = g('eh-to');
+  if (g('eh-price')   !== null) update.sellingPrice  = Number(g('eh-price')) || 0;
+  if (g('eh-discount')!== null) update.txnDiscount   = Number(g('eh-discount')) || 0;
+  if (g('eh-paid')    !== null) update.totalPaid      = Number(g('eh-paid')) || 0;
+  if (g('eh-payment') !== null) update.paymentSummary = g('eh-payment').trim();
+  if (g('eh-date')    !== null && g('eh-date')) {
+    const dateVal = g('eh-date') + ' 00:00';
+    if (_editHistTab === 'sales') update.soldAt = dateVal;
+    else update.createdAt = dateVal;
+  }
+  try {
+    await db.collection(coll).doc(_editHistDocId).update(update);
+    showToast('Updated.', 'ok');
+    closeEditHistModal();
+    loadHistory();
+  } catch(e) { showToast('Error saving.', 'error'); }
+}
+async function deleteHistoryRecord(docId, tab) {
+  if (!confirm('Delete this record?')) return;
+  const coll = _histCollMap[tab];
+  try {
+    await db.collection(coll).doc(docId).delete();
+    showToast('Deleted.', 'ok');
+    loadHistory();
+  } catch(e) { showToast('Error deleting.', 'error'); }
 }
 
 // ==========================================
@@ -1572,8 +1728,12 @@ firebase.auth().onAuthStateChanged(async user => {
     badge.className = 'role-badge ' + currentRole;
     document.getElementById('user-info').style.display = 'flex';
     loadAll().then(() => {
-      const tab = new URLSearchParams(location.search).get('tab');
-      if (tab) switchTab(tab);
+      const urlTab = new URLSearchParams(location.search).get('tab');
+      const savedTab = localStorage.getItem('inventory_tab');
+      const savedHistTab = localStorage.getItem('inventory_hist_tab');
+      const tabToLoad = urlTab || savedTab || 'inventory';
+      if (tabToLoad !== 'inventory') switchTab(tabToLoad);
+      if (savedHistTab && savedHistTab !== 'sales') switchHistoryTab(savedHistTab);
     });
   } else {
     window.location.href = '/';

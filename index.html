@@ -100,6 +100,12 @@
     .not-held-btn:hover { background:#ffedd5; }
     .miss-reason-text { font-size:11px;color:#c2410c;display:block;margin-top:3px; }
     body.role-manager .staff-only { display:none!important; }
+    .miss-toggle { padding:6px 16px;border:1px solid #d0d0d0;background:white;border-radius:5px;cursor:pointer;font-size:13px;font-family:inherit;color:#555; }
+    .miss-toggle.active { background:#1a1a2e;color:white;border-color:#1a1a2e; }
+    .miss-toggle:hover:not(.active) { background:#f5f5f5; }
+    .miss-section-label { font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px; }
+    .hours-nav-btn { padding:4px 10px;border:1px solid #d0d0d0;background:white;border-radius:5px;cursor:pointer;font-size:14px;font-family:inherit;color:#333;line-height:1; }
+    .hours-nav-btn:hover { background:#f5f5f5; }
     .progress-fill { height: 100%; border-radius: 4px; background: #22c55e; }
     .progress-fill.warn { background: #f59e0b; } .progress-fill.over { background: #ef4444; }
     .hours-over { color: #dc2626; font-weight: 600; }
@@ -163,6 +169,8 @@
     /* Absence / substitute session block colors */
     .session-block.not-held    { background:#fef9c3; color:#854d0e; border-left-color:#eab308; }
     .session-block.sub-covered { background:#ede9fe; color:#6d28d9; border-left-color:#8b5cf6; }
+    .session-block.Meeting     { background:#fff7ed; color:#9a3412; border-left-color:#f97316; }
+    .session-block.Training    { background:#f0fdfa; color:#134e4a; border-left-color:#14b8a6; }
     .absence-badge { display:inline-block;font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;text-transform:uppercase;letter-spacing:0.4px;vertical-align:middle;margin-left:4px;background:#fde68a;color:#92400e; }
 
 
@@ -199,14 +207,19 @@
   <a class="page-nav-tab active" href="/">Scheduler</a>
   <a class="page-nav-tab" href="/inventory">Inventory</a>
 </nav>
+<div class="detail-tabs" id="home-tabs" style="justify-content:space-between;align-items:center;">
+  <div style="display:flex;">
+    <button class="detail-tab active" onclick="switchHomeTab('teachers')">Teachers</button>
+    <button class="detail-tab" onclick="switchHomeTab('hours')">Hours Overview</button>
+    <button class="detail-tab" onclick="switchHomeTab('students')">Students</button>
+    <button class="detail-tab" onclick="switchHomeTab('history')">History</button>
+  </div>
+  <div id="current-quarter-badge" style="display:none;margin-right:16px;padding:4px 12px;background:#1a1a2e;color:white;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.3px;white-space:nowrap;"></div>
+</div>
 <div id="teacher-context-bar"><span id="header-teacher-name"></span></div>
 
 <!-- VIEW 1: Teacher List / Hours Overview -->
 <div id="view-home" class="view active">
-  <div class="detail-tabs" id="home-tabs">
-    <button class="detail-tab active" onclick="switchHomeTab('teachers')">Teachers</button>
-    <button class="detail-tab" onclick="switchHomeTab('hours')">Hours Overview</button>
-  </div>
 
   <!-- Teachers tab -->
   <div id="home-tab-teachers" class="detail-tab-content active">
@@ -216,8 +229,15 @@
           <h2 style="margin:0;">Teachers</h2>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-secondary btn-sm" onclick="openCalendarModal()">&#128197; School Calendar</button>
+            <button class="btn btn-secondary btn-sm manager-only" onclick="openImportModal()">&#8679; Import Schedule</button>
             <button class="btn btn-primary btn-sm manager-only" onclick="openAddTeacherModal()">+ Add Teacher</button>
           </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+          <button id="tl-filter-btn" class="btn btn-secondary btn-sm" onclick="openTLFilterModal()" style="position:relative;">
+            &#9776; Filter<span id="tl-filter-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#1a1a2e;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;align-items:center;justify-content:center;"></span>
+          </button>
+          <div id="tl-filter-summary" style="font-size:12px;color:#6b7280;"></div>
         </div>
         <div id="teacher-list"><div class="empty-state">Loading…</div></div>
       </div>
@@ -228,21 +248,95 @@
   <div id="home-tab-hours" class="detail-tab-content">
     <main>
       <div class="card">
-        <div class="hours-period">
-          <button class="hours-period-btn active" id="hhbtn-week" onclick="setHomeHoursPeriod('week')">This Week</button>
-          <button class="hours-period-btn" id="hhbtn-month" onclick="setHomeHoursPeriod('month')">This Month</button>
-          <button class="hours-period-btn" id="hhbtn-custom" onclick="setHomeHoursPeriod('custom')">Custom</button>
+        <div style="display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
+          <div class="hours-period" style="margin-bottom:0;">
+            <button class="hours-period-btn active" id="hhbtn-week" onclick="setHomeHoursPeriod('week')">Week</button>
+            <button class="hours-period-btn" id="hhbtn-month" onclick="setHomeHoursPeriod('month')">Month</button>
+            <button class="hours-period-btn" id="hhbtn-custom" onclick="setHomeHoursPeriod('custom')">Custom</button>
+          </div>
+          <div id="home-hours-nav" style="display:flex;align-items:center;gap:4px;">
+            <button class="hours-nav-btn" onclick="changeHomeHoursOffset(-1)">&#8592;</button>
+            <button class="hours-nav-btn" onclick="changeHomeHoursOffset(1)">&#8594;</button>
+          </div>
           <div id="home-hours-custom-range" style="display:none;align-items:center;gap:6px;flex-wrap:wrap;">
             <input type="date" id="home-hours-from" style="font-size:12px;padding:4px 7px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;">
             <span style="color:#999;font-size:13px;">–</span>
             <input type="date" id="home-hours-to" style="font-size:12px;padding:4px 7px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;">
             <button class="btn btn-primary btn-sm" onclick="renderAllTeachersHours()">Go</button>
           </div>
-          <span id="home-hours-range-label" style="font-size:12px;color:#888;margin-left:4px;"></span>
+          <span id="home-hours-range-label" style="font-size:12px;color:#888;"></span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px;">
+          <button id="hours-filter-btn" class="btn btn-secondary btn-sm" onclick="openHoursFilterModal()" style="position:relative;">
+            &#9776; Filter<span id="hours-filter-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#1a1a2e;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;"></span>
+          </button>
+          <div id="hours-filter-summary" style="font-size:12px;color:#6b7280;"></div>
+          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-left:auto;">
+            <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;user-select:none;">
+              <input type="checkbox" id="home-hours-include-mt" checked onchange="renderAllTeachersHours()" style="cursor:pointer;">
+              Include Meeting/Training in Total
+            </label>
+            <button class="btn btn-secondary btn-sm" onclick="exportHoursOverviewCSV()">&#8595; Export CSV</button>
+          </div>
         </div>
         <div id="all-teachers-hours-content"><div class="empty-state">Select a period above.</div></div>
       </div>
     </main>
+  </div>
+
+  <!-- History (Audit Log) tab — manager only -->
+  <div id="home-tab-history" class="detail-tab-content">
+    <main>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <h2 style="margin:0;font-size:16px;">Change History</h2>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button class="hours-period-btn active" id="audbtn-all" onclick="setAuditFilter('all')">All</button>
+            <button class="hours-period-btn" id="audbtn-create" onclick="setAuditFilter('create')">Create</button>
+            <button class="hours-period-btn" id="audbtn-update" onclick="setAuditFilter('update')">Update</button>
+            <button class="hours-period-btn" id="audbtn-delete" onclick="setAuditFilter('delete')">Delete</button>
+          </div>
+        </div>
+        <div id="audit-log-content"><div class="empty-state">Loading…</div></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Students Overview tab -->
+  <div id="home-tab-students" class="detail-tab-content">
+    <main>
+      <div class="card">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+          <h2 style="margin:0;font-size:16px;">Students PT Overview</h2>
+          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div class="hours-period" style="margin-bottom:0;">
+              <button class="hours-period-btn active" id="scbtn-all" onclick="setStudentsCampus('all')">All</button>
+              <button class="hours-period-btn" id="scbtn-IRV" onclick="setStudentsCampus('IRV')">IRV</button>
+              <button class="hours-period-btn" id="scbtn-RH" onclick="setStudentsCampus('RH')">RH</button>
+              <button class="hours-period-btn" id="scbtn-LA" onclick="setStudentsCampus('LA')">LA</button>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="openRegisterStudentModal()">+ Register Student</button>
+            <button class="btn btn-secondary btn-sm" onclick="exportStudentsOverviewCSV()">&#8595; Export CSV</button>
+          </div>
+        </div>
+        <div id="students-overview-content"><div class="empty-state">Loading…</div></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- Edit Audit Record Modal -->
+<div id="edit-audit-modal" class="modal-overlay">
+  <div class="modal" style="max-width:480px;">
+    <h3>Edit History Record</h3>
+    <div class="form-group">
+      <label>Description</label>
+      <input type="text" id="edit-audit-summary" style="width:100%;">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-primary" onclick="saveAuditRecord()">Save</button>
+      <button class="btn btn-secondary" onclick="closeEditAuditModal()">Cancel</button>
+    </div>
   </div>
 </div>
 
@@ -272,6 +366,7 @@
             <button class="btn btn-secondary btn-sm manager-only" onclick="deleteHolidaySessions()" style="background:#fff5f5;color:#dc2626;border-color:#fca5a5;" title="Delete all sessions that fall on holidays">&#128683; Clear Holiday Sessions</button>
           </div>
           <button class="btn btn-primary btn-sm manager-only" onclick="openAddModal()">+ Add Session</button>
+          <button class="btn btn-primary btn-sm staff-only" onclick="openAddPTFromTracker()">+ Add PT Session</button>
         </div>
       </div>
       <div class="legend">
@@ -280,6 +375,7 @@
         <span class="legend-item"><span class="legend-dot" style="background:#f9fafb;border:1px dashed #d1d5db;"></span>PT (scheduled)</span>
         <span class="legend-item"><span class="legend-dot" style="background:#fef9c3;border:1px solid #eab308;"></span>Not Held</span>
         <span class="legend-item"><span class="legend-dot" style="background:#ede9fe;border:1px solid #8b5cf6;"></span>Sub Covered</span>
+        <span class="legend-item"><span class="legend-dot" style="background:#fff7ed;border:1px solid #f97316;"></span>Meeting / Training</span>
       </div>
       <div class="card" style="padding:0;overflow:hidden;">
         <div class="grid-wrapper">
@@ -291,16 +387,8 @@
 
   <div id="dtab-pt" class="detail-tab-content">
     <main>
-      <div class="card manager-only" style="max-width:540px;">
-        <h2>Set PT Contract</h2>
-        <div class="form-grid">
-          <div class="form-group"><label>Student Name</label><input type="text" id="pt-student" placeholder="Student name"></div>
-          <div class="form-group"><label>Contract Hours</label><input type="number" id="pt-hours" min="0" step="0.5" placeholder="e.g. 20"></div>
-        </div>
-        <button class="btn btn-primary" onclick="savePTContract()">Save</button>
-      </div>
       <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;">
-        <button class="btn btn-primary btn-sm manager-only" onclick="openAddPTFromTracker()">+ Add PT Session</button>
+        <button class="btn btn-primary btn-sm" onclick="openAddPTFromTracker()">+ Add PT Session</button>
         <button class="btn btn-secondary btn-sm" onclick="exportPTCSV()">&#8595; Export CSV</button>
         <button class="btn btn-secondary btn-sm" onclick="printPTTracker()">&#128438; Print</button>
       </div>
@@ -314,21 +402,22 @@
   <div class="modal">
     <h3>Add Session</h3>
 
-    <div class="form-group" style="margin-bottom:14px;">
+    <div class="form-group manager-only" id="sess-type-group" style="margin-bottom:14px;">
       <label>Session Type</label>
       <select id="sess-type" onchange="onSessionTypeChange()">
         <option value="Regular">Regular</option>
         <option value="PT">PT</option>
+        <option value="Meeting">Meeting / Training</option>
       </select>
     </div>
 
-    <!-- Regular form -->
+    <!-- Regular / Meeting / Training form -->
     <div id="regular-form">
       <div class="form-group" style="margin-bottom:10px;">
-        <label>Class Name</label>
+        <label id="reg-class-name-label">Class Name</label>
         <input type="text" id="reg-class-name" placeholder="e.g. Advanced English A" oninput="validateForm()">
       </div>
-      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
+      <div id="reg-class-extra-fields" class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
         <div class="form-group"><label>Classroom</label><input type="text" id="reg-classroom" placeholder="e.g. Room 101"></div>
         <div class="form-group"><label>Class Code</label><input type="text" id="reg-class-code" placeholder="Optional"></div>
         <div class="form-group"><label>Level</label>
@@ -373,7 +462,7 @@
           <select id="sess-student-select" onchange="validateForm()">
             <option value="">-- Select student --</option>
           </select>
-          <div id="pt-no-students-msg" style="display:none;font-size:12px;color:#c2410c;margin-top:4px;">No registered students. Use "Set PT Contract" to register a student first.</div>
+          <div id="pt-no-students-msg" style="display:none;font-size:12px;color:#c2410c;margin-top:4px;">No registered students. Register students in the Students tab first.</div>
         </div>
         <div class="form-group"><label>Date</label><input type="date" id="sess-date" oninput="validateForm()"></div>
         <div class="form-group"><label>Start Time</label><input type="time" id="sess-start" value="09:00" oninput="validateForm()"></div>
@@ -388,7 +477,7 @@
     <div class="warnings" id="session-warnings"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closeAddModal()">Cancel</button>
-      <button class="btn btn-primary btn-sm manager-only" onclick="addSession()">Add</button>
+      <button class="btn btn-primary btn-sm" id="add-session-btn" onclick="addSession()">Add</button>
     </div>
   </div>
 </div>
@@ -414,7 +503,7 @@
     </div>
 
     <!-- Add session form — always visible at the top for managers -->
-    <div id="pt-mini-add-form" class="manager-only" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
+    <div id="pt-mini-add-form" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
       <div style="font-size:11px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Add PT Session</div>
       <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
         <div class="form-group" style="margin-bottom:0;width:140px;"><label>Date</label><input type="date" id="pt-mini-date"></div>
@@ -433,10 +522,141 @@
         <span id="pt-mini-week-label" class="week-label"></span>
         <button onclick="changePTMiniWeek(1)">&#8594;</button>
       </div>
-      <span class="manager-only" style="font-size:11px;color:#aaa;">Click a time slot to fill in date &amp; time</span>
+      <span style="font-size:11px;color:#aaa;">Click a time slot to fill in date &amp; time</span>
     </div>
     <div style="overflow-x:auto;border:1px solid #e0e0e0;border-radius:8px;">
       <div id="pt-mini-grid" class="mini-schedule-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Schedule CSV Import Modal -->
+<div class="modal-overlay" id="import-schedule-modal">
+  <div class="modal" style="width:540px;max-height:85vh;overflow-y:auto;">
+    <h3>Import Schedule from CSV</h3>
+
+    <!-- Step 1: settings -->
+    <div id="import-step1">
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:12px;">
+        <div class="form-group">
+          <label>Quarter</label>
+          <select id="import-quarter">
+            <option value="">— Select Quarter —</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Branch</label>
+          <select id="import-branch">
+            <option value="IRV">IRV</option>
+            <option value="RH">RH</option>
+            <option value="LA">LA</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px;">
+        <label>CSV File</label>
+        <input type="file" id="import-csv-file" accept=".csv" style="font-size:13px;">
+      </div>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:10px 12px;margin-bottom:14px;font-size:11.5px;color:#555;line-height:1.7;">
+        <strong>Required columns:</strong> teacher, days, start, end, class_name<br>
+        <strong>Optional:</strong> classroom, class_code, level, notes<br>
+        <strong>days format:</strong> Mon / Tue / Wed / Thu / Fri / Sat (comma-separated)<br>
+        <strong>time format:</strong> 09:00
+        <div style="margin-top:8px;">
+          <button class="btn btn-secondary btn-sm" onclick="downloadCSVTemplate()" style="font-size:11px;">&#8595; Download Template</button>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="closeImportModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="parseImportCSV()">Preview</button>
+      </div>
+    </div>
+
+    <!-- Step 2: preview -->
+    <div id="import-step2" style="display:none;">
+      <div id="import-preview-summary" style="margin-bottom:10px;font-size:13px;"></div>
+      <div id="import-preview-errors" style="margin-bottom:8px;"></div>
+      <div id="import-preview-table" style="max-height:320px;overflow-y:auto;margin-bottom:14px;font-size:12px;"></div>
+      <div class="modal-actions">
+        <button class="btn btn-secondary btn-sm" onclick="document.getElementById('import-step1').style.display='';document.getElementById('import-step2').style.display='none';">Back</button>
+        <button class="btn btn-primary btn-sm" id="import-confirm-btn" onclick="confirmImport()">Import</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Hours Overview Filter Modal -->
+<div class="modal-overlay" id="hours-filter-modal">
+  <div class="modal" style="width:320px;">
+    <h3>Filter</h3>
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Branch</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="hcbtn-all" onclick="hfSetCampus('all')">All</button>
+          <button class="hours-period-btn" id="hcbtn-IRV" onclick="hfSetCampus('IRV')">IRV</button>
+          <button class="hours-period-btn" id="hcbtn-RH"  onclick="hfSetCampus('RH')">RH</button>
+          <button class="hours-period-btn" id="hcbtn-LA"  onclick="hfSetCampus('LA')">LA</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Status</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="hsfbtn-all"      onclick="hfSet('status','all')">All</button>
+          <button class="hours-period-btn"        id="hsfbtn-active"   onclick="hfSet('status','active')">Active</button>
+          <button class="hours-period-btn"        id="hsfbtn-inactive" onclick="hfSet('status','inactive')">Inactive</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Type</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="htfbtn-all"        onclick="hfSet('type','all')">All</button>
+          <button class="hours-period-btn"        id="htfbtn-regular"    onclick="hfSet('type','regular')">Regular</button>
+          <button class="hours-period-btn"        id="htfbtn-substitute" onclick="hfSet('type','substitute')">Substitute</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Hours</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="hhfbtn-all"  onclick="hfSet('hours','all')">All</button>
+          <button class="hours-period-btn"        id="hhfbtn-has"  onclick="hfSet('hours','has')">Has Hours</button>
+          <button class="hours-period-btn"        id="hhfbtn-none" onclick="hfSet('hours','none')">No Hours</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="hfReset()">Reset</button>
+      <button class="btn btn-primary btn-sm" onclick="applyHoursFilter()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Teacher List Filter Modal -->
+<div class="modal-overlay" id="tl-filter-modal">
+  <div class="modal" style="width:320px;">
+    <h3>Filter Teachers</h3>
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Branch</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="tlfbtn-branch-all" onclick="tlDraftSet('branch','all')">All</button>
+          <button class="hours-period-btn" id="tlfbtn-branch-IRV" onclick="tlDraftSet('branch','IRV')">IRV</button>
+          <button class="hours-period-btn" id="tlfbtn-branch-RH"  onclick="tlDraftSet('branch','RH')">RH</button>
+          <button class="hours-period-btn" id="tlfbtn-branch-LA"  onclick="tlDraftSet('branch','LA')">LA</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Status</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="tlfbtn-status-all"      onclick="tlDraftSet('status','all')">All</button>
+          <button class="hours-period-btn" id="tlfbtn-status-active"   onclick="tlDraftSet('status','active')">Active</button>
+          <button class="hours-period-btn" id="tlfbtn-status-inactive" onclick="tlDraftSet('status','inactive')">Inactive</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="tlFilterReset()">Reset</button>
+      <button class="btn btn-primary btn-sm" onclick="applyTLFilter()">Apply</button>
     </div>
   </div>
 </div>
@@ -453,11 +673,25 @@
         </select>
       </div>
     </div>
-    <div class="form-group" style="margin-bottom:12px;">
+    <div class="form-group" style="margin-bottom:4px;">
       <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">
-        <input type="checkbox" id="teacher-is-substitute" style="width:15px;height:15px;">
+        <input type="checkbox" id="teacher-is-substitute" style="width:15px;height:15px;" onchange="if(this.checked){document.getElementById('teacher-is-inactive').checked=false;document.getElementById('inactive-from-row').style.display='none';}">
         <span>Substitute Teacher</span>
       </label>
+    </div>
+    <div class="form-group" style="margin-bottom:4px;">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">
+        <input type="checkbox" id="teacher-is-inactive" style="width:15px;height:15px;" onchange="onInactiveCheckChange(this)">
+        <span style="color:#6b7280;">Inactive</span>
+      </label>
+      <div id="inactive-from-row" style="display:none;margin-top:6px;padding-left:23px;">
+        <label style="font-size:12px;color:#555;display:block;margin-bottom:3px;">Inactive from</label>
+        <input type="date" id="teacher-inactive-from" style="font-size:13px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:100%;box-sizing:border-box;">
+      </div>
+    </div>
+    <div id="teacher-status-history" style="display:none;border-top:1px solid #eee;padding-top:10px;margin-top:4px;margin-bottom:8px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Status History</div>
+      <div id="status-history-list" style="max-height:130px;overflow-y:auto;font-size:12px;color:#555;"></div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closeTeacherModal()">Cancel</button>
@@ -472,51 +706,48 @@
     <h3 id="edit-modal-title">Edit Session</h3>
     <div id="edit-scope-notice" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1d4ed8;border-radius:5px;padding:8px 12px;margin-bottom:12px;font-size:12.5px;display:none;"></div>
 
-    <!-- Regular fields -->
-    <div id="edit-regular-fields">
-      <div class="form-group" style="margin-bottom:10px;">
-        <label>Class Name</label>
-        <input type="text" id="edit-class-name">
-      </div>
-      <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
-        <div class="form-group"><label>Classroom</label><input type="text" id="edit-classroom" placeholder="e.g. Room 101"></div>
-        <div class="form-group"><label>Class Code</label><input type="text" id="edit-class-code" placeholder="Optional"></div>
-        <div class="form-group"><label>Level</label>
-          <select id="edit-class-level">
-            <option value="">— Select —</option>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
-            <option value="Advanced-EAP">Advanced-EAP</option>
-            <option value="EAP">EAP</option>
-            <option value="BE">BE (Business English)</option>
-          </select>
-        </div>
-      </div>
-      <div id="edit-date-group" class="form-group" style="margin-bottom:10px;">
-        <label>Date</label>
-        <input type="date" id="edit-date">
-      </div>
-      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
-        <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time"></div>
-        <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time"></div>
+    <!-- Type selector (single-edit only) -->
+    <div id="edit-type-row" style="margin-bottom:12px;">
+      <label style="font-size:12px;color:#555;display:block;margin-bottom:5px;">Type</label>
+      <div class="hours-period" style="margin-bottom:0;">
+        <button class="hours-period-btn" id="edit-type-btn-Regular"   onclick="onEditTypeChange('Regular')">Regular</button>
+        <button class="hours-period-btn" id="edit-type-btn-PT"        onclick="onEditTypeChange('PT')">PT</button>
+        <button class="hours-period-btn" id="edit-type-btn-Meeting"   onclick="onEditTypeChange('Meeting')">Meeting</button>
+        <button class="hours-period-btn" id="edit-type-btn-Training"  onclick="onEditTypeChange('Training')">Training</button>
       </div>
     </div>
 
-    <!-- PT fields -->
-    <div id="edit-pt-fields" style="display:none;">
-      <div class="form-group" style="margin-bottom:10px;">
-        <label>Student Name</label>
-        <input type="text" id="edit-student-name">
+    <!-- Name / Title field (label changes by type) -->
+    <div class="form-group" style="margin-bottom:10px;">
+      <label id="edit-name-label">Class Name</label>
+      <input type="text" id="edit-name">
+    </div>
+
+    <!-- Regular-only extra fields -->
+    <div id="edit-class-extra-fields" class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
+      <div class="form-group"><label>Classroom</label><input type="text" id="edit-classroom" placeholder="e.g. Room 101"></div>
+      <div class="form-group"><label>Class Code</label><input type="text" id="edit-class-code" placeholder="Optional"></div>
+      <div class="form-group"><label>Level</label>
+        <select id="edit-class-level">
+          <option value="">— Select —</option>
+          <option value="Beginner">Beginner</option>
+          <option value="Intermediate">Intermediate</option>
+          <option value="Advanced">Advanced</option>
+          <option value="Advanced-EAP">Advanced-EAP</option>
+          <option value="EAP">EAP</option>
+          <option value="BE">BE (Business English)</option>
+        </select>
       </div>
-      <div class="form-group" style="margin-bottom:10px;">
-        <label>Date</label>
-        <input type="date" id="edit-date-pt">
-      </div>
-      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
-        <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time-pt"></div>
-        <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time-pt"></div>
-      </div>
+    </div>
+
+    <!-- Shared date / time -->
+    <div id="edit-date-group" class="form-group" style="margin-bottom:10px;">
+      <label>Date</label>
+      <input type="date" id="edit-date">
+    </div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
+      <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time"></div>
+      <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time"></div>
     </div>
 
     <div class="form-group" style="margin-bottom:10px;">
@@ -578,7 +809,7 @@
       <div class="manager-only" style="background:#f5f7ff;border:1px solid #c7d2fe;border-radius:7px;padding:12px 14px;margin-bottom:14px;">
         <div style="font-size:11px;font-weight:700;color:#4338ca;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:10px;">Add Quarter</div>
         <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;">
-          <div class="form-group" style="margin-bottom:0;width:80px;"><label>Year</label><input type="number" id="q-year" placeholder="2026" min="2020" max="2035" style="width:80px;"></div>
+          <div class="form-group" style="margin-bottom:0;width:80px;"><label>Year</label><input type="number" id="q-year" placeholder="2026" min="2020" max="2060" style="width:80px;"></div>
           <div class="form-group" style="margin-bottom:0;width:110px;"><label>Quarter</label>
             <select id="q-num">
               <option value="1">Q1 (Winter)</option>
@@ -600,25 +831,76 @@
 <!-- PT Not Held Modal -->
 <div class="modal-overlay" id="pt-miss-modal">
   <div class="modal" style="width:360px;">
-    <h3>Mark as Not Held</h3>
-    <div class="form-group" style="margin-bottom:10px;">
+    <h3 id="pt-miss-title">Mark as Not Held</h3>
+    <div class="form-group" style="margin-bottom:16px;">
       <label>Reason</label>
-      <select id="pt-miss-preset" onchange="onMissReasonPreset()">
-        <option value="">Select a reason…</option>
-        <option value="Student no-show">Student no-show</option>
-        <option value="Teacher absent">Teacher absent</option>
-        <option value="Holiday / school closed">Holiday / school closed</option>
-        <option value="Rescheduled">Rescheduled</option>
-        <option value="Other">Other…</option>
-      </select>
+      <input type="text" id="pt-miss-reason" placeholder="e.g. Student no-show, Teacher sick…">
     </div>
-    <div class="form-group" id="pt-miss-custom-group" style="display:none;margin-bottom:10px;">
-      <label>Custom reason</label>
-      <input type="text" id="pt-miss-custom" placeholder="Enter reason…">
+    <div style="margin-bottom:16px;">
+      <div class="miss-section-label">Outcome</div>
+      <div style="display:flex;gap:8px;">
+        <button id="pt-miss-out-cancel" class="miss-toggle active" onclick="setPTMissOutcome('cancel')">Cancel</button>
+        <button id="pt-miss-out-deduct" class="miss-toggle" onclick="setPTMissOutcome('deduct')">Hours Deducted</button>
+      </div>
+      <div style="font-size:11px;color:#888;margin-top:6px;" id="pt-miss-outcome-hint">Cancel: does not count toward contract hours</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closePTMissModal()">Cancel</button>
       <button class="btn btn-primary btn-sm" onclick="savePTMissed()">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Register Student Modal -->
+<div class="modal-overlay" id="register-student-modal">
+  <div class="modal" style="width:380px;">
+    <h3>Register Student</h3>
+    <div class="form-grid">
+      <div class="form-group"><label>Student Name</label><input type="text" id="reg-stu-name" placeholder="Full name"></div>
+      <div class="form-group"><label>Student ID <span style="font-weight:400;color:#aaa;">(optional)</span></label><input type="text" id="reg-stu-id" placeholder="e.g. STU-001"></div>
+      <div class="form-group"><label>Branch</label>
+        <select id="reg-stu-branch">
+          <option value="">— Select —</option>
+          <option value="IRV">IRV</option>
+          <option value="RH">RH</option>
+          <option value="LA">LA</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-sm" id="reg-stu-delete-btn" onclick="deleteStudentFromModal()" style="display:none;background:#fff5f5;color:#dc2626;border:1px solid #fca5a5;">Delete</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="closeRegisterStudentModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" id="reg-stu-save-btn" onclick="saveStudentRegistration()">Register</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit PT Contract Modal -->
+<div class="modal-overlay" id="add-pt-contract-modal">
+  <div class="modal" style="width:380px;">
+    <h3 id="add-ptc-title">Add PT Contract</h3>
+    <div id="add-ptc-student-display" style="margin-bottom:14px;font-size:14px;color:#374151;"></div>
+    <div class="form-grid">
+      <div class="form-group" id="add-ptc-teacher-row"><label>Teacher</label>
+        <select id="add-ptc-teacher">
+          <option value="">— Select Teacher —</option>
+        </select>
+      </div>
+      <div class="form-group" id="add-ptc-teacher-fixed" style="display:none;"><label>Teacher</label>
+        <div id="add-ptc-teacher-name" style="padding:7px 10px;background:#f3f4f6;border-radius:5px;font-size:13px;color:#374151;"></div>
+      </div>
+      <div class="form-group"><label>Contract Hours <span style="font-weight:400;color:#aaa;">(optional)</span></label>
+        <input type="number" id="add-ptc-hours" min="0" step="0.5" placeholder="e.g. 20">
+      </div>
+    </div>
+    <div class="modal-actions" style="justify-content:space-between;">
+      <button class="btn btn-sm" id="add-ptc-delete-btn" onclick="deletePTContractFromModal()" style="display:none;background:#fff5f5;color:#dc2626;border:1px solid #fca5a5;">Delete</button>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-secondary btn-sm" onclick="closeAddPTContractModal()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="saveAddPTContract()">Save</button>
+      </div>
     </div>
   </div>
 </div>
@@ -635,13 +917,29 @@
 let teachers = [], sessions = [], ptContracts = [], schoolEvents = [];
 let currentTeacher = null, currentWeekStart = getWeekStart(new Date());
 let editingTeacherId = null, selectedSessionId = null;
+let tlFilter = { branch: 'all', status: 'all' };
 let editingSessionId = null, editScope = 'single';
 let ptMiniStudentName = null, ptMiniWeekStart = null;
 let unsubSessions = null, unsubContracts = null, unsubSchoolEvents = null;
+// Sessions (any type) where the selected teacher is the substitute — loaded per teacher.
+let subCoverageSessions = [], unsubSubCoverage = null;
 let pendingTeacherId = window.location.hash.slice(1) || null;
 let calendarYear = new Date().getFullYear();
 let homeHoursPeriod = 'week';
-let allSessionsGlobal = [], unsubAllSessionsGlobal = null;
+let homeHoursWeekOffset = 0, homeHoursMonthOffset = 0;
+let homeHoursCampus = 'all';
+let homeHoursStatusFilter = 'all';
+let homeHoursTypeFilter = 'all';
+let homeHoursHoursFilter = 'all';
+// PT sessions only (all time, live). PT volume is small and is the only data that
+// needs full history (PT tracker + rename/delete cascades all filter type==='PT').
+// Bulk Regular-class sessions are NOT loaded here — the Hours report queries them
+// by date range on demand, keeping load light as years accumulate.
+let allPTSessionsGlobal = [], unsubAllPTSessionsGlobal = null;
+let allPTContractsGlobal = [], unsubAllContractsGlobal = null;
+let allStudentsGlobal = [], unsubStudentsGlobal = null;
+let homeStudentsCampus = 'all';
+let studentsOverviewData = [];
 let quarters=[], currentQuarter=null, scheduleQuarterYear=new Date().getFullYear(), unsubQuarters=null;
 
 // Utilities
@@ -650,7 +948,11 @@ function getWeekStart(date) {
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   d.setHours(0,0,0,0); return d;
 }
-function dateToStr(d) { return d.toISOString().slice(0,10); }
+// Local-date based (NOT toISOString, which is UTC and shifts "today" by a day
+// in timezones ahead of/behind UTC — e.g. Korea mornings or LA evenings).
+function dateToStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
 function strToDate(s) { return new Date(s + 'T00:00:00'); }
 function timeToMins(t) { const [h,m] = t.split(':').map(Number); return h*60+m; }
 function minsToTime(m) { return `${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`; }
@@ -659,10 +961,13 @@ function formatTime(t) {
   const ap = h>=12?'pm':'am'; const hr = h%12||12;
   return m===0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2,'0')}${ap}`;
 }
-function fmtDate(s) { if(!s) return ''; const [y,m,d]=s.split('-'); return `${+m}/${+d}/${y}`; }
-// 50-min period = 1 credit hour
-function calcHours(s, e) {
-  return Math.round((timeToMins(e) - timeToMins(s) + 10) / 60 * 2) / 2;
+function fmtDate(s) { if(!s) return ''; const [y,m,d]=s.split('-'); return `${m.padStart(2,'0')}/${d.padStart(2,'0')}/${y}`; }
+// Regular/Meeting/Training: 50-min = 1 credit hour
+// PT: 30-min increments (30 min = 0.5 hr, 60 min = 1.0 hr, 90 min = 1.5 hr, etc.)
+function calcHours(s, e, type) {
+  const dur = timeToMins(e) - timeToMins(s);
+  if (type === 'PT') return Math.round(dur / 30) / 2;
+  return Math.round((dur + 10) / 60);
 }
 function fmtHours(h) {
   const v = Math.round(h * 10) / 10;
@@ -754,49 +1059,75 @@ function getSessionDates(fromStr, toStr, dayNames) {
 }
 
 // Views
-function goHome() {
+function _showHomeView() {
   if (unsubSessions)  { unsubSessions();  unsubSessions  = null; }
   if (unsubContracts) { unsubContracts(); unsubContracts = null; }
+  if (unsubSubCoverage) { unsubSubCoverage(); unsubSubCoverage = null; }
+  subCoverageSessions = [];
   currentTeacher = null;
-  history.pushState('', document.title, window.location.pathname);
   document.getElementById('view-home').classList.add('active');
   document.getElementById('view-detail').classList.remove('active');
   document.getElementById('back-btn').style.display = 'none';
   document.getElementById('header-teacher-name').textContent = '';
   document.getElementById('teacher-context-bar').style.display = 'none';
+  const savedTab = localStorage.getItem('scheduler_home_tab') || 'teachers';
+  switchHomeTab(savedTab);
+}
+function goHome() {
+  history.pushState('', document.title, window.location.pathname);
+  _showHomeView();
 }
 
-function openTeacherDetail(teacher) {
+function _showTeacherDetailView(teacher) {
   currentTeacher = teacher;
-  // Reset to current quarter and today's week
   const today = dateToStr(new Date());
   const todayQ = quarters.find(q => q.startDate <= today && q.endDate >= today);
   if (todayQ) {
     currentQuarter = todayQ;
     scheduleQuarterYear = todayQ.year;
   } else {
-    // No quarter contains today — keep whatever was selected, or null
     if (!currentQuarter) scheduleQuarterYear = new Date().getFullYear();
   }
   currentWeekStart = getWeekStart(new Date());
-  window.location.hash = teacher.id;
   document.getElementById('view-home').classList.remove('active');
   document.getElementById('view-detail').classList.add('active');
   document.getElementById('back-btn').style.display = '';
   document.getElementById('header-teacher-name').textContent = `${teacher.name} (${teacher.campus})`;
   document.getElementById('teacher-context-bar').style.display = 'block';
+  document.querySelectorAll('#home-tabs .detail-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
   switchDetailTab('schedule');
   startTeacherListeners(teacher.id);
 }
+function openTeacherDetail(teacher) {
+  window.location.hash = teacher.id;
+  _showTeacherDetailView(teacher);
+}
+
+window.addEventListener('popstate', function() {
+  const hash = window.location.hash.slice(1);
+  if (hash) {
+    const t = teachers.find(x => x.id === hash);
+    if (t) _showTeacherDetailView(t);
+    else _showHomeView();
+  } else {
+    _showHomeView();
+  }
+});
 
 function switchDetailTab(name) {
-  document.querySelectorAll('.detail-tab').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.detail-tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('#view-detail .detail-tab').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('#view-detail .detail-tab-content').forEach(el => el.classList.remove('active'));
   const idx={schedule:0,pt:1};
-  document.querySelectorAll('.detail-tab')[idx[name]].classList.add('active');
+  document.querySelectorAll('#view-detail .detail-tab')[idx[name]].classList.add('active');
   document.getElementById('dtab-'+name).classList.add('active');
   if (name==='schedule') { renderQuarterSelector(); renderSchedule(); }
   if (name==='pt')       renderPTTracker();
+}
+
+function openTeacherPT(teacherId) {
+  const teacher=teachers.find(t=>t.id===teacherId); if (!teacher) return;
+  openTeacherDetail(teacher);
+  switchDetailTab('pt');
 }
 
 // Firestore
@@ -806,12 +1137,13 @@ function initTeacherListener() {
       teachers = snap.docs.map(d => ({id:d.id,...d.data()}));
       renderTeacherList();
       if (document.getElementById('home-tab-hours').classList.contains('active')) renderAllTeachersHours();
+      if (document.getElementById('home-tab-students')?.classList.contains('active')) renderStudentsOverview();
       if (currentTeacher) {
         const updated = teachers.find(t => t.id===currentTeacher.id);
         if (updated) { currentTeacher=updated; document.getElementById('header-teacher-name').textContent=`${updated.name} (${updated.campus})`; }
       } else if (pendingTeacherId) {
         const teacher = teachers.find(t => t.id===pendingTeacherId);
-        if (teacher) { pendingTeacherId=null; openTeacherDetail(teacher); }
+        if (teacher) { pendingTeacherId=null; _showTeacherDetailView(teacher); }
       }
     },
     err => {
@@ -825,6 +1157,7 @@ function initTeacherListener() {
 function startTeacherListeners(teacherId) {
   if (unsubSessions)  unsubSessions();
   if (unsubContracts) unsubContracts();
+  if (unsubSubCoverage) unsubSubCoverage();
   unsubSessions = db.collection('sessions').where('teacherId','==',teacherId).onSnapshot(
     snap => {
       sessions = snap.docs.map(d => ({id:d.id,...d.data()}));
@@ -833,6 +1166,14 @@ function startTeacherListeners(teacherId) {
       if (document.getElementById('pt-mini-schedule-modal').classList.contains('open')) renderPTMiniGrid();
     },
     err => { console.error('Firestore sessions error:', err); showToast('Firebase error: ' + err.message, 'error'); }
+  );
+  // Sessions this teacher substitutes for (taught by others) — shown on the schedule grid.
+  unsubSubCoverage = db.collection('sessions').where('substituteId','==',teacherId).onSnapshot(
+    snap => {
+      subCoverageSessions = snap.docs.map(d => ({id:d.id,...d.data()}));
+      renderSchedule();
+    },
+    err => { console.error('Firestore sub-coverage error:', err); }
   );
   unsubContracts = db.collection('pt_contracts').where('teacherId','==',teacherId).onSnapshot(
     snap => {
@@ -908,8 +1249,8 @@ function renderSchedule() {
     const qFilter = s => !currentQuarter || (s.date>=currentQuarter.startDate && s.date<=currentQuarter.endDate);
     const ownSessions = sessions.filter(s=>s.date===dateStr && qFilter(s));
     // Sessions where this teacher is the substitute (from global sessions list)
-    const subCovSessions = currentTeacher ? allSessionsGlobal.filter(s=>
-      s.date===dateStr && s.coverType==='substituted' && s.substituteId===currentTeacher.id &&
+    const subCovSessions = currentTeacher ? subCoverageSessions.filter(s=>
+      s.date===dateStr && s.coverType==='substituted' &&
       s.teacherId!==currentTeacher.id && qFilter(s)
     ) : [];
     const hdrStyle=isToday?'background:#eef2ff;color:#3730a3;':'';
@@ -934,10 +1275,13 @@ function renderSchedule() {
       const top=(timeToMins(sess.startTime)-GRID_START)/30*SLOT_H;
       const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
       if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
-      const label = sess.type==='Regular' ? (sess.studentName ? escHtml(sess.studentName) : 'Regular') : escHtml(sess.studentName);
-      const isPending = sess.type==='PT' && sess.conducted===false;
-      const hrs = calcHours(sess.startTime, sess.endTime);
-      const absClass = sess.absenceType ? ' not-held' : '';
+      const label = (sess.type==='Regular'||sess.type==='Meeting'||sess.type==='Training')
+        ? (sess.studentName ? escHtml(sess.studentName) : sess.type)
+        : escHtml(sess.studentName);
+      const isPending = sess.type==='PT' && sess.conducted===false && !sess.missedReason;
+      const hrs = calcHours(sess.startTime, sess.endTime, sess.type);
+      const isPTNotHeld = sess.type==='PT' && sess.conducted===false && !!sess.missedReason;
+      const absClass = (sess.absenceType || isPTNotHeld) ? ' not-held' : '';
       let metaLines = '';
       if (sess.type === 'Regular') {
         if (sess.classroom) metaLines += `<div class="sb-meta">Room: ${escHtml(sess.classroom)}</div>`;
@@ -963,8 +1307,10 @@ function renderSchedule() {
       const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
       if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
       const origTeacher = teachers.find(t=>t.id===sess.teacherId);
-      const hrs = calcHours(sess.startTime, sess.endTime);
-      const label = sess.type==='Regular' ? (sess.studentName ? escHtml(sess.studentName) : 'Regular') : escHtml(sess.studentName);
+      const hrs = calcHours(sess.startTime, sess.endTime, sess.type);
+      const label = (sess.type==='Regular'||sess.type==='Meeting'||sess.type==='Training')
+        ? (sess.studentName ? escHtml(sess.studentName) : sess.type)
+        : escHtml(sess.studentName);
       html+=`<div class="session-block sub-covered"
         style="top:${top}px;height:${Math.max(height-2,16)}px;"
         onclick="openDetailModal('${sess.id}')">
@@ -982,6 +1328,7 @@ function renderSchedule() {
 // Add Session Modal
 function openAddModal() {
   if (currentRole !== 'manager') return;
+  if (isTeacherCurrentlyInactive(currentTeacher)) return showToast('Cannot add sessions: this teacher is currently inactive.','error');
   const today=new Date(), todayStr=dateToStr(today);
   const todayDay=DAYS[((today.getDay()+6)%7)];
   document.getElementById('sess-type').value='Regular';
@@ -998,16 +1345,28 @@ function openAddModal() {
   document.getElementById('regular-form').style.display='';
   document.getElementById('pt-form').style.display='none';
   if(document.getElementById('sess-student-select')) document.getElementById('sess-student-select').value='';
+  document.getElementById('sess-type-group').style.display='';
+  document.getElementById('add-session-btn').classList.add('manager-only');
+  if (currentRole!=='manager') document.getElementById('add-session-btn').style.display='none';
+  else document.getElementById('add-session-btn').style.display='';
   document.getElementById('add-session-modal').classList.add('open');
 }
 function closeAddModal() { document.getElementById('add-session-modal').classList.remove('open'); }
 
 function onSessionTypeChange() {
   const type=document.getElementById('sess-type').value;
-  document.getElementById('regular-form').style.display=type==='Regular'?'':'none';
+  const isRegularLike=type==='Regular'||type==='Meeting'||type==='Training';
+  document.getElementById('regular-form').style.display=isRegularLike?'':'none';
   document.getElementById('pt-form').style.display=type==='PT'?'':'none';
+  const isMT=type==='Meeting'||type==='Training';
+  const extraFields=document.getElementById('reg-class-extra-fields');
+  if (extraFields) extraFields.style.display=isMT?'none':'';
+  const nameLabel=document.getElementById('reg-class-name-label');
+  if (nameLabel) nameLabel.textContent=isMT?'Title (optional)':'Class Name';
+  const nameInput=document.getElementById('reg-class-name');
+  if (nameInput) nameInput.placeholder=isMT?'e.g. Staff Meeting, PD Training':'e.g. Advanced English A';
   document.getElementById('session-warnings').innerHTML='';
-  if (type==='PT') populatePTStudentDropdown('sess-student-select');
+  if (type==='PT') populatePTStudentDropdown('sess-student-select', currentTeacher?.campus);
   validateForm();
 }
 
@@ -1053,7 +1412,7 @@ function validateForm() {
   const warnEl=document.getElementById('session-warnings');
   const errors=[], warnings=[], infos=[];
 
-  if (type==='Regular') {
+  if (type==='Regular'||type==='Meeting'||type==='Training') {
     const from=document.getElementById('reg-from-date').value;
     const to=document.getElementById('reg-to-date').value;
     const days=getSelectedDays();
@@ -1108,7 +1467,7 @@ function validateForm() {
       if (overlaps.length>0) {
         errors.push(`Overlaps with ${overlaps[0].type} session: ${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}`);
       }
-      warnings.push(...getRuleWarnings({date,startTime:start,endTime:end,type,teacherId:currentTeacher.id}));
+      warnings.push(...getRuleWarnings({date,startTime:start,endTime:end,type,teacherId:currentTeacher.id,studentName:stud}));
     }
   }
 
@@ -1139,7 +1498,7 @@ function getConsecutiveBlock(date, startTime, endTime, excludeId=null) {
   return maxBlock;
 }
 
-function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null) {
+function getRuleWarnings({date,startTime,endTime,type,teacherId,studentName}, excludeId=null) {
   const warnings=[];
   const start=timeToMins(startTime), end=timeToMins(endTime), dur=end-start;
   if (end<=start) { warnings.push('End time must be after start time.'); return warnings; }
@@ -1149,6 +1508,10 @@ function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null
   if (type==='PT') {
     const ptToday=same.filter(s=>s.type==='PT').reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
     if (ptToday+dur>3.5*60) warnings.push(`PT hours would exceed 3.5 hrs today (${(ptToday/60).toFixed(1)} hrs already).`);
+    if (studentName) {
+      const ptWithStudent=same.filter(s=>s.type==='PT'&&s.studentName===studentName).reduce((n,s)=>n+timeToMins(s.endTime)-timeToMins(s.startTime),0);
+      if (ptWithStudent+dur>3.5*60) warnings.push(`PT with ${studentName} would exceed 3.5 hrs on this day (${(ptWithStudent/60).toFixed(1)} hrs already scheduled). For in-person sessions, PT cannot exceed 3.5 hrs per day.`);
+    }
   }
   if (totalToday+dur>8*60) warnings.push(`Teacher would exceed 8 hrs today (${(totalToday/60).toFixed(1)} hrs already).`);
   const workedDates=new Set(sessions.filter(s=>s.id!==excludeId).map(s=>s.date));
@@ -1166,13 +1529,18 @@ function getRuleWarnings({date,startTime,endTime,type,teacherId}, excludeId=null
   return warnings;
 }
 
-function populatePTStudentDropdown(selectId) {
+function populatePTStudentDropdown(selectId, branchFilter) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
-  const names = ptContracts.map(c=>c.studentName).sort();
+  // Use allStudentsGlobal; fall back to ptContracts for legacy data
+  let students = allStudentsGlobal.length > 0
+    ? [...allStudentsGlobal].sort((a,b)=>a.name.localeCompare(b.name))
+    : ptContracts.map(c=>({name:c.studentName, branch:''})).sort((a,b)=>a.name.localeCompare(b.name));
+  // Filter by branch if specified
+  if (branchFilter) students = students.filter(s => s.branch === branchFilter);
   const noMsg = document.getElementById('pt-no-students-msg');
-  if (names.length === 0) {
-    sel.innerHTML = '<option value="">— No registered students —</option>';
+  if (students.length === 0) {
+    sel.innerHTML = '<option value="">— No students in this branch —</option>';
     sel.disabled = true;
     if (noMsg) noMsg.style.display='';
   } else {
@@ -1180,15 +1548,15 @@ function populatePTStudentDropdown(selectId) {
     if (noMsg) noMsg.style.display='none';
     const current = sel.value;
     sel.innerHTML = '<option value="">-- Select student --</option>' +
-      names.map(n=>`<option value="${escHtml(n)}" ${n===current?'selected':''}>${escHtml(n)}</option>`).join('');
+      students.map(s=>`<option value="${escHtml(s.name)}" ${s.name===current?'selected':''}>${escHtml(s.name)}${s.branch?' ('+s.branch+')':''}</option>`).join('');
   }
 }
 
 function openAddPTFromTracker() {
-  if (currentRole !== 'manager') return;
+  if (isTeacherCurrentlyInactive(currentTeacher)) return showToast('Cannot add sessions: this teacher is currently inactive.','error');
   document.getElementById('sess-type').value='PT';
   onSessionTypeChange();
-  populatePTStudentDropdown('sess-student-select');
+  populatePTStudentDropdown('sess-student-select', currentTeacher?.campus);
   document.getElementById('sess-date').value=dateToStr(new Date());
   document.getElementById('sess-start').value='09:00';
   document.getElementById('sess-end').value='10:00';
@@ -1196,6 +1564,9 @@ function openAddPTFromTracker() {
   document.getElementById('session-warnings').innerHTML='';
   document.getElementById('regular-form').style.display='none';
   document.getElementById('pt-form').style.display='';
+  document.getElementById('sess-type-group').style.display='none';
+  document.getElementById('add-session-btn').classList.remove('manager-only');
+  document.getElementById('add-session-btn').style.display='';
   document.getElementById('add-session-modal').classList.add('open');
 }
 
@@ -1223,11 +1594,11 @@ async function deleteHolidaySessions() {
 }
 
 async function addSession() {
-  if (currentRole !== 'manager') return;
   const type=document.getElementById('sess-type').value;
+  if (currentRole !== 'manager' && type !== 'PT') return;
   const notes=document.getElementById('sess-notes').value.trim();
 
-  if (type==='Regular') {
+  if (type==='Regular'||type==='Meeting'||type==='Training') {
     const from=document.getElementById('reg-from-date').value;
     const to=document.getElementById('reg-to-date').value;
     const days=getSelectedDays();
@@ -1259,10 +1630,11 @@ async function addSession() {
     }
     if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?'…':''}`, 'error');
     // Check rules for all effective dates
+    const titleNameForCheck = document.getElementById('reg-class-name').value.trim() || type;
     const ruleViolations = new Set();
     for (const date of effectiveDates) {
       for (const ts of validSlots) {
-        const w = getRuleWarnings({date, startTime:ts.start, endTime:ts.end, type:'Regular', teacherId:currentTeacher.id});
+        const w = getRuleWarnings({date, startTime:ts.start, endTime:ts.end, type, teacherId:currentTeacher.id, studentName:titleNameForCheck});
         w.forEach(v => ruleViolations.add(v));
       }
     }
@@ -1271,22 +1643,27 @@ async function addSession() {
       if (!ok) return;
     }
     try {
-      const regClassroom=document.getElementById('reg-classroom').value.trim();
-      const regClassCode=document.getElementById('reg-class-code').value.trim();
-      const regClassLevel=document.getElementById('reg-class-level').value;
+      const titleName=document.getElementById('reg-class-name').value.trim()||type;
       const batch=db.batch();
       for (const date of effectiveDates) for (const ts of validSlots) {
-        batch.set(db.collection('sessions').doc(), {
+        const docData={
           teacherId:currentTeacher.id,
-          studentName:document.getElementById('reg-class-name').value.trim(),
-          type:'Regular',
+          studentName:titleName,
+          type,
           date, startTime:ts.start, endTime:ts.end, notes,
-          classroom:regClassroom, classCode:regClassCode, classLevel:regClassLevel,
           createdAt:firebase.firestore.FieldValue.serverTimestamp()
-        });
+        };
+        if (type==='Regular') {
+          docData.classroom=document.getElementById('reg-classroom').value.trim();
+          docData.classCode=document.getElementById('reg-class-code').value.trim();
+          docData.classLevel=document.getElementById('reg-class-level').value;
+        }
+        batch.set(db.collection('sessions').doc(), docData);
       }
       await batch.commit();
-      showToast(`${effectiveDates.length*validSlots.length} sessions added!`,'ok');
+      const count = effectiveDates.length*validSlots.length;
+      await logAudit('create','sessions','(batch)',`Added ${count} ${type} session(s): ${titleName} (${currentTeacher.name})`);
+      showToast(`${count} sessions added!`,'ok');
       closeAddModal();
     } catch(e) { console.error(e); showToast('Error saving sessions.','error'); }
 
@@ -1302,17 +1679,18 @@ async function addSession() {
     const overlaps=getOverlaps(date,start,end);
     if (overlaps.length>0) return showToast(`Cannot add: overlaps with ${overlaps[0].type} session (${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}).`,'error');
     if (isDateBlocked(date)) return showToast('Cannot add: this date is a school holiday. Mark it as School Open in School Calendar first.','error');
-    const ptRuleWarnings = getRuleWarnings({date, startTime:start, endTime:end, type:'PT', teacherId:currentTeacher.id});
+    const ptRuleWarnings = getRuleWarnings({date, startTime:start, endTime:end, type:'PT', teacherId:currentTeacher.id, studentName:stud});
     if (ptRuleWarnings.length > 0) {
       const ok = confirm(`⚠ Schedule Warning\n\n${ptRuleWarnings.map(w=>'• '+w).join('\n')}\n\nDo you want to proceed anyway?`);
       if (!ok) return;
     }
     try {
-      await db.collection('sessions').add({
+      const ref = await db.collection('sessions').add({
         teacherId:currentTeacher.id, studentName:stud, type:'PT',
         date, startTime:start, endTime:end, notes, conducted:false,
         createdAt:firebase.firestore.FieldValue.serverTimestamp()
       });
+      await logAudit('create','sessions',ref.id,`Added PT session: ${stud} on ${date} ${start}–${end} (${currentTeacher.name})`);
       showToast('PT session added!','ok');
       closeAddModal();
     } catch(e) { console.error(e); showToast('Error saving session.','error'); }
@@ -1333,9 +1711,10 @@ function openDetailModal(id) {
     ${s.type==='Regular'?`<div class="modal-row"><strong>Classroom</strong>${escHtml(s.classroom||'—')}</div>`:''}
     ${s.type==='Regular'?`<div class="modal-row"><strong>Code</strong>${escHtml(s.classCode||'N/A')}</div>`:''}
     ${s.type==='Regular'?`<div class="modal-row"><strong>Level</strong>${escHtml(s.classLevel||'—')}</div>`:''}
-    ${s.type!=='Regular'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
+    ${(s.type==='Meeting'||s.type==='Training')&&s.studentName&&s.studentName!==s.type?`<div class="modal-row"><strong>Title</strong>${escHtml(s.studentName)}</div>`:''}
+    ${s.type==='PT'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
     <div class="modal-row"><strong>Date</strong>${fmtDate(s.date)} (${dayName})</div>
-    <div class="modal-row"><strong>Time</strong>${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime))})</div>
+    <div class="modal-row" id="detail-time-row"><strong>Time</strong><span id="detail-time-display">${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime, s.type))})</span>${currentRole==='manager'?`<button onclick="startInlineTimeEdit('${s.id}')" style="margin-left:6px;background:none;border:none;cursor:pointer;color:#aaa;font-size:12px;padding:1px 4px;border-radius:3px;line-height:1;" title="Edit time">✏️</button>`:''}</div>
     <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}${absLabel}</div>
     ${s.notes?`<div class="modal-row"><strong>Notes</strong>${escHtml(s.notes)}</div>`:''}
   `;
@@ -1344,8 +1723,8 @@ function openDetailModal(id) {
   if (currentRole === 'manager') {
     const campus = currentTeacher ? currentTeacher.campus : '';
     // Same-campus teachers first; if none, show all teachers as fallback
-    let sameTeachers = teachers.filter(t => t.campus===campus && t.id!==s.teacherId);
-    const allOtherTeachers = teachers.filter(t => t.id!==s.teacherId);
+    let sameTeachers = teachers.filter(t => t.campus===campus && t.id!==s.teacherId && !isTeacherCurrentlyInactive(t));
+    const allOtherTeachers = teachers.filter(t => t.id!==s.teacherId && !isTeacherCurrentlyInactive(t));
     if (sameTeachers.length === 0) sameTeachers = allOtherTeachers;
     const regularTeachers = sameTeachers.filter(t => !t.isSubstitute);
     const subTeachers = sameTeachers.filter(t => t.isSubstitute);
@@ -1376,13 +1755,15 @@ function openDetailModal(id) {
           ${s.absenceType?`<button class="btn btn-secondary btn-sm" onclick="clearAbsence('${id}')">Clear</button>`:''}
         </div>
       </div>`;
-    if (s.type === 'Regular') {
+    if (s.type === 'Regular' || s.type === 'Meeting' || s.type === 'Training') {
       const recurring = getRecurringSessions(s);
       const recCount = recurring.length;
       const recLabel = `All "${escHtml(s.studentName)}" on ${dayName}s (${recCount})`;
+      const mgr = currentRole === 'manager';
       actionsHtml = `
         <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;">
-          ${absenceSection}
+          ${s.type === 'Regular' ? absenceSection : ''}
+          ${mgr ? `
           <div class="session-action-group" style="margin-top:10px;">
             <div class="session-action-group-label">Edit</div>
             <div class="session-action-btns">
@@ -1396,16 +1777,55 @@ function openDetailModal(id) {
               <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete this session</button>
               <button class="btn btn-danger btn-sm" onclick="deleteAllRecurring('${id}')">${recLabel}</button>
             </div>
-          </div>
+          </div>` : ''}
         </div>`;
     } else {
+      const ptConducted = s.conducted !== false;
+      const ptMissed = s.conducted === false && !!s.missedReason;
+      let ptStatusSection = '';
+      const isMgr = currentRole === 'manager';
+      if (ptConducted) {
+        ptStatusSection = `
+          <div class="session-action-group" style="margin-top:10px;">
+            <div class="session-action-group-label">Status</div>
+            <div style="display:flex;gap:6px;align-items:center;">
+              <span class="status-badge status-done">✓ Done</span>
+              ${isMgr ? `<button class="btn btn-sm" style="background:#f3f4f6;color:#555;" onclick="togglePTConducted('${id}',true);closeDetailModal()">Undo</button>` : ''}
+            </div>
+          </div>`;
+      } else if (ptMissed) {
+        ptStatusSection = `
+          <div class="session-action-group" style="margin-top:10px;">
+            <div class="session-action-group-label">Status</div>
+            <div>
+              <span class="status-badge status-missed">✗ Not held</span>
+              <span class="miss-reason-text">${escHtml(s.missedReason)}</span>
+              ${isMgr ? `<div style="display:flex;gap:4px;margin-top:6px;">
+                <button class="btn btn-sm not-held-btn" style="font-size:12px;" onclick="closeDetailModal();openPTMissModal('${id}')">Edit</button>
+                <button class="btn btn-sm" style="background:#f3f4f6;color:#555;font-size:12px;" onclick="undoPTNotHeld('${id}');closeDetailModal()">Undo</button>
+              </div>` : ''}
+            </div>
+          </div>`;
+      } else {
+        ptStatusSection = `
+          <div class="session-action-group" style="margin-top:10px;">
+            <div class="session-action-group-label">Mark Status</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn btn-mark btn-sm" onclick="togglePTConducted('${id}',false);closeDetailModal()">✓ Done</button>
+              <button class="btn btn-sm not-held-btn" onclick="closeDetailModal();openPTMissModal('${id}')">✗ Not held</button>
+            </div>
+          </div>`;
+      }
       actionsHtml = `
         <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;">
-          ${absenceSection}
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
-            <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete</button>
-          </div>
+          ${ptStatusSection}
+          ${isMgr ? `<div style="margin-top:14px;padding-top:12px;border-top:1px solid #f0f0f0;">
+            <div class="session-action-group-label">Session</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+              <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete</button>
+            </div>
+          </div>` : ''}
         </div>`;
     }
   }
@@ -1427,13 +1847,31 @@ function closeDetailModal() {
   selectedSessionId=null;
 }
 
+async function deletePTSessionRow(id) {
+  if (!confirm('Delete this PT session?')) return;
+  try {
+    const snap = await db.collection('sessions').doc(id).get();
+    const s = snap.data() || {};
+    await db.collection('sessions').doc(id).delete();
+    await logAudit('delete','sessions',id,`Deleted PT session: ${s.studentName||'?'} on ${s.date||'?'} ${s.startTime||''}–${s.endTime||''}`,[snapDoc('sessions',id,s)]);
+    showToast('Session deleted.','ok');
+  } catch(e) { showToast('Error deleting session.','error'); }
+}
 async function deleteThisSession() {
+  if (currentRole !== 'manager') return;
   if (!selectedSessionId||!confirm('Delete this session?')) return;
-  try { await db.collection('sessions').doc(selectedSessionId).delete(); closeDetailModal(); showToast('Session deleted.','ok'); }
-  catch(e) { showToast('Error deleting session.','error'); }
+  try {
+    const snap = await db.collection('sessions').doc(selectedSessionId).get();
+    const s = snap.data() || {};
+    await db.collection('sessions').doc(selectedSessionId).delete();
+    await logAudit('delete','sessions',selectedSessionId,`Deleted ${s.type||'?'} session: ${s.studentName||'?'} on ${s.date||'?'}`,[snapDoc('sessions',selectedSessionId,s)]);
+    closeDetailModal();
+    showToast('Session deleted.','ok');
+  } catch(e) { showToast('Error deleting session.','error'); }
 }
 
 async function deleteAllRecurring(id) {
+  if (currentRole !== 'manager') return;
   const s=sessions.find(x=>x.id===id); if (!s) return;
   const dayName=DAYS[((strToDate(s.date).getDay()+6)%7)];
   const recurring=getRecurringSessions(s);
@@ -1442,13 +1880,30 @@ async function deleteAllRecurring(id) {
     const batch=db.batch();
     recurring.forEach(sess=>batch.delete(db.collection('sessions').doc(sess.id)));
     await batch.commit();
+    await logAudit('delete','sessions','(batch)',`Deleted ${recurring.length} ${s.type||'?'} session(s): ${s.studentName} on ${dayName}s`,recurring.map(sess=>snapDoc('sessions',sess.id,sess)));
     closeDetailModal();
     showToast(`${recurring.length} sessions deleted.`,'ok');
   } catch(e) { showToast('Error deleting sessions.','error'); }
 }
 
 // Edit Session Modal
+let _editCurrentType = 'Regular';
+
+function onEditTypeChange(type) {
+  _editCurrentType = type;
+  ['Regular','PT','Meeting','Training'].forEach(t => {
+    const b = document.getElementById('edit-type-btn-'+t);
+    if (b) b.classList.toggle('active', t===type);
+  });
+  const isPT = type==='PT';
+  const isRegular = type==='Regular';
+  const isMT = type==='Meeting'||type==='Training';
+  document.getElementById('edit-name-label').textContent = isPT?'Student Name':isMT?'Title (optional)':'Class Name';
+  document.getElementById('edit-class-extra-fields').style.display = isRegular?'':'none';
+}
+
 function openEditModal(id, scope) {
+  if (currentRole !== 'manager') return;
   const s=sessions.find(x=>x.id===id); if (!s) return;
   editingSessionId=id; editScope=scope;
   closeDetailModal();
@@ -1456,38 +1911,33 @@ function openEditModal(id, scope) {
   const titleEl=document.getElementById('edit-modal-title');
   const noticeEl=document.getElementById('edit-scope-notice');
 
-  if (s.type==='Regular') {
-    document.getElementById('edit-regular-fields').style.display='';
-    document.getElementById('edit-pt-fields').style.display='none';
-    document.getElementById('edit-class-name').value=s.studentName||'';
-    document.getElementById('edit-classroom').value=s.classroom||'';
-    document.getElementById('edit-class-code').value=s.classCode||'';
-    document.getElementById('edit-class-level').value=s.classLevel||'';
-    document.getElementById('edit-start-time').value=s.startTime;
-    document.getElementById('edit-end-time').value=s.endTime;
-    if (scope==='all') {
-      const recurring=getRecurringSessions(s);
-      titleEl.textContent='Edit Recurring Sessions';
-      noticeEl.style.display='';
-      noticeEl.innerHTML=`Editing all <strong>${recurring.length}</strong> sessions of "<strong>${escHtml(s.studentName)}</strong>" on <strong>${dayName}s</strong>. Date cannot be changed here.`;
-      document.getElementById('edit-date-group').style.display='none';
-    } else {
-      titleEl.textContent='Edit Session';
-      noticeEl.style.display='none';
-      document.getElementById('edit-date-group').style.display='';
-      document.getElementById('edit-date').value=s.date;
-    }
-  } else {
-    document.getElementById('edit-regular-fields').style.display='none';
-    document.getElementById('edit-pt-fields').style.display='';
-    titleEl.textContent='Edit PT Session';
-    noticeEl.style.display='none';
-    document.getElementById('edit-student-name').value=s.studentName||'';
-    document.getElementById('edit-date-pt').value=s.date;
-    document.getElementById('edit-start-time-pt').value=s.startTime;
-    document.getElementById('edit-end-time-pt').value=s.endTime;
-  }
+  // Type selector — only for single edit
+  const typeRow=document.getElementById('edit-type-row');
+  typeRow.style.display=scope==='all'?'none':'';
+  _editCurrentType=s.type;
+  onEditTypeChange(s.type);
+
+  // Populate shared fields
+  document.getElementById('edit-name').value=s.studentName||'';
+  document.getElementById('edit-classroom').value=s.classroom||'';
+  document.getElementById('edit-class-code').value=s.classCode||'';
+  document.getElementById('edit-class-level').value=s.classLevel||'';
+  document.getElementById('edit-start-time').value=s.startTime;
+  document.getElementById('edit-end-time').value=s.endTime;
   document.getElementById('edit-notes').value=s.notes||'';
+
+  if (scope==='all') {
+    const recurring=getRecurringSessions(s);
+    titleEl.textContent=`Edit Recurring ${s.type} Sessions`;
+    noticeEl.style.display='';
+    noticeEl.innerHTML=`Editing all <strong>${recurring.length}</strong> sessions of "<strong>${escHtml(s.studentName)}</strong>" on <strong>${dayName}s</strong>. Date cannot be changed here.`;
+    document.getElementById('edit-date-group').style.display='none';
+  } else {
+    titleEl.textContent=`Edit Session`;
+    noticeEl.style.display='none';
+    document.getElementById('edit-date-group').style.display='';
+    document.getElementById('edit-date').value=s.date;
+  }
   document.getElementById('edit-session-modal').classList.add('open');
 }
 
@@ -1499,57 +1949,48 @@ function closeEditModal() {
 async function saveEditedSession() {
   if (!editingSessionId||currentRole!=='manager') return;
   const s=sessions.find(x=>x.id===editingSessionId); if (!s) return;
+  const type=_editCurrentType;
+  const isPT=type==='PT';
+  const isRegular=type==='Regular';
+  const isMT=type==='Meeting'||type==='Training';
+  const name=document.getElementById('edit-name').value.trim();
+  const startTime=document.getElementById('edit-start-time').value;
+  const endTime=document.getElementById('edit-end-time').value;
+  const notes=document.getElementById('edit-notes').value.trim();
+  if (isRegular&&!name) return showToast('Please enter a class name.','error');
+  if (isPT&&!name) return showToast('Please enter a student name.','error');
+  if (timeToMins(endTime)<=timeToMins(startTime)) return showToast('End time must be after start time.','error');
   try {
-    if (s.type==='Regular') {
-      const className=document.getElementById('edit-class-name').value.trim();
-      const classroom=document.getElementById('edit-classroom').value.trim();
-      const classCode=document.getElementById('edit-class-code').value.trim();
-      const classLevel=document.getElementById('edit-class-level').value;
-      const startTime=document.getElementById('edit-start-time').value;
-      const endTime=document.getElementById('edit-end-time').value;
-      const notes=document.getElementById('edit-notes').value.trim();
-      if (!className) return showToast('Please enter a class name.','error');
-      if (timeToMins(endTime)<=timeToMins(startTime)) return showToast('End time must be after start time.','error');
-      if (editScope==='all') {
-        const recurring=getRecurringSessions(s);
-        const batch=db.batch();
-        recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),{studentName:className,classroom,classCode,classLevel,startTime,endTime,notes}));
-        await batch.commit();
-        showToast(`${recurring.length} sessions updated!`,'ok');
-      } else {
-        const date=document.getElementById('edit-date').value;
-        if (!date) return showToast('Please select a date.','error');
-        await db.collection('sessions').doc(editingSessionId).update({studentName:className,classroom,classCode,classLevel,date,startTime,endTime,notes});
-        showToast('Session updated!','ok');
-      }
+    const updateData={type,studentName:name||type,startTime,endTime,notes};
+    if (isRegular) {
+      updateData.classroom=document.getElementById('edit-classroom').value.trim();
+      updateData.classCode=document.getElementById('edit-class-code').value.trim();
+      updateData.classLevel=document.getElementById('edit-class-level').value;
     } else {
-      const student=document.getElementById('edit-student-name').value.trim();
-      const date=document.getElementById('edit-date-pt').value;
-      const startTime=document.getElementById('edit-start-time-pt').value;
-      const endTime=document.getElementById('edit-end-time-pt').value;
-      const notes=document.getElementById('edit-notes').value.trim();
-      if (!student) return showToast('Please enter a student name.','error');
+      updateData.classroom=firebase.firestore.FieldValue.delete();
+      updateData.classCode=firebase.firestore.FieldValue.delete();
+      updateData.classLevel=firebase.firestore.FieldValue.delete();
+    }
+    if (editScope==='all') {
+      const recurring=getRecurringSessions(s);
+      const batch=db.batch();
+      const shared={type,studentName:name||type,startTime,endTime,notes};
+      recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),shared));
+      await batch.commit();
+      await logAudit('update','sessions','(batch)',`Updated ${recurring.length} ${type} session(s): ${name||type} (${currentTeacher.name})`);
+      showToast(`${recurring.length} sessions updated!`,'ok');
+    } else {
+      const date=document.getElementById('edit-date').value;
       if (!date) return showToast('Please select a date.','error');
-      if (timeToMins(endTime)<=timeToMins(startTime)) return showToast('End time must be after start time.','error');
-      await db.collection('sessions').doc(editingSessionId).update({studentName:student,date,startTime,endTime,notes});
-      showToast('PT session updated!','ok');
+      await db.collection('sessions').doc(editingSessionId).update({...updateData,date});
+      await logAudit('update','sessions',editingSessionId,`Updated ${type} session: ${name||type} on ${date}`);
+      showToast('Session updated!','ok');
     }
     closeEditModal();
   } catch(e) { console.error(e); showToast('Error saving changes.','error'); }
 }
 
 // Hours Tab
-function setHoursPeriod(period) {
-  hoursPeriod=period;
-  ['week','month','custom'].forEach(p=>{
-    const b=document.getElementById('hbtn-'+p);
-    if (b) b.classList.toggle('active',p===period);
-  });
-  const customRange=document.getElementById('hours-custom-range');
-  if (customRange) customRange.style.display=period==='custom'?'flex':'none';
-  if (period!=='custom') renderHoursReport();
-}
-
 function getHoursDateRange() {
   const today=new Date();
   if (hoursPeriod==='week') {
@@ -1581,6 +2022,8 @@ function renderHoursReport() {
   const inRange=s=>s.date>=from&&s.date<=to;
   const regularSessions=sessions.filter(s=>s.type==='Regular'&&inRange(s));
   const ptSessions=sessions.filter(s=>s.type==='PT'&&inRange(s));
+  const meetingSessions=sessions.filter(s=>s.type==='Meeting'&&inRange(s));
+  const trainingSessions=sessions.filter(s=>s.type==='Training'&&inRange(s));
 
   const byClass={};
   regularSessions.forEach(s=>{ if (!byClass[s.studentName]) byClass[s.studentName]=[]; byClass[s.studentName].push(s); });
@@ -1595,7 +2038,7 @@ function renderHoursReport() {
     html+=`<table class="hours-table"><thead><tr><th>Class Name</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
     classes.forEach(cn=>{
       const list=byClass[cn];
-      const hrs=list.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+      const hrs=list.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
       totalRegHrs+=hrs;
       html+=`<tr><td>${escHtml(cn)}</td><td>${list.length}</td><td>${fmtHours(hrs)}</td></tr>`;
     });
@@ -1609,9 +2052,9 @@ function renderHoursReport() {
   const ptConducted=ptSessions.filter(s=>s.conducted!==false);
   const ptNotHeld=ptSessions.filter(s=>s.conducted===false&&!!s.missedReason);
   const ptScheduled=ptSessions.filter(s=>s.conducted===false&&!s.missedReason);
-  const ptCondHrs=ptConducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-  const ptNotHeldHrs=ptNotHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-  const ptSchedHrs=ptScheduled.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+  const ptCondHrs=ptConducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+  const ptNotHeldHrs=ptNotHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+  const ptSchedHrs=ptScheduled.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
 
   html+=`<div class="hours-section-title">PT Sessions</div>`;
   if (ptSessions.length>0) {
@@ -1625,10 +2068,27 @@ function renderHoursReport() {
     html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No PT sessions in this period.</div>`;
   }
 
+  // Meeting / Training sessions
+  const allMTSessions=[...meetingSessions,...trainingSessions];
+  const mtHrs=allMTSessions.filter(s=>!s.absenceType).reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+  if (allMTSessions.length>0) {
+    const byTitle={};
+    allMTSessions.forEach(s=>{ const k=s.studentName&&s.studentName!==s.type?s.studentName:s.type; if (!byTitle[k]) byTitle[k]=[]; byTitle[k].push(s); });
+    html+=`<div class="hours-section-title">Meeting / Training</div>`;
+    html+=`<table class="hours-table"><thead><tr><th>Title</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
+    Object.keys(byTitle).sort().forEach(k=>{
+      const list=byTitle[k];
+      const hrs=list.filter(s=>!s.absenceType).reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      html+=`<tr><td>${escHtml(k)}</td><td>${list.length}</td><td>${fmtHours(hrs)}</td></tr>`;
+    });
+    html+=`<tr class="hours-total-row"><td>Total</td><td>${allMTSessions.length}</td><td>${fmtHours(mtHrs)}</td></tr>`;
+    html+=`</tbody></table>`;
+  }
+
   // Grand total
-  const grand=totalRegHrs+ptCondHrs;
+  const grand=totalRegHrs+ptCondHrs+mtHrs;
   html+=`<div class="hours-grand-total">
-    <span style="font-size:13px;font-weight:500;opacity:0.85;">Grand Total &nbsp;<span style="opacity:0.6;font-size:11px;">(Regular + PT conducted)</span></span>
+    <span style="font-size:13px;font-weight:500;opacity:0.85;">Grand Total &nbsp;<span style="opacity:0.6;font-size:11px;">(Regular + PT + Meeting/Training)</span></span>
     <span style="font-size:22px;font-weight:700;">${fmtHours(grand)}</span>
   </div>`;
 
@@ -1636,64 +2096,71 @@ function renderHoursReport() {
 }
 
 // PT Tracker
-async function savePTContract() {
-  if (currentRole !== 'manager') return;
-  const student=document.getElementById('pt-student').value.trim();
-  const hours=parseFloat(document.getElementById('pt-hours').value);
-  if (!student||isNaN(hours)||hours<0) return showToast('Please enter student name and contract hours.','error');
-  const existing=ptContracts.find(c=>c.studentName===student);
+async function undoPTNotHeld(sessionId) {
   try {
-    if (existing) await db.collection('pt_contracts').doc(existing.id).update({totalHours:hours});
-    else await db.collection('pt_contracts').add({teacherId:currentTeacher.id, studentName:student, totalHours:hours});
-    document.getElementById('pt-student').value='';
-    document.getElementById('pt-hours').value='';
-    showToast('PT contract saved!','ok');
-  } catch(e) { showToast('Error saving contract.','error'); }
+    const snap = await db.collection('sessions').doc(sessionId).get();
+    const s = snap.data() || {};
+    await db.collection('sessions').doc(sessionId).update({
+      conducted: false,
+      missedReason: firebase.firestore.FieldValue.delete(),
+      missOutcome: firebase.firestore.FieldValue.delete()
+    });
+    await logAudit('update','sessions',sessionId,`Reverted PT session to scheduled: ${s.studentName||'?'} on ${s.date||'?'}`);
+    showToast('Reverted to scheduled.','ok');
+  } catch(e) { showToast('Error updating session.','error'); }
 }
 
 async function togglePTConducted(sessionId, currentValue) {
-  if (currentRole !== 'manager') return;
+  if (currentValue && currentRole !== 'manager') return;
   try {
+    const snap = await db.collection('sessions').doc(sessionId).get();
+    const s = snap.data() || {};
     if (currentValue) {
       await db.collection('sessions').doc(sessionId).update({conducted:false, missedReason:firebase.firestore.FieldValue.delete()});
+      await logAudit('update','sessions',sessionId,`Unmarked PT session: ${s.studentName||'?'} on ${s.date||'?'}`);
       showToast('Unmarked.','ok');
     } else {
       await db.collection('sessions').doc(sessionId).update({conducted:true, missedReason:firebase.firestore.FieldValue.delete()});
+      await logAudit('update','sessions',sessionId,`Marked PT session as done: ${s.studentName||'?'} on ${s.date||'?'}`);
       showToast('✓ Marked as done!','ok');
     }
   } catch(e) { showToast('Error updating session.','error'); }
 }
 
-let ptMissTargetId = null;
+let ptMissTargetId = null, ptMissOutcome = 'cancel';
+function setPTMissOutcome(val) {
+  ptMissOutcome=val;
+  document.getElementById('pt-miss-out-cancel').classList.toggle('active',val==='cancel');
+  document.getElementById('pt-miss-out-deduct').classList.toggle('active',val==='deduct');
+  document.getElementById('pt-miss-outcome-hint').textContent=
+    val==='cancel'?'Cancel: does not count toward contract hours':'Hours Deducted: counts toward contract hours';
+}
 function openPTMissModal(sessionId) {
-  if (currentRole !== 'manager') return;
   ptMissTargetId = sessionId;
   const sess = sessions.find(s => s.id === sessionId);
-  const existing = sess && sess.missedReason ? sess.missedReason : '';
-  const presets = ['Student no-show','Teacher absent','Holiday / school closed','Rescheduled'];
-  const isPreset = presets.includes(existing);
-  document.getElementById('pt-miss-preset').value = existing && !isPreset ? 'Other' : existing;
-  document.getElementById('pt-miss-custom').value = existing && !isPreset ? existing : '';
-  document.getElementById('pt-miss-custom-group').style.display = (existing && !isPreset) ? 'block' : 'none';
+  const isEdit = sess && sess.conducted === false && !!sess.missedReason;
+  document.getElementById('pt-miss-title').textContent = isEdit ? 'Edit Not Held' : 'Mark as Not Held';
+  document.getElementById('pt-miss-reason').value = (sess && sess.missedReason) || '';
+  setPTMissOutcome((sess && sess.missOutcome) || 'cancel');
   document.getElementById('pt-miss-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('pt-miss-reason').focus(),50);
 }
 function closePTMissModal() {
   document.getElementById('pt-miss-modal').classList.remove('open');
   ptMissTargetId = null;
 }
-function onMissReasonPreset() {
-  const val = document.getElementById('pt-miss-preset').value;
-  document.getElementById('pt-miss-custom-group').style.display = val === 'Other' ? 'block' : 'none';
-}
 async function savePTMissed() {
   if (!ptMissTargetId) return;
-  const preset = document.getElementById('pt-miss-preset').value;
-  const custom = document.getElementById('pt-miss-custom').value.trim();
-  const reason = preset === 'Other' ? custom : preset;
-  if (!reason) { showToast('Please select a reason.','error'); return; }
+  const reason = document.getElementById('pt-miss-reason').value.trim();
+  if (!reason) { showToast('Please enter a reason.','error'); return; }
   try {
-    await db.collection('sessions').doc(ptMissTargetId).update({conducted:false, missedReason:reason});
-    showToast('Marked as not held.','ok');
+    const snap = await db.collection('sessions').doc(ptMissTargetId).get();
+    const s = snap.data() || {};
+    await db.collection('sessions').doc(ptMissTargetId).update({
+      conducted: false, missedReason: reason, missOutcome: ptMissOutcome
+    });
+    await logAudit('update','sessions',ptMissTargetId,`Marked PT session as not-held: ${s.studentName||'?'} on ${s.date||'?'} — ${reason}`);
+    showToast('Saved.','ok');
     closePTMissModal();
   } catch(e) { showToast('Error updating session.','error'); }
 }
@@ -1715,17 +2182,20 @@ function renderPTTracker() {
     const list=studentSessions[student];
     const contract=ptContracts.find(c=>c.studentName===student);
     const total=contract?contract.totalHours:null;
-    const conductedList=list.filter(s=>s.conducted!==false);
-    const totalUsed=conductedList.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
+    const conductedList=list.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
+    const totalUsed=conductedList.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
     const pct=total?Math.min(totalUsed/total*100,100):0;
     const fillCls=pct>=100?'over':pct>=80?'warn':'';
 
+    const idBadge = contract?.studentId
+      ? `<span style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;">ID: ${escHtml(contract.studentId)}</span>`
+      : `<span id="sid-span-${contract?.id||student}" style="vertical-align:middle;"><button class="manager-only" onclick="startAddStudentId('${contract?.id||''}')" style="margin-left:6px;font-size:11px;color:#6b7280;background:none;border:1px dashed #d1d5db;border-radius:4px;padding:1px 7px;cursor:pointer;">+ Add ID</button></span>`;
     html+=`<div class="card" style="margin-bottom:16px;">
       <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px;">
         <h2 style="margin:0;">
           <button class="btn-student-link" data-student="${escHtml(student)}" onclick="openPTMiniSchedule(this.dataset.student)">
             ${escHtml(student)} <span style="font-size:12px;color:#6b7280;font-weight:400;">↗</span>
-          </button>
+          </button>${idBadge}
         </h2>
         <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
           <span>Contract: <strong>${total!==null?total+' hrs':'—'}</strong></span>
@@ -1741,33 +2211,37 @@ function renderPTTracker() {
       html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No sessions yet.</div>`;
     } else {
       html+=`<table class="pt-table"><thead><tr>
-        <th>#</th><th>Date</th><th>Time</th><th>Duration</th><th>Status</th><th>Used (cumul.)</th><th>Remaining</th>
+        <th>#</th><th>Date</th><th>Time</th><th>Duration</th><th>Status</th><th>Used (cumul.)</th><th>Remaining</th><th class="manager-only"></th>
       </tr></thead><tbody>`;
       let running=0;
       list.forEach((sess,idx) => {
-        const dur=calcHours(sess.startTime,sess.endTime);
+        const dur=calcHours(sess.startTime,sess.endTime,sess.type);
         const isConducted=sess.conducted!==false;
         const isMissed=sess.conducted===false&&!!sess.missedReason;
-        if (isConducted) running+=dur;
+        const isDeducted=sess.missOutcome==='deduct';
+        if (isConducted||isDeducted) running+=dur;
         const rem=total!==null?total-running:null;
         const remVal=rem===null?null:Math.round(rem*10)/10;
         const remCell=remVal===null?'<span style="color:#bbb">—</span>'
           :remVal<0?`<span class="hours-over">${Math.abs(remVal)} over</span>`:`${remVal} hrs`;
-        const rowCls=isConducted?'':isMissed?'missed-row':'pending-row';
+        const rowCls=isConducted||isDeducted?'':isMissed?'missed-row':'pending-row';
         let statusCell;
         if (isConducted) {
           statusCell=`<span class="status-badge status-done">✓ Done</span>
             <button class="btn btn-sm manager-only" style="margin-left:5px;background:#f3f4f6;color:#555;font-size:11px;padding:2px 7px;" onclick="togglePTConducted('${sess.id}',true)">Undo</button>`;
         } else if (isMissed) {
-          statusCell=`<span class="status-badge status-missed">✗ Not held</span>
+          const deductBadge=isDeducted?'<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:4px;padding:1px 6px;margin-left:4px;">deducted</span>':'';
+          statusCell=`<span class="status-badge status-missed">✗ Not held</span>${deductBadge}
             <span class="miss-reason-text">${escHtml(sess.missedReason)}</span>
-            <button class="btn btn-sm manager-only not-held-btn" style="margin-top:4px;font-size:11px;padding:2px 7px;" onclick="openPTMissModal('${sess.id}')">Edit</button>`;
+            <span class="manager-only" style="display:inline-flex;gap:4px;margin-top:4px;">
+              <button class="btn btn-sm not-held-btn" style="font-size:11px;padding:2px 7px;" onclick="openPTMissModal('${sess.id}')">Edit</button>
+              <button class="btn btn-sm" style="background:#f3f4f6;color:#555;font-size:11px;padding:2px 7px;" onclick="undoPTNotHeld('${sess.id}')">Undo</button>
+            </span>`;
         } else {
-          statusCell=`<span class="manager-only" style="display:inline-flex;gap:4px;">
+          statusCell=`<span style="display:inline-flex;gap:4px;">
               <button class="btn btn-mark btn-sm" onclick="togglePTConducted('${sess.id}',false)">✓ Done</button>
               <button class="btn btn-sm not-held-btn" onclick="openPTMissModal('${sess.id}')">✗ Not held</button>
-            </span>
-            <span class="staff-only status-badge status-scheduled">Scheduled</span>`;
+            </span>`;
         }
         html+=`<tr class="${rowCls}">
           <td style="color:#aaa;">${idx+1}</td>
@@ -1775,8 +2249,9 @@ function renderPTTracker() {
           <td>${formatTime(sess.startTime)} – ${formatTime(sess.endTime)}</td>
           <td>${fmtHours(dur)}</td>
           <td>${statusCell}</td>
-          <td>${isConducted?fmtHours(running):'<span style="color:#bbb">—</span>'}</td>
-          <td>${isConducted?remCell:'<span style="color:#bbb">—</span>'}</td>
+          <td>${isConducted||isDeducted?fmtHours(running):'<span style="color:#bbb">—</span>'}</td>
+          <td>${isConducted||isDeducted?remCell:'<span style="color:#bbb">—</span>'}</td>
+          <td><button class="btn btn-danger btn-sm manager-only" style="font-size:11px;padding:2px 7px;" onclick="deletePTSessionRow('${sess.id}')">Del</button></td>
         </tr>`;
       });
       html+=`</tbody></table>`;
@@ -1834,7 +2309,7 @@ function renderPTMiniGrid() {
       const isStudent=sess.type==='PT'&&sess.studentName===ptMiniStudentName;
       const isPending=isStudent&&sess.conducted===false;
       const cls=isStudent?(isPending?'student pending':'student'):'other';
-      const label=sess.type==='Regular'?'Regular':escHtml(sess.studentName);
+      const label=(sess.type==='Regular'||sess.type==='Meeting'||sess.type==='Training')?(sess.studentName||sess.type):escHtml(sess.studentName);
       html+=`<div class="mini-session-blk ${cls}" style="top:${top}px;height:${Math.max(height-1,8)}px;">${label}</div>`;
     });
     html+='</div></div>';
@@ -1872,18 +2347,19 @@ async function addPTFromMini() {
     warnEl.innerHTML=`<div class="error-item">⛔ This date is a school holiday. Go to School Calendar → Mark School Open to allow sessions.</div>`;
     return;
   }
-  const miniRuleWarnings = getRuleWarnings({date, startTime:start, endTime:end, type:'PT', teacherId:currentTeacher.id});
+  const miniRuleWarnings = getRuleWarnings({date, startTime:start, endTime:end, type:'PT', teacherId:currentTeacher.id, studentName:ptMiniStudentName});
   if (miniRuleWarnings.length > 0) {
     const ok = confirm(`⚠ Schedule Warning\n\n${miniRuleWarnings.map(w=>'• '+w).join('\n')}\n\nProceed with adding this PT session?`);
     if (!ok) return;
   }
   warnEl.innerHTML='';
   try {
-    await db.collection('sessions').add({
+    const ref = await db.collection('sessions').add({
       teacherId:currentTeacher.id, studentName:ptMiniStudentName, type:'PT',
       date, startTime:start, endTime:end, notes, conducted:false,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
+    await logAudit('create','sessions',ref.id,`Added PT session: ${ptMiniStudentName} on ${date} ${start}–${end} (${currentTeacher.name})`);
     showToast('PT session scheduled!','ok');
     document.getElementById('pt-mini-notes').value='';
     ptMiniWeekStart=getWeekStart(strToDate(date));
@@ -1925,12 +2401,15 @@ async function saveAbsence(id) {
   }
   const del = firebase.firestore.FieldValue.delete();
   try {
+    const snap = await db.collection('sessions').doc(id).get();
+    const s = snap.data() || {};
     await db.collection('sessions').doc(id).update({
       absenceType: leaveType,
       coverType,
       substituteId: subId || del,
       substituteName: subName || del
     });
+    await logAudit('update','sessions',id,`Set absence for ${s.studentName||'?'} on ${s.date||'?'}: ${leaveType}${subName?' (sub: '+subName+')':''}`);
     closeDetailModal();
     showToast('Not-held status saved.', 'ok');
   } catch(e) { showToast('Error saving absence.', 'error'); }
@@ -1938,12 +2417,15 @@ async function saveAbsence(id) {
 
 async function clearAbsence(id) {
   try {
+    const snap = await db.collection('sessions').doc(id).get();
+    const s = snap.data() || {};
     await db.collection('sessions').doc(id).update({
       absenceType: firebase.firestore.FieldValue.delete(),
       coverType: firebase.firestore.FieldValue.delete(),
       substituteId: firebase.firestore.FieldValue.delete(),
       substituteName: firebase.firestore.FieldValue.delete()
     });
+    await logAudit('update','sessions',id,`Cleared absence for ${s.studentName||'?'} on ${s.date||'?'}`);
     closeDetailModal();
     showToast('Not-held status cleared.', 'ok');
   } catch(e) { showToast('Error clearing absence.', 'error'); }
@@ -1967,11 +2449,28 @@ function detectCurrentQuarter() {
   const today = dateToStr(new Date());
   const found = quarters.find(q => q.startDate <= today && q.endDate >= today);
   if (found) {
-    // Always sync to current quarter on initial load or if not yet set
     if (!currentQuarter) {
       currentQuarter = found;
       scheduleQuarterYear = found.year;
-      currentWeekStart = getWeekStart(new Date()); // start at today's week within the quarter
+      currentWeekStart = getWeekStart(new Date());
+    }
+  }
+  // Update home page quarter badge
+  const badge = document.getElementById('current-quarter-badge');
+  if (badge) {
+    if (found) {
+      badge.textContent = `${found.year} Q${found.quarter} ${Q_LABELS[found.quarter]} · ${fmtDate(found.startDate)} – ${fmtDate(found.endDate)}`;
+      badge.style.display = '';
+    } else {
+      // Between quarters — show next upcoming
+      const upcoming = quarters.filter(q => q.startDate > today).sort((a,b) => a.startDate.localeCompare(b.startDate))[0];
+      if (upcoming) {
+        badge.textContent = `Next: ${upcoming.year} Q${upcoming.quarter} ${Q_LABELS[upcoming.quarter]} starts ${fmtDate(upcoming.startDate)}`;
+        badge.style.background = '#6b7280';
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
     }
   }
 }
@@ -2059,19 +2558,25 @@ async function addQuarter() {
   const exists = quarters.find(x => x.year===year && x.quarter===q);
   if (exists) return showToast(`Q${q} ${year} already exists.`,'error');
   try {
-    await db.collection('quarters').add({
-      year, quarter:q, startDate:start, endDate:end,
-      name:`Q${q} ${year} (${Q_LABELS[q]})`,
+    const name = `Q${q} ${year} (${Q_LABELS[q]})`;
+    const ref = await db.collection('quarters').add({
+      year, quarter:q, startDate:start, endDate:end, name,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
+    await logAudit('create','quarters',ref.id,`Added quarter: ${name} (${start} – ${end})`);
     showToast('Quarter added!','ok');
   } catch(e) { showToast('Error adding quarter.','error'); }
 }
 
 async function deleteQuarter(id) {
   if (!confirm('Delete this quarter?')) return;
-  try { await db.collection('quarters').doc(id).delete(); showToast('Quarter deleted.','ok'); }
-  catch(e) { showToast('Error deleting quarter.','error'); }
+  try {
+    const snap = await db.collection('quarters').doc(id).get();
+    const q = snap.data() || {};
+    await db.collection('quarters').doc(id).delete();
+    await logAudit('delete','quarters',id,`Deleted quarter: ${q.name||id}`,[snapDoc('quarters',id,q)]);
+    showToast('Quarter deleted.','ok');
+  } catch(e) { showToast('Error deleting quarter.','error'); }
 }
 
 function renderCalendarQuarters() {
@@ -2188,11 +2693,12 @@ async function addSchoolEvent() {
   const type=document.getElementById('cal-event-type').value;
   if (!date||!name) return showToast('Please enter date and event name.','error');
   try {
-    await db.collection('school_events').add({
+    const ref = await db.collection('school_events').add({
       date,name,type,
       createdBy:firebase.auth().currentUser.email,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
+    await logAudit('create','school_events',ref.id,`Added school event: ${name} on ${date} (${type})`);
     document.getElementById('cal-event-name').value='';
     showToast('Event added!','ok');
   } catch(e) { showToast('Error adding event.','error'); }
@@ -2200,40 +2706,99 @@ async function addSchoolEvent() {
 
 async function deleteSchoolEvent(id) {
   if (!confirm('Delete this event?')) return;
-  try { await db.collection('school_events').doc(id).delete(); showToast('Event deleted.','ok'); }
-  catch(e) { showToast('Error deleting event.','error'); }
+  try {
+    const snap = await db.collection('school_events').doc(id).get();
+    const ev = snap.data() || {};
+    await db.collection('school_events').doc(id).delete();
+    await logAudit('delete','school_events',id,`Deleted school event: ${ev.name||'?'} on ${ev.date||'?'}`,[snapDoc('school_events',id,ev)]);
+    showToast('Event deleted.','ok');
+  } catch(e) { showToast('Error deleting event.','error'); }
 }
 
 // Teachers
+let _tlDraft = {};
+function openTLFilterModal() {
+  _tlDraft = { branch: tlFilter.branch, status: tlFilter.status };
+  _tlDraftSync();
+  document.getElementById('tl-filter-modal').classList.add('open');
+}
+function _tlDraftSync() {
+  ['all','IRV','RH','LA'].forEach(v=>{ const b=document.getElementById('tlfbtn-branch-'+v); if(b) b.classList.toggle('active', v===_tlDraft.branch); });
+  ['all','active','inactive'].forEach(v=>{ const b=document.getElementById('tlfbtn-status-'+v); if(b) b.classList.toggle('active', v===_tlDraft.status); });
+}
+function tlDraftSet(kind, val) { _tlDraft[kind]=val; _tlDraftSync(); }
+function tlFilterReset() { _tlDraft={branch:'all',status:'all'}; _tlDraftSync(); }
+function applyTLFilter() {
+  tlFilter.branch=_tlDraft.branch;
+  tlFilter.status=_tlDraft.status;
+  document.getElementById('tl-filter-modal').classList.remove('open');
+  _updateTLFilterBadge();
+  renderTeacherList();
+}
+function _updateTLFilterBadge() {
+  const active=[tlFilter.branch!=='all', tlFilter.status!=='all'].filter(Boolean);
+  const badge=document.getElementById('tl-filter-badge');
+  const btn=document.getElementById('tl-filter-btn');
+  const summary=document.getElementById('tl-filter-summary');
+  if (badge) { badge.style.display=active.length?'inline-flex':'none'; badge.textContent=active.length||''; }
+  if (btn) { btn.style.background=active.length?'#1a1a2e':''; btn.style.color=active.length?'white':''; btn.style.borderColor=active.length?'#1a1a2e':''; }
+  const parts=[];
+  if (tlFilter.branch!=='all') parts.push(tlFilter.branch);
+  if (tlFilter.status!=='all') parts.push(tlFilter.status);
+  if (summary) summary.textContent=parts.length?parts.join(' · '):'';
+}
+
 function renderTeacherList() {
   const list=document.getElementById('teacher-list');
   if (teachers.length===0) { list.innerHTML='<div class="empty-state">No teachers yet.</div>'; return; }
   const campusOrder=['IRV','RH','LA'];
+  let filtered=teachers;
+  if (tlFilter.branch!=='all') filtered=filtered.filter(t=>t.campus===tlFilter.branch);
+  if (tlFilter.status==='active') filtered=filtered.filter(t=>!isTeacherCurrentlyInactive(t));
+  else if (tlFilter.status==='inactive') filtered=filtered.filter(t=>isTeacherCurrentlyInactive(t));
   const grouped={};
-  teachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
+  filtered.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
   const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
-  function teacherCard(t) {
-    return `<div class="teacher-card">
+  if (campuses.length===0) { list.innerHTML='<div class="empty-state">No teachers match the selected filters.</div>'; return; }
+  function teacherCard(t, inactive) {
+    const cardStyle=inactive?'opacity:0.5;filter:grayscale(0.4);':'';
+    const today=dateToStr(new Date());
+    const inactiveMeta=inactive&&t.inactiveFrom?`<div style="font-size:11px;color:#9ca3af;">Since ${fmtDate(t.inactiveFrom)}</div>`:'';
+    const pendingBadge=!inactive&&t.isInactive&&t.inactiveFrom&&today<t.inactiveFrom
+      ?`<div style="font-size:11px;color:#d97706;">Inactive from ${fmtDate(t.inactiveFrom)}</div>`:'';
+    return `<div class="teacher-card" style="${cardStyle}">
       <div class="teacher-card-info" data-teacher-id="${t.id}" onclick="openTeacherDetailById(this.dataset.teacherId)">
         <div class="teacher-card-name">${escHtml(t.name)}</div>
+        ${inactiveMeta}${pendingBadge}
       </div>
-      <div class="teacher-card-actions manager-only">
+      <div class="teacher-card-actions">
         <button class="btn btn-secondary btn-sm" onclick="event.stopPropagation();editTeacher('${t.id}')">Edit</button>
-        <button class="btn btn-danger btn-sm" onclick="event.stopPropagation();removeTeacher('${t.id}')">Del</button>
+        <button class="btn btn-danger btn-sm manager-only" onclick="event.stopPropagation();removeTeacher('${t.id}')">Del</button>
       </div>
     </div>`;
   }
   list.innerHTML=campuses.map(campus=>{
-    const regular=grouped[campus].filter(t=>!t.isSubstitute);
-    const subs=grouped[campus].filter(t=>t.isSubstitute);
-    let inner=`<div class="teacher-grid">${regular.map(teacherCard).join('')}</div>`;
-    if (subs.length>0) {
-      inner+=`<div class="campus-sub-label">Substitute</div><div class="teacher-grid">${subs.map(teacherCard).join('')}</div>`;
-    }
-    return `<div class="campus-section"><div class="campus-section-header">${escHtml(campus)}</div>${inner}</div>`;
+    const regular=grouped[campus].filter(t=>!t.isSubstitute&&!isTeacherCurrentlyInactive(t));
+    const subs=grouped[campus].filter(t=>t.isSubstitute&&!isTeacherCurrentlyInactive(t));
+    const inactive=grouped[campus].filter(t=>isTeacherCurrentlyInactive(t));
+    const parts=[];
+    if (regular.length>0) parts.push(`<div class="teacher-grid">${regular.map(t=>teacherCard(t,false)).join('')}</div>`);
+    if (subs.length>0) parts.push(`<div class="campus-sub-label">Substitute</div><div class="teacher-grid">${subs.map(t=>teacherCard(t,false)).join('')}</div>`);
+    if (inactive.length>0) parts.push(`<div class="campus-sub-label" style="color:#9ca3af;border-left-color:#9ca3af;">Inactive</div><div class="teacher-grid">${inactive.map(t=>teacherCard(t,true)).join('')}</div>`);
+    if (parts.length===0) return '';
+    return `<div class="campus-section"><div class="campus-section-header">${escHtml(campus)}</div>${parts.join('')}</div>`;
   }).join('');
 }
 
+function isTeacherCurrentlyInactive(t) {
+  if (!t||!t.isInactive) return false;
+  if (!t.inactiveFrom) return true;
+  return dateToStr(new Date())>=t.inactiveFrom;
+}
+function onInactiveCheckChange(el) {
+  if (el.checked) document.getElementById('teacher-is-substitute').checked=false;
+  document.getElementById('inactive-from-row').style.display=el.checked?'block':'none';
+}
 function openTeacherDetailById(id) {
   const t = teachers.find(x => x.id === id);
   if (t) openTeacherDetail(t);
@@ -2245,6 +2810,10 @@ function openAddTeacherModal() {
   document.getElementById('teacher-name').value='';
   document.getElementById('teacher-campus').value='IRV';
   document.getElementById('teacher-is-substitute').checked=false;
+  document.getElementById('teacher-is-inactive').checked=false;
+  document.getElementById('teacher-inactive-from').value='';
+  document.getElementById('inactive-from-row').style.display='none';
+  document.getElementById('teacher-status-history').style.display='none';
   document.getElementById('teacher-modal-title').textContent='Add Teacher';
   document.getElementById('teacher-modal').classList.add('open');
 }
@@ -2258,25 +2827,235 @@ function editTeacher(id) {
   document.getElementById('teacher-name').value=t.name;
   document.getElementById('teacher-campus').value=t.campus;
   document.getElementById('teacher-is-substitute').checked=!!t.isSubstitute;
+  document.getElementById('teacher-is-inactive').checked=!!t.isInactive;
+  document.getElementById('teacher-inactive-from').value=t.inactiveFrom||'';
+  document.getElementById('inactive-from-row').style.display=t.isInactive?'block':'none';
+  document.getElementById('status-history-list').innerHTML=renderStatusHistoryHtml(t.id, t.statusHistory||[]);
+  document.getElementById('teacher-status-history').style.display='block';
   document.getElementById('teacher-modal-title').textContent='Edit Teacher';
   document.getElementById('teacher-modal').classList.add('open');
+}
+function renderStatusHistoryHtml(teacherId, hist) {
+  if (hist.length===0) return '<span style="color:#bbb;">No history recorded</span>';
+  return hist.slice().reverse().map((h,di)=>{
+    const origIdx=hist.length-1-di;
+    const badge=h.status==='inactive'?'background:#fee2e2;color:#b91c1c':'background:#dcfce7;color:#15803d';
+    return `<div style="padding:3px 0;border-bottom:1px solid #f3f4f6;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+      <span style="display:inline-block;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;${badge}">${h.status}</span>
+      <span style="color:#444;">${fmtDate(h.date)}</span>
+      ${h.changedBy?`<span style="color:#bbb;font-size:11px;">${escHtml(h.changedBy)}</span>`:''}
+      ${currentRole==='manager'?`<button onclick="deleteStatusHistoryEntry('${teacherId}',${origIdx})" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#d1d5db;font-size:12px;padding:0 2px;line-height:1;" title="Remove">✕</button>`:''}
+    </div>`;
+  }).join('');
+}
+async function deleteStatusHistoryEntry(teacherId, idx) {
+  const t=teachers.find(x=>x.id===teacherId); if (!t) return;
+  const entry=(t.statusHistory||[])[idx];
+  const updated=(t.statusHistory||[]).filter((_,i)=>i!==idx);
+  try {
+    await db.collection('teachers').doc(teacherId).update({statusHistory:updated});
+    await logAudit('update','teachers',teacherId,`Removed status history entry for ${t.name}: ${entry?.status||'?'} on ${entry?.date||'?'}`);
+    document.getElementById('status-history-list').innerHTML=renderStatusHistoryHtml(teacherId,updated);
+  } catch(e) { showToast('Error removing entry.','error'); }
 }
 async function saveTeacher() {
   const name=document.getElementById('teacher-name').value.trim();
   const campus=document.getElementById('teacher-campus').value;
   const isSubstitute=document.getElementById('teacher-is-substitute').checked;
+  const isInactive=document.getElementById('teacher-is-inactive').checked;
+  const inactiveFrom=isInactive?(document.getElementById('teacher-inactive-from').value||dateToStr(new Date())):null;
   if (!name) return showToast('Please enter a teacher name.','error');
+  // Block deactivation if teacher has sessions on/after inactiveFrom
+  if (isInactive && editingTeacherId) {
+    const checkDate=inactiveFrom||dateToStr(new Date());
+    const snap=await db.collection('sessions').where('teacherId','==',editingTeacherId).get();
+    const futureDocs=snap.docs.filter(d=>d.data().date>=checkDate);
+    if (futureDocs.length>0) {
+      const lastDate=futureDocs.map(d=>d.data().date).sort().pop();
+      const nextDay=dateToStr(new Date(strToDate(lastDate).getTime()+86400000));
+      showToast(`Has sessions until ${fmtDate(lastDate)}. Earliest inactive date: ${fmtDate(nextDay)}`,'error');
+      document.getElementById('teacher-inactive-from').value=nextDay;
+      return;
+    }
+  }
+  // Track status history when status changes
+  const existing=editingTeacherId?teachers.find(t=>t.id===editingTeacherId):null;
+  const wasInactive=existing?!!existing.isInactive:false;
+  const statusHistory=existing&&existing.statusHistory?[...existing.statusHistory]:[];
+  if (editingTeacherId && wasInactive!==isInactive) {
+    statusHistory.push({
+      status:isInactive?'inactive':'active',
+      date:inactiveFrom||dateToStr(new Date()),
+      changedBy:firebase.auth().currentUser?.email||'unknown'
+    });
+  }
   try {
-    if (editingTeacherId) { await db.collection('teachers').doc(editingTeacherId).update({name,campus,isSubstitute}); showToast('Teacher updated.','ok'); }
-    else { await db.collection('teachers').add({name,campus,isSubstitute}); showToast('Teacher added!','ok'); }
+    if (editingTeacherId) {
+      const update={name,campus,isSubstitute,isInactive};
+      update.inactiveFrom=inactiveFrom||firebase.firestore.FieldValue.delete();
+      if (statusHistory.length>0) update.statusHistory=statusHistory;
+      await db.collection('teachers').doc(editingTeacherId).update(update);
+      await logAudit('update','teachers',editingTeacherId,`Updated teacher: ${name} (${campus})${isInactive?' — inactive':''}`);
+      showToast('Teacher updated.','ok');
+    } else {
+      const ref = await db.collection('teachers').add({name,campus,isSubstitute,isInactive});
+      await logAudit('create','teachers',ref.id,`Added teacher: ${name} (${campus})${isSubstitute?' — substitute':''}`);
+      showToast('Teacher added!','ok');
+    }
     closeTeacherModal();
   } catch(e) { showToast('Error saving teacher.','error'); }
 }
+// ── CSV Schedule Import ──────────────────────────────────────────
+let _importRows = [];
+
+function openImportModal() {
+  if (currentRole !== 'manager') return;
+  // Populate quarter selector
+  const sel = document.getElementById('import-quarter');
+  sel.innerHTML = '<option value="">— Select Quarter —</option>' +
+    quarters.map(q => `<option value="${q.id}">${q.year} Q${q.quarter} ${Q_LABELS[q.quarter]} (${fmtDate(q.startDate)} – ${fmtDate(q.endDate)})</option>`).join('');
+  // Reset
+  document.getElementById('import-csv-file').value = '';
+  document.getElementById('import-step1').style.display = '';
+  document.getElementById('import-step2').style.display = 'none';
+  document.getElementById('import-schedule-modal').classList.add('open');
+}
+function closeImportModal() {
+  document.getElementById('import-schedule-modal').classList.remove('open');
+}
+function downloadCSVTemplate() {
+  const rows = [
+    ['teacher','days','start','end','class_name','classroom','class_code','level','notes'],
+    ['Jane Smith','Mon,Wed,Fri','09:00','10:00','Conversation A','Room 1','C101','Intermediate',''],
+    ['Jane Smith','Tue,Thu','11:00','12:00','Advanced Writing','Room 2','C102','Advanced',''],
+    ['Tom Lee','Mon,Tue,Wed,Thu,Fri','14:00','15:00','Business English','','','BE','Zoom'],
+  ];
+  const csv = rows.map(r => r.map(c => `"${c}"`).join(',')).join('\r\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'schedule_template.csv';
+  a.click();
+}
+
+const DAY_MAP = { mon:'Mon',tue:'Mon',monday:'Mon', tue:'Tue',tuesday:'Tue', wed:'Wed',wednesday:'Wed', thu:'Thu',thursday:'Thu', fri:'Fri',friday:'Fri', sat:'Sat',saturday:'Sat', sun:'Sun',sunday:'Sun' };
+const DAY_FULL = { Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday',Sun:'Sunday' };
+
+function parseImportCSV() {
+  const qId = document.getElementById('import-quarter').value;
+  const branch = document.getElementById('import-branch').value;
+  const file = document.getElementById('import-csv-file').files[0];
+  if (!qId) return showToast('Please select a quarter.', 'error');
+  if (!file) return showToast('Please select a CSV file.', 'error');
+
+  const quarter = quarters.find(q => q.id === qId);
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) return showToast('CSV is empty.', 'error');
+
+    // Parse header
+    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g,''));
+    const idx = h => headers.indexOf(h);
+    const required = ['teacher','days','start','end','class_name'];
+    const missing = required.filter(h => idx(h) === -1);
+    if (missing.length) return showToast(`Missing columns: ${missing.join(', ')}`, 'error');
+
+    const errors = [], rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim());
+      const get = h => (cols[idx(h)] || '').trim();
+      const teacherName = get('teacher');
+      const teacher = teachers.find(t => t.name.toLowerCase() === teacherName.toLowerCase() && t.campus === branch);
+      const dayRaw = get('days').split(/[,;\/]/).map(d => DAY_MAP[d.trim().toLowerCase()]).filter(Boolean);
+      const start = get('start'); const end = get('end');
+      const className = get('class_name');
+      const rowErrors = [];
+      if (!teacherName) continue;
+      if (!teacher) rowErrors.push(`Teacher "${teacherName}" not found in ${branch}`);
+      if (!dayRaw.length) rowErrors.push(`Invalid days: "${get('days')}"`);
+      if (!start.match(/^\d{2}:\d{2}$/)) rowErrors.push(`Invalid start time: "${start}"`);
+      if (!end.match(/^\d{2}:\d{2}$/)) rowErrors.push(`Invalid end time: "${end}"`);
+      if (!className) rowErrors.push('class_name is required');
+      if (rowErrors.length) { errors.push(`Row ${i+1}: ${rowErrors.join('; ')}`); continue; }
+      rows.push({ teacher, days: dayRaw, start, end, className, classroom: get('classroom'), classCode: get('class_code'), level: get('class_level')||get('level'), notes: get('notes'), quarter });
+    }
+
+    _importRows = rows;
+    // Show preview
+    document.getElementById('import-step1').style.display = 'none';
+    document.getElementById('import-step2').style.display = '';
+    document.getElementById('import-preview-summary').innerHTML =
+      `<strong>${rows.length}</strong> schedule(s) ready to import for <strong>${branch}</strong> · <strong>${quarter.year} Q${quarter.quarter}</strong> (${fmtDate(quarter.startDate)} – ${fmtDate(quarter.endDate)})`;
+    document.getElementById('import-preview-errors').innerHTML = errors.length
+      ? errors.map(e => `<div class="error-item">${escHtml(e)}</div>`).join('') : '';
+    document.getElementById('import-confirm-btn').disabled = rows.length === 0;
+
+    let table = `<table style="width:100%;border-collapse:collapse;">
+      <thead><tr style="background:#f8f8f8;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;">
+        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Teacher</th>
+        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Class</th>
+        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Days</th>
+        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Time</th>
+      </tr></thead><tbody>`;
+    rows.forEach(r => {
+      table += `<tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:5px 8px;">${escHtml(r.teacher.name)}</td>
+        <td style="padding:5px 8px;">${escHtml(r.className)}</td>
+        <td style="padding:5px 8px;">${r.days.join(', ')}</td>
+        <td style="padding:5px 8px;">${r.start} – ${r.end}</td>
+      </tr>`;
+    });
+    document.getElementById('import-preview-table').innerHTML = table + '</tbody></table>';
+  };
+  reader.readAsText(file);
+}
+
+async function confirmImport() {
+  if (!_importRows.length) return;
+  document.getElementById('import-confirm-btn').disabled = true;
+  document.getElementById('import-confirm-btn').textContent = 'Importing…';
+  try {
+    const BATCH_SIZE = 400;
+    let batch = db.batch(); let count = 0; let total = 0;
+    for (const r of _importRows) {
+      const q = r.quarter;
+      // Generate all matching dates in the quarter
+      const dates = [];
+      const cur = strToDate(q.startDate);
+      const end = strToDate(q.endDate);
+      while (cur <= end) {
+        const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][cur.getDay()];
+        if (r.days.includes(dow) && !isDateBlocked(dateToStr(cur))) dates.push(dateToStr(cur));
+        cur.setDate(cur.getDate() + 1);
+      }
+      for (const date of dates) {
+        const docData = { teacherId: r.teacher.id, studentName: r.className, type: 'Regular', date, startTime: r.start, endTime: r.end, notes: r.notes || '', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+        if (r.classroom) docData.classroom = r.classroom;
+        if (r.classCode)  docData.classCode  = r.classCode;
+        if (r.level)      docData.classLevel  = r.level;
+        batch.set(db.collection('sessions').doc(), docData);
+        count++; total++;
+        if (count >= BATCH_SIZE) { await batch.commit(); batch = db.batch(); count = 0; }
+      }
+    }
+    if (count > 0) await batch.commit();
+    showToast(`${total} sessions imported!`, 'ok');
+    closeImportModal();
+  } catch(e) { console.error(e); showToast('Import failed: ' + e.message, 'error'); }
+  document.getElementById('import-confirm-btn').disabled = false;
+  document.getElementById('import-confirm-btn').textContent = 'Import';
+}
+// ────────────────────────────────────────────────────────────────
+
 async function removeTeacher(id) {
   const t=teachers.find(x=>x.id===id);
   if (!confirm(`Delete ${t?.name}? Their sessions will not be deleted.`)) return;
-  try { await db.collection('teachers').doc(id).delete(); showToast('Teacher removed.','ok'); }
-  catch(e) { showToast('Error deleting teacher.','error'); }
+  try {
+    await db.collection('teachers').doc(id).delete();
+    await logAudit('delete','teachers',id,`Deleted teacher: ${t?.name||id} (${t?.campus||''})`,t?[snapDoc('teachers',id,t)]:undefined);
+    showToast('Teacher removed.','ok');
+  } catch(e) { showToast('Error deleting teacher.','error'); }
 }
 
 // PT Tracker Export / Print
@@ -2302,7 +3081,7 @@ function exportPTCSV() {
       rows.push([student,total,'','','','','','','','']);
     } else {
       list.forEach(function(sess) {
-        var dur=calcHours(sess.startTime,sess.endTime);
+        var dur=calcHours(sess.startTime,sess.endTime,sess.type);
         var isConducted=sess.conducted!==false;
         var isMissed=sess.conducted===false&&!!sess.missedReason;
         if (isConducted) running+=dur;
@@ -2335,7 +3114,7 @@ function buildPrintHTML(teacherName, students, studentSessions) {
     var list=studentSessions[student];
     var contract=ptContracts.find(function(c){return c.studentName===student;});
     var total=contract?contract.totalHours:null;
-    var conducted=list.filter(function(s){return s.conducted!==false;});
+    var conducted=list.filter(function(s){return s.conducted!==false||s.missOutcome==='deduct';});
     var used=conducted.reduce(function(n,s){return n+(timeToMins(s.endTime)-timeToMins(s.startTime))/60;},0);
     var rem=total!==null?total-used:null;
     rows+='<div style="margin-bottom:28px;page-break-inside:avoid;">';
@@ -2354,7 +3133,7 @@ function buildPrintHTML(teacherName, students, studentSessions) {
       rows+='</tr></thead><tbody>';
       var running=0;
       list.forEach(function(sess,idx) {
-        var dur=calcHours(sess.startTime,sess.endTime);
+        var dur=calcHours(sess.startTime,sess.endTime,sess.type);
         var ok=sess.conducted!==false;
         var missed=sess.conducted===false&&!!sess.missedReason;
         if (ok) running+=dur;
@@ -2411,11 +3190,12 @@ function printPTTracker() {
 async function addSchoolOpenOverride(date) {
   if (currentRole !== 'manager') return;
   try {
-    await db.collection('school_events').add({
+    const ref = await db.collection('school_events').add({
       date, type:'school_open', name:'School Open',
       createdBy:firebase.auth().currentUser.email,
       createdAt:firebase.firestore.FieldValue.serverTimestamp()
     });
+    await logAudit('create','school_events',ref.id,`Marked as School Open: ${date}`);
     showToast('Marked as School Open!','ok');
   } catch(e) { showToast('Error saving override.','error'); }
 }
@@ -2423,42 +3203,115 @@ async function addSchoolOpenOverride(date) {
 async function removeSchoolOpenOverride(id) {
   if (!confirm('Revert to holiday? Sessions cannot be added on this date.')) return;
   try {
+    const snap = await db.collection('school_events').doc(id).get();
+    const ev = snap.data() || {};
     await db.collection('school_events').doc(id).delete();
+    await logAudit('delete','school_events',id,`Reverted School Open to holiday: ${ev.date||'?'}`);
     showToast('Reverted to holiday.','ok');
   } catch(e) { showToast('Error removing override.','error'); }
 }
 
 // Home-level tabs (Teachers / Hours Overview)
 function switchHomeTab(name) {
+  if (document.getElementById('view-detail').classList.contains('active')) {
+    goHome();
+  }
   const tabs=document.querySelectorAll('#home-tabs .detail-tab');
   tabs[0].classList.toggle('active', name==='teachers');
   tabs[1].classList.toggle('active', name==='hours');
+  tabs[2].classList.toggle('active', name==='students');
+  if (tabs[3]) tabs[3].classList.toggle('active', name==='history');
   document.getElementById('home-tab-teachers').classList.toggle('active', name==='teachers');
   document.getElementById('home-tab-hours').classList.toggle('active', name==='hours');
-  if (name==='hours') setHomeHoursPeriod(homeHoursPeriod||'week');
+  document.getElementById('home-tab-students').classList.toggle('active', name==='students');
+  document.getElementById('home-tab-history').classList.toggle('active', name==='history');
+  if (name==='hours') { invalidateHoursCache(); setHomeHoursPeriod(homeHoursPeriod||'week'); }
+  if (name==='students') renderStudentsOverview();
+  if (name==='history') renderAuditLog();
+  localStorage.setItem('scheduler_home_tab', name);
 }
 
 function setHomeHoursPeriod(period) {
   homeHoursPeriod=period;
+  homeHoursWeekOffset=0;
+  homeHoursMonthOffset=0;
   ['week','month','custom'].forEach(p=>{
     const b=document.getElementById('hhbtn-'+p);
     if (b) b.classList.toggle('active',p===period);
   });
+  const nav=document.getElementById('home-hours-nav');
+  if (nav) nav.style.display=(period==='week'||period==='month')?'flex':'none';
   const customRange=document.getElementById('home-hours-custom-range');
   if (customRange) customRange.style.display=period==='custom'?'flex':'none';
   if (period!=='custom') renderAllTeachersHours();
+}
+
+function changeHomeHoursOffset(delta) {
+  if (homeHoursPeriod==='week') homeHoursWeekOffset+=delta;
+  else if (homeHoursPeriod==='month') homeHoursMonthOffset+=delta;
+  renderAllTeachersHours();
+}
+
+// Temporary filter state while modal is open (draft)
+let _hfDraft = {};
+function openHoursFilterModal() {
+  _hfDraft = { campus: homeHoursCampus, status: homeHoursStatusFilter, type: homeHoursTypeFilter, hours: homeHoursHoursFilter };
+  _hfSync();
+  document.getElementById('hours-filter-modal').classList.add('open');
+}
+function _hfSync() {
+  ['all','IRV','RH','LA'].forEach(v=>{ const b=document.getElementById('hcbtn-'+v); if(b) b.classList.toggle('active',v===_hfDraft.campus); });
+  ['all','active','inactive'].forEach(v=>{ const b=document.getElementById('hsfbtn-'+v); if(b) b.classList.toggle('active',v===_hfDraft.status); });
+  ['all','regular','substitute'].forEach(v=>{ const b=document.getElementById('htfbtn-'+v); if(b) b.classList.toggle('active',v===_hfDraft.type); });
+  ['all','has','none'].forEach(v=>{ const b=document.getElementById('hhfbtn-'+v); if(b) b.classList.toggle('active',v===_hfDraft.hours); });
+}
+function hfSetCampus(v) { _hfDraft.campus=v; _hfSync(); }
+function hfSet(kind, v) { _hfDraft[kind]=v; _hfSync(); }
+function hfReset() {
+  _hfDraft={campus:'all',status:'all',type:'all',hours:'all'};
+  _hfSync();
+}
+function applyHoursFilter() {
+  homeHoursCampus=_hfDraft.campus;
+  homeHoursStatusFilter=_hfDraft.status;
+  homeHoursTypeFilter=_hfDraft.type;
+  homeHoursHoursFilter=_hfDraft.hours;
+  document.getElementById('hours-filter-modal').classList.remove('open');
+  _updateHoursFilterBadge();
+  renderAllTeachersHours();
+}
+function _updateHoursFilterBadge() {
+  const active=[ homeHoursCampus!=='all', homeHoursStatusFilter!=='all', homeHoursTypeFilter!=='all', homeHoursHoursFilter!=='all' ].filter(Boolean);
+  const badge=document.getElementById('hours-filter-badge');
+  const btn=document.getElementById('hours-filter-btn');
+  const summary=document.getElementById('hours-filter-summary');
+  if (badge) {
+    badge.style.display=active.length?'inline-flex':'none';
+    badge.textContent=active.length||'';
+  }
+  if (btn) btn.style.background=active.length?'#1a1a2e':'';
+  if (btn) btn.style.color=active.length?'white':'';
+  if (btn) btn.style.borderColor=active.length?'#1a1a2e':'';
+  const parts=[];
+  if (homeHoursCampus!=='all') parts.push(homeHoursCampus);
+  if (homeHoursStatusFilter!=='all') parts.push(homeHoursStatusFilter);
+  if (homeHoursTypeFilter!=='all') parts.push(homeHoursTypeFilter);
+  if (homeHoursHoursFilter==='has') parts.push('has hours');
+  if (homeHoursHoursFilter==='none') parts.push('no hours');
+  if (summary) summary.textContent=parts.length?parts.join(' · '):'';
 }
 
 function getHomeHoursDateRange() {
   const today=new Date();
   if (homeHoursPeriod==='week') {
     const from=getWeekStart(today);
+    from.setDate(from.getDate()+homeHoursWeekOffset*7);
     const to=new Date(from); to.setDate(to.getDate()+6);
     return {from:dateToStr(from),to:dateToStr(to)};
   }
   if (homeHoursPeriod==='month') {
-    const from=new Date(today.getFullYear(),today.getMonth(),1);
-    const to=new Date(today.getFullYear(),today.getMonth()+1,0);
+    const from=new Date(today.getFullYear(),today.getMonth()+homeHoursMonthOffset,1);
+    const to=new Date(from.getFullYear(),from.getMonth()+1,0);
     return {from:dateToStr(from),to:dateToStr(to)};
   }
   return {
@@ -2467,7 +3320,8 @@ function getHomeHoursDateRange() {
   };
 }
 
-function renderAllTeachersHours() {
+let _hoursRenderSeq=0;
+async function renderAllTeachersHours() {
   const el=document.getElementById('all-teachers-hours-content'); if (!el) return;
   const {from,to}=getHomeHoursDateRange();
   if (!from||!to) { el.innerHTML='<div class="empty-state">Select a period above.</div>'; return; }
@@ -2478,43 +3332,61 @@ function renderAllTeachersHours() {
 
   if (teachers.length===0) { el.innerHTML='<div class="empty-state">No teachers yet.</div>'; return; }
 
-  const inRange=s=>s.date>=from&&s.date<=to;
-  const inRangeSessions=allSessionsGlobal.filter(inRange);
+  const includeMT=(document.getElementById('home-hours-include-mt')||{checked:true}).checked;
+  // Fetch only this date range's sessions on demand (instead of holding all sessions ever).
+  const seq=++_hoursRenderSeq;
+  el.innerHTML='<div class="empty-state">Loading…</div>';
+  let inRangeSessions;
+  try { inRangeSessions=await getRangeSessions(from,to); }
+  catch(e) { console.error('hours range load error:',e); el.innerHTML='<div class="empty-state" style="color:#dc2626;">Error loading hours.</div>'; return; }
+  if (seq!==_hoursRenderSeq) return; // superseded by a newer render — drop this one
 
   const campusOrder=['IRV','RH','LA'];
+
+  // Apply status and type filters
+  let filteredTeachers=teachers;
+  if (homeHoursStatusFilter==='active')   filteredTeachers=filteredTeachers.filter(t=>!isTeacherCurrentlyInactive(t));
+  if (homeHoursStatusFilter==='inactive') filteredTeachers=filteredTeachers.filter(t=>isTeacherCurrentlyInactive(t));
+  if (homeHoursTypeFilter==='regular')    filteredTeachers=filteredTeachers.filter(t=>!t.isSubstitute);
+  if (homeHoursTypeFilter==='substitute') filteredTeachers=filteredTeachers.filter(t=>t.isSubstitute);
+
   const grouped={};
-  teachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
+  filteredTeachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
   const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
 
   let html='';
 
+  function calcTeacherHours(t) {
+    const tSess=inRangeSessions.filter(s=>s.teacherId===t.id);
+    const regSess=tSess.filter(s=>s.type==='Regular');
+    const ptSess=tSess.filter(s=>s.type==='PT');
+    const mtSess=tSess.filter(s=>s.type==='Meeting'||s.type==='Training');
+    const regHeld=regSess.filter(s=>!s.absenceType);
+    const regPaid=regSess.filter(s=>s.absenceType==='paid');
+    const ptCond=ptSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
+    const regHrs=regHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const paidHrs=regPaid.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const ptCondHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const mtHeld=mtSess.filter(s=>!s.absenceType);
+    const mtHrs=mtHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
+    const subHrs=subSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const total=regHrs+paidHrs+ptCondHrs+(includeMT?mtHrs:0)+subHrs;
+    return {regHrs,regHeld,paidHrs,regPaid,ptCondHrs,ptCond,mtHrs,mtHeld,subHrs,subSess,total};
+  }
+
   function hoursTableRows(teacherList) {
     let rows='';
     teacherList.forEach(t=>{
-      const tSess=inRangeSessions.filter(s=>s.teacherId===t.id);
-      const regSess=tSess.filter(s=>s.type==='Regular');
-      const ptSess=tSess.filter(s=>s.type==='PT');
-      // Regular: only sessions with no absence (or absenceType not set)
-      const regHeld=regSess.filter(s=>!s.absenceType);
-      const regPaid=regSess.filter(s=>s.absenceType==='paid');
-      // PT as before
-      const ptCond=ptSess.filter(s=>s.conducted!==false);
-      const ptNotHeld=ptSess.filter(s=>s.conducted===false&&!!s.missedReason);
-      const ptSched=ptSess.filter(s=>s.conducted===false&&!s.missedReason);
-      const regHrs=regHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-      const paidHrs=regPaid.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-      const ptCondHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-      // Sub covered: sessions of other teachers where coverType==='substituted' and substituteId===this teacher's id
-      const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
-      const subHrs=subSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime),0);
-      const total=regHrs+paidHrs+ptCondHrs+subHrs;
+      const {regHrs,regHeld,paidHrs,regPaid,ptCondHrs,ptCond,mtHrs,mtHeld,subHrs,subSess,total}=calcTeacherHours(t);
+      if (homeHoursHoursFilter==='has'  && total===0) return;
+      if (homeHoursHoursFilter==='none' && total>0)   return;
       rows+=`<tr>
         <td><button class="btn-student-link" onclick="openTeacherDetailById('${t.id}')">${escHtml(t.name)}</button></td>
         <td>${fmtHours(regHrs)} <span style="color:#aaa;font-size:11px;">(${regHeld.length})</span></td>
         <td style="color:${paidHrs>0?'#92400e':'#ddd'};">${paidHrs>0?fmtHours(paidHrs)+` <span style="font-size:11px;">(${regPaid.length})</span>`:'—'}</td>
         <td>${fmtHours(ptCondHrs)} <span style="color:#aaa;font-size:11px;">(${ptCond.length})</span></td>
-        <td style="color:${ptNotHeld.length>0?'#c2410c':'#ddd'};">${ptNotHeld.length>0?ptNotHeld.length:'—'}</td>
-        <td style="color:${ptSched.length>0?'#6b7280':'#ddd'};">${ptSched.length>0?ptSched.length:'—'}</td>
+        <td style="color:${mtHrs>0?'#9a3412':'#ddd'};">${mtHrs>0?fmtHours(mtHrs)+` <span style="font-size:11px;">(${mtHeld.length})</span>`:'—'}</td>
         <td style="color:${subHrs>0?'#3730a3':'#ddd'};">${subHrs>0?fmtHours(subHrs)+` <span style="font-size:11px;">(${subSess.length})</span>`:'—'}</td>
         <td><strong>${fmtHours(total)}</strong></td>
       </tr>`;
@@ -2522,30 +3394,625 @@ function renderAllTeachersHours() {
     return rows;
   }
 
-  campuses.forEach(campus=>{
-    const regular=grouped[campus].filter(t=>!t.isSubstitute);
-    const subs=grouped[campus].filter(t=>t.isSubstitute);
-    html+=`<div class="hours-section-title">${escHtml(campus)}</div>`;
-    html+=`<table class="hours-table"><thead><tr>
-      <th>Teacher</th><th>Regular (hrs)</th><th>Paid Leave (hrs)</th><th>PT Conducted (hrs)</th><th>PT Not Held</th><th>PT Scheduled</th><th>Sub Covered (hrs)</th><th>Total (hrs)</th>
-    </tr></thead><tbody>${hoursTableRows(regular)}`;
-    if (subs.length>0) {
-      html+=`<tr><td colspan="8" style="padding:4px 12px;background:#f5f3ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#8b5cf6;border-top:1px solid #ede9fe;">Substitute</td></tr>`;
-      html+=hoursTableRows(subs);
+  const filteredCampuses=homeHoursCampus==='all'?campuses:campuses.filter(c=>c===homeHoursCampus);
+  if (filteredCampuses.length===0) { el.innerHTML='<div class="empty-state">No teachers for this campus.</div>'; return; }
+
+  filteredCampuses.forEach(campus=>{
+    const campusTeachers=grouped[campus]||[];
+    if (homeHoursTypeFilter!=='all') {
+      const rows=hoursTableRows(campusTeachers);
+      if (!rows) return;
+      html+=`<div class="hours-section-title">${escHtml(campus)}</div>`;
+      html+=`<table class="hours-table"><thead><tr>
+        <th>Teacher</th><th>Regular (hrs)</th><th>Paid Leave (hrs)</th><th>PT (hrs)</th><th>Meeting / Training (hrs)</th><th>Sub Covered (hrs)</th><th>Total (hrs)</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+    } else {
+      const regular=campusTeachers.filter(t=>!t.isSubstitute);
+      const subs=campusTeachers.filter(t=>t.isSubstitute);
+      const regRows=hoursTableRows(regular);
+      const subRows=hoursTableRows(subs);
+      if (!regRows&&!subRows) return;
+      html+=`<div class="hours-section-title">${escHtml(campus)}</div>`;
+      html+=`<table class="hours-table"><thead><tr>
+        <th>Teacher</th><th>Regular (hrs)</th><th>Paid Leave (hrs)</th><th>PT (hrs)</th><th>Meeting / Training (hrs)</th><th>Sub Covered (hrs)</th><th>Total (hrs)</th>
+      </tr></thead><tbody>${regRows}`;
+      if (subRows) {
+        html+=`<tr><td colspan="7" style="padding:4px 12px;background:#f5f3ff;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.8px;color:#8b5cf6;border-top:1px solid #ede9fe;">Substitute</td></tr>${subRows}`;
+      }
+      html+=`</tbody></table>`;
     }
-    html+=`</tbody></table>`;
   });
 
+  if (!html) { el.innerHTML='<div class="empty-state">No teachers match the selected filters.</div>'; return; }
   el.innerHTML=html;
 }
 
-// Global sessions listener (all teachers) for Hours Overview
+// ==========================================
+// STUDENTS OVERVIEW
+// ==========================================
+function setStudentsCampus(campus) {
+  homeStudentsCampus=campus;
+  ['all','IRV','RH','LA'].forEach(c=>{
+    const b=document.getElementById('scbtn-'+c);
+    if (b) b.classList.toggle('active',c===campus);
+  });
+  renderStudentsOverview();
+}
+
+function initAllContractsListener() {
+  if (unsubAllContractsGlobal) return;
+  unsubAllContractsGlobal=db.collection('pt_contracts').onSnapshot(snap=>{
+    allPTContractsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if (document.getElementById('home-tab-students')?.classList.contains('active')) renderStudentsOverview();
+  }, err=>console.error('allContracts error:',err));
+}
+
+function initStudentsListener() {
+  if (unsubStudentsGlobal) return;
+  unsubStudentsGlobal=db.collection('students').onSnapshot(snap=>{
+    allStudentsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
+    if (document.getElementById('home-tab-students')?.classList.contains('active')) renderStudentsOverview();
+  }, err=>console.error('students error:',err));
+}
+
+// Register / Edit Student modal
+let _regStuMode='add', _editStuDocId=null, _editStuOldName='';
+
+function openRegisterStudentModal() {
+  _regStuMode='add'; _editStuDocId=null; _editStuOldName='';
+  document.getElementById('reg-stu-name').value='';
+  document.getElementById('reg-stu-id').value='';
+  document.getElementById('reg-stu-branch').value='';
+  document.querySelector('#register-student-modal h3').textContent='Register Student';
+  document.getElementById('reg-stu-save-btn').textContent='Register';
+  document.getElementById('reg-stu-delete-btn').style.display='none';
+  document.getElementById('register-student-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('reg-stu-name').focus(),50);
+}
+function openEditStudentModal(gIdx) {
+  const sg=studentsOverviewData[gIdx]; if (!sg) return;
+  _regStuMode='edit'; _editStuDocId=sg.docId||null; _editStuOldName=sg.name;
+  document.getElementById('reg-stu-name').value=sg.name;
+  document.getElementById('reg-stu-id').value=sg.studentId||'';
+  document.getElementById('reg-stu-branch').value=sg.branch||'';
+  document.querySelector('#register-student-modal h3').textContent='Edit Student';
+  document.getElementById('reg-stu-save-btn').textContent='Save';
+  document.getElementById('reg-stu-delete-btn').style.display=currentRole==='manager'?'':'none';
+  document.getElementById('register-student-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('reg-stu-name').focus(),50);
+}
+async function deleteStudentFromModal() {
+  const sg=studentsOverviewData.find(s=>s.docId===_editStuDocId&&_editStuDocId)
+        ||studentsOverviewData.find(s=>s.name===_editStuOldName);
+  if (!sg) return;
+  const gIdx=studentsOverviewData.indexOf(sg);
+  closeRegisterStudentModal();
+  await deleteStudent(gIdx);
+}
+function closeRegisterStudentModal() {
+  document.getElementById('register-student-modal').classList.remove('open');
+}
+async function saveStudentRegistration() {
+  const name=document.getElementById('reg-stu-name').value.trim();
+  const studentId=document.getElementById('reg-stu-id').value.trim();
+  const branch=document.getElementById('reg-stu-branch').value;
+  if (!name) return showToast('Please enter student name.','error');
+
+  if (_regStuMode==='add') {
+    const dup=allStudentsGlobal.find(s=>s.name.toLowerCase()===name.toLowerCase());
+    if (dup) return showToast('A student with this name is already registered.','error');
+    try {
+      const data={name,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+      if (studentId) data.studentId=studentId;
+      if (branch) data.branch=branch;
+      const ref = await db.collection('students').add(data);
+      await logAudit('create','students',ref.id,`Registered student: ${name}${branch?' ('+branch+')':''}`);
+      showToast('Student registered!','ok');
+      closeRegisterStudentModal();
+    } catch(e) { showToast('Error registering student.','error'); console.error(e); }
+  } else {
+    const dup=allStudentsGlobal.find(s=>s.name.toLowerCase()===name.toLowerCase()&&s.id!==(_editStuDocId||''));
+    if (dup) return showToast('Another student with this name already exists.','error');
+    try {
+      const batch=db.batch();
+      if (_editStuDocId) {
+        // Registered student — update existing doc
+        const stuUpd={name,branch:branch||firebase.firestore.FieldValue.delete()};
+        if (studentId) stuUpd.studentId=studentId; else stuUpd.studentId=firebase.firestore.FieldValue.delete();
+        batch.update(db.collection('students').doc(_editStuDocId),stuUpd);
+      } else {
+        // Legacy student — create new students doc
+        const data={name,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
+        if (studentId) data.studentId=studentId;
+        if (branch) data.branch=branch;
+        const ref=db.collection('students').doc();
+        batch.set(ref,data);
+      }
+      // If name changed → update pt_contracts + PT sessions
+      if (name!==_editStuOldName) {
+        allPTContractsGlobal.filter(c=>c.studentName===_editStuOldName)
+          .forEach(c=>batch.update(db.collection('pt_contracts').doc(c.id),{studentName:name}));
+        allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.studentName===_editStuOldName)
+          .forEach(s=>batch.update(db.collection('sessions').doc(s.id),{studentName:name}));
+      }
+      // Sync studentId to pt_contracts if changed
+      const oldStu=_editStuDocId?allStudentsGlobal.find(s=>s.id===_editStuDocId):null;
+      if (studentId!==(oldStu?.studentId||'')) {
+        allPTContractsGlobal.filter(c=>c.studentName===_editStuOldName||c.studentName===name)
+          .forEach(c=>batch.update(db.collection('pt_contracts').doc(c.id),
+            studentId?{studentId}:{studentId:firebase.firestore.FieldValue.delete()}));
+      }
+      await batch.commit();
+      await logAudit('update','students',_editStuDocId||'(legacy)',`Updated student: ${name}${name!==_editStuOldName?' (renamed from '+_editStuOldName+')':''}`);
+      showToast('Student updated!','ok');
+      closeRegisterStudentModal();
+    } catch(e) { showToast('Error updating student.','error'); console.error(e); }
+  }
+}
+
+async function deleteStudent(gIdx) {
+  if (currentRole!=='manager') return;
+  const sg=studentsOverviewData[gIdx]; if (!sg) return;
+  const contractCount=sg.contracts.length;
+  const sessionCount=allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.studentName===sg.name).length;
+  let msg=`Delete "${sg.name}"?\n\nThis will permanently delete:`;
+  if (sg.isRegistered) msg+='\n• Student registration';
+  if (contractCount>0) msg+=`\n• ${contractCount} PT contract(s)`;
+  if (sessionCount>0) msg+=`\n• ${sessionCount} PT session record(s)`;
+  msg+='\n\nThis cannot be undone.';
+  if (!confirm(msg)) return;
+  try {
+    const batch=db.batch();
+    const snapshot=[];
+    if (sg.isRegistered&&sg.docId) {
+      batch.delete(db.collection('students').doc(sg.docId));
+      const stuDoc=allStudentsGlobal.find(s=>s.id===sg.docId);
+      if (stuDoc) snapshot.push(snapDoc('students',sg.docId,stuDoc));
+    }
+    sg.contracts.forEach(c=>{
+      batch.delete(db.collection('pt_contracts').doc(c.id));
+      snapshot.push(snapDoc('pt_contracts',c.id,c));
+    });
+    allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.studentName===sg.name)
+      .forEach(s=>{
+        batch.delete(db.collection('sessions').doc(s.id));
+        snapshot.push(snapDoc('sessions',s.id,s));
+      });
+    await batch.commit();
+    await logAudit('delete','students',sg.docId||'(legacy)',`Deleted student: ${sg.name} (${contractCount} contract(s), ${sessionCount} session(s))`,snapshot);
+    showToast('Student deleted.','ok');
+  } catch(e) { showToast('Error deleting student.','error'); console.error(e); }
+}
+
+// Add / Edit PT Contract modal
+let addPTContractIdx=-1, addPTContractMode='add', editPTContractId=null;
+
+function _ptcSetMode(mode) {
+  const isAdd=mode==='add';
+  document.getElementById('add-ptc-title').textContent=isAdd?'Add PT Contract':'Edit PT Contract';
+  document.getElementById('add-ptc-teacher-row').style.display=isAdd?'':'none';
+  document.getElementById('add-ptc-teacher-fixed').style.display=isAdd?'none':'';
+  document.getElementById('add-ptc-delete-btn').style.display=(isAdd||currentRole!=='manager')?'none':'';
+}
+
+function openAddPTContractModal(gIdx) {
+  const sg=studentsOverviewData[gIdx]; if (!sg) return;
+  addPTContractIdx=gIdx; addPTContractMode='add'; editPTContractId=null;
+  _ptcSetMode('add');
+  document.getElementById('add-ptc-student-display').innerHTML=
+    `<span style="font-weight:700;">${escHtml(sg.name)}</span>${sg.branch?` <span style="font-size:12px;color:#6b7280;background:#f3f4f6;border-radius:4px;padding:1px 7px;">${escHtml(sg.branch)}</span>`:''}`;
+  const sel=document.getElementById('add-ptc-teacher');
+  const active=[...teachers].filter(t=>!isTeacherCurrentlyInactive(t)).sort((a,b)=>a.name.localeCompare(b.name));
+  const sameBranch=sg.branch?active.filter(t=>t.campus===sg.branch):active;
+  const otherBranch=sg.branch?active.filter(t=>t.campus!==sg.branch):[];
+  const toOpt=t=>`<option value="${t.id}">${escHtml(t.name)} (${t.campus})</option>`;
+  let optHtml='<option value="">— Select Teacher —</option>';
+  if (sameBranch.length) optHtml+=`<optgroup label="${sg.branch||'Teachers'}">${sameBranch.map(toOpt).join('')}</optgroup>`;
+  if (otherBranch.length) optHtml+=`<optgroup label="Other Branches">${otherBranch.map(toOpt).join('')}</optgroup>`;
+  sel.innerHTML=optHtml;
+  document.getElementById('add-ptc-hours').value='';
+  document.getElementById('add-pt-contract-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('add-ptc-teacher').focus(),50);
+}
+
+function openEditPTContract(contractId) {
+  const c=allPTContractsGlobal.find(x=>x.id===contractId); if (!c) return;
+  const teacher=teachers.find(t=>t.id===c.teacherId);
+  addPTContractIdx=-1; addPTContractMode='edit'; editPTContractId=contractId;
+  _ptcSetMode('edit');
+  const sg=studentsOverviewData.find(s=>s.name===c.studentName)||{name:c.studentName,branch:''};
+  document.getElementById('add-ptc-student-display').innerHTML=
+    `<span style="font-weight:700;">${escHtml(sg.name)}</span>${sg.branch?` <span style="font-size:12px;color:#6b7280;background:#f3f4f6;border-radius:4px;padding:1px 7px;">${escHtml(sg.branch)}</span>`:''}`;
+  document.getElementById('add-ptc-teacher-name').textContent=
+    teacher?(teacher.name+(teacher.campus?' ('+teacher.campus+')':'')):'(unknown)';
+  document.getElementById('add-ptc-hours').value=
+    (c.totalHours!==null&&c.totalHours!==undefined)?c.totalHours:'';
+  document.getElementById('add-pt-contract-modal').classList.add('open');
+  setTimeout(()=>document.getElementById('add-ptc-hours').focus(),50);
+}
+
+function closeAddPTContractModal() {
+  document.getElementById('add-pt-contract-modal').classList.remove('open');
+  addPTContractIdx=-1; editPTContractId=null;
+}
+
+async function deletePTContractFromModal() {
+  if (!editPTContractId) return;
+  const c=allPTContractsGlobal.find(x=>x.id===editPTContractId); if (!c) return;
+  const teacher=teachers.find(t=>t.id===c.teacherId);
+  const tName=teacher?teacher.name:'(unknown)';
+  const relSess=allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.teacherId===c.teacherId&&s.studentName===c.studentName);
+  let msg=`Delete PT contract between "${c.studentName}" and "${tName}"?`;
+  if (relSess.length>0) msg+=`\n\n${relSess.length} session record(s) will also be deleted.`;
+  msg+='\n\nThis cannot be undone.';
+  if (!confirm(msg)) return;
+  closeAddPTContractModal();
+  try {
+    const batch=db.batch();
+    const cId=editPTContractId||c.id;
+    const snapshot=[snapDoc('pt_contracts',cId,c)];
+    batch.delete(db.collection('pt_contracts').doc(cId));
+    relSess.forEach(s=>{
+      batch.delete(db.collection('sessions').doc(s.id));
+      snapshot.push(snapDoc('sessions',s.id,s));
+    });
+    await batch.commit();
+    await logAudit('delete','pt_contracts',cId,`Deleted PT contract: ${c.studentName} — ${tName}${relSess.length>0?' ('+relSess.length+' session(s) also deleted)':''}`,snapshot);
+    showToast('Contract deleted.','ok');
+  } catch(e) { showToast('Error deleting contract.','error'); console.error(e); }
+}
+
+async function saveAddPTContract() {
+  const hoursRaw=document.getElementById('add-ptc-hours').value;
+  const hours=hoursRaw===''?null:parseFloat(hoursRaw);
+  if (hours!==null&&(isNaN(hours)||hours<0)) return showToast('Invalid hours.','error');
+
+  if (addPTContractMode==='edit') {
+    if (!editPTContractId) return;
+    try {
+      const snap = await db.collection('pt_contracts').doc(editPTContractId).get();
+      const c = snap.data() || {};
+      await db.collection('pt_contracts').doc(editPTContractId).update({totalHours:hours});
+      await logAudit('update','pt_contracts',editPTContractId,`Updated PT contract: ${c.studentName||'?'} — ${hours??'unlimited'}h`);
+      showToast('Contract updated!','ok');
+      closeAddPTContractModal();
+    } catch(e) { showToast('Error updating contract.','error'); console.error(e); }
+    return;
+  }
+
+  const sg=studentsOverviewData[addPTContractIdx]; if (!sg) return;
+  const teacherId=document.getElementById('add-ptc-teacher').value;
+  if (!teacherId) return showToast('Please select a teacher.','error');
+  const existing=allPTContractsGlobal.find(c=>c.teacherId===teacherId&&c.studentName===sg.name);
+  const tName = teachers.find(t=>t.id===teacherId)?.name||teacherId;
+  try {
+    if (existing) {
+      const upd={totalHours:hours};
+      if (sg.studentId) upd.studentId=sg.studentId;
+      await db.collection('pt_contracts').doc(existing.id).update(upd);
+      await logAudit('update','pt_contracts',existing.id,`Updated PT contract: ${sg.name} — ${hours??'unlimited'}h (${tName})`);
+      showToast('PT contract updated!','ok');
+    } else {
+      const data={teacherId,studentName:sg.name,totalHours:hours};
+      if (sg.studentId) data.studentId=sg.studentId;
+      const ref = await db.collection('pt_contracts').add(data);
+      await logAudit('create','pt_contracts',ref.id,`Added PT contract: ${sg.name} — ${hours??'unlimited'}h (${tName})`);
+      showToast('PT contract added!','ok');
+    }
+    closeAddPTContractModal();
+  } catch(e) { showToast('Error saving contract.','error'); console.error(e); }
+}
+
+function renderStudentsOverview() {
+  const el=document.getElementById('students-overview-content'); if (!el) return;
+
+  // Build master list: registered students + legacy (from contracts only)
+  const studentMap={};
+  allStudentsGlobal.forEach(s=>{
+    studentMap[s.id]={name:s.name,studentId:s.studentId||'',branch:s.branch||'',contracts:[],isRegistered:true,docId:s.id};
+  });
+  allPTContractsGlobal.forEach(c=>{
+    const reg=allStudentsGlobal.find(s=>
+      (s.studentId&&s.studentId===c.studentId)||
+      s.name.toLowerCase()===(c.studentName||'').toLowerCase()
+    );
+    if (reg) {
+      studentMap[reg.id].contracts.push(c);
+    } else {
+      const lk='=>'+c.studentName;
+      if (!studentMap[lk]) studentMap[lk]={name:c.studentName,studentId:c.studentId||'',branch:'',contracts:[],isRegistered:false,docId:null};
+      if (c.studentId&&!studentMap[lk].studentId) studentMap[lk].studentId=c.studentId;
+      studentMap[lk].contracts.push(c);
+    }
+  });
+
+  let studentList=Object.values(studentMap).sort((a,b)=>a.name.localeCompare(b.name));
+
+  // Apply campus filter
+  if (homeStudentsCampus!=='all') {
+    studentList=studentList.filter(sg=>{
+      if (sg.branch) return sg.branch===homeStudentsCampus;
+      return sg.contracts.some(c=>{ const t=teachers.find(x=>x.id===c.teacherId); return t&&t.campus===homeStudentsCampus; });
+    });
+  }
+
+  if (studentList.length===0) {
+    el.innerHTML=allStudentsGlobal.length===0&&allPTContractsGlobal.length===0
+      ?'<div class="empty-state">No students registered yet. Click "Register Student" to add one.</div>'
+      :'<div class="empty-state">No students for this campus.</div>';
+    return;
+  }
+
+  studentsOverviewData=studentList;
+  const ptSessions=allPTSessionsGlobal.filter(s=>s.type==='PT');
+  const BRANCH_ORDER=['IRV','RH','LA'];
+
+  // Group by branch when showing all
+  const showGroups=homeStudentsCampus==='all';
+  let displaySections;
+  if (showGroups) {
+    const byBranch={};
+    studentList.forEach(sg=>{ const b=sg.branch||'__none__'; if(!byBranch[b])byBranch[b]=[]; byBranch[b].push(sg); });
+    const ordered=[
+      ...BRANCH_ORDER.filter(b=>byBranch[b]),
+      ...Object.keys(byBranch).filter(b=>!BRANCH_ORDER.includes(b)&&b!=='__none__'),
+      ...(byBranch['__none__']?['__none__']:[])
+    ];
+    displaySections=ordered.map(b=>({label:b==='__none__'?'No Branch':b,students:byBranch[b]}));
+  } else {
+    displaySections=[{label:null,students:studentList}];
+  }
+
+  let html=`<table class="hours-table" style="width:100%"><thead><tr>
+    <th>Teacher</th><th>Campus</th><th>Conducted (hrs)</th><th>Sessions</th><th>Contract (hrs)</th><th>Remaining</th><th class="manager-only" style="width:1px;"></th>
+  </tr></thead><tbody>`;
+
+  // Render one student group
+  const renderSG=(sg)=>{
+    const gIdx=studentsOverviewData.indexOf(sg);
+    let totalCondHrs=0, totalContractHrs=0, hasContract=false;
+    const rows=sg.contracts.map(c=>{
+      const teacher=teachers.find(t=>t.id===c.teacherId);
+      const tName=teacher?teacher.name:'(unknown)';
+      const campus=teacher?teacher.campus:'—';
+      const cSess=ptSessions.filter(s=>s.teacherId===c.teacherId&&s.studentName===c.studentName);
+      const conducted=cSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
+      const condHrs=conducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      totalCondHrs+=condHrs;
+      const contractHrs=(c.totalHours!==null&&c.totalHours!==undefined)?c.totalHours:null;
+      if (contractHrs!==null){totalContractHrs+=contractHrs;hasContract=true;}
+      const rem=contractHrs!==null?contractHrs-condHrs:null;
+      const remCell=rem===null?'—':rem<0
+        ?`<span style="color:#c2410c;font-weight:600;">${Math.abs(rem).toFixed(1)} over</span>`
+        :`${rem.toFixed(1)} hrs`;
+      return {tName,campus,condHrs,condCount:conducted.length,contractHrs,remCell,contractId:c.id,teacherId:c.teacherId};
+    });
+
+    const idBadge=sg.studentId
+      ?`<span style="font-size:12px;color:#374151;background:#e5e7eb;border-radius:4px;padding:1px 8px;font-weight:600;">${escHtml(sg.studentId)}</span>`:'';
+    const branchBadge=(!showGroups&&sg.branch)
+      ?`<span style="font-size:11px;color:#6b7280;background:#f3f4f6;border-radius:4px;padding:1px 7px;">${escHtml(sg.branch)}</span>`:'';
+
+    html+=`<tr>
+      <td colspan="7" style="background:#f4f4f5;padding:8px 14px;border-top:3px solid #9ca3af;border-bottom:1px solid #e4e4e7;">
+        <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:14px;color:#111827;">${escHtml(sg.name)}</span>
+          ${branchBadge}${idBadge}
+          <span style="margin-left:auto;display:flex;gap:6px;">
+            <button onclick="openEditStudentModal(${gIdx})" style="font-size:12px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:5px;padding:3px 11px;cursor:pointer;">Edit</button>
+            <button onclick="openAddPTContractModal(${gIdx})" style="font-size:12px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:5px;padding:3px 11px;cursor:pointer;">+ Add PT</button>
+          </span>
+        </span>
+      </td>
+    </tr>`;
+
+    if (rows.length===0) {
+      html+=`<tr><td colspan="7" style="color:#aaa;font-size:13px;padding:10px 20px;font-style:italic;">No PT contracts yet.</td></tr>`;
+    } else {
+      rows.forEach(r=>{
+        html+=`<tr>
+          <td style="padding-left:20px;"><button onclick="openTeacherPT('${r.teacherId}')" style="background:none;border:none;color:#1a1a2e;font-size:inherit;font-family:inherit;cursor:pointer;padding:0;text-decoration:underline;text-underline-offset:2px;">${escHtml(r.tName)}</button></td>
+          <td style="color:#888;font-size:12px;">${escHtml(r.campus)}</td>
+          <td>${fmtHours(r.condHrs)}</td>
+          <td style="color:#aaa;font-size:12px;">${r.condCount}</td>
+          <td>${r.contractHrs!==null?r.contractHrs+' hrs':'—'}</td>
+          <td>${r.remCell}</td>
+          <td style="white-space:nowrap;padding:4px 8px;">
+            <button onclick="openEditPTContract('${r.contractId}')" style="font-size:11px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;cursor:pointer;">Edit</button>
+          </td>
+        </tr>`;
+      });
+      if (rows.length>1) {
+        const totalRem=hasContract?totalContractHrs-totalCondHrs:null;
+        const totalRemCell=totalRem===null?'—':totalRem<0
+          ?`<span style="color:#c2410c;font-weight:600;">${Math.abs(totalRem).toFixed(1)} over</span>`
+          :`${totalRem.toFixed(1)} hrs`;
+        html+=`<tr style="background:#f9fafb;border-bottom:2px solid #d1d5db;">
+          <td colspan="2" style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;padding-left:20px;">↳ Total</td>
+          <td style="font-weight:600;">${fmtHours(totalCondHrs)}</td>
+          <td></td>
+          <td style="font-weight:600;">${hasContract?totalContractHrs+' hrs':'—'}</td>
+          <td style="font-weight:600;">${totalRemCell}</td>
+          <td></td>
+        </tr>`;
+      }
+    }
+  };
+
+  displaySections.forEach(({label,students})=>{
+    if (label) {
+      html+=`<tr><td colspan="7" style="background:#f9fafb;padding:5px 14px;border-top:2px solid #e5e7eb;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;">${escHtml(label)}</td></tr>`;
+    }
+    students.forEach(sg=>renderSG(sg));
+  });
+
+  html+='</tbody></table>';
+  el.innerHTML=html;
+}
+
+
+function exportStudentsOverviewCSV() {
+  if (studentsOverviewData.length===0) { showToast('No data to export.','error'); return; }
+  const ptSessions=allPTSessionsGlobal.filter(s=>s.type==='PT');
+  const rows=[['Student Name','Student ID','Branch','Teacher','Campus','Conducted (hrs)','Conducted (sessions)','Contract (hrs)','Remaining (hrs)']];
+  studentsOverviewData.forEach(sg=>{
+    if (sg.contracts.length===0) {
+      rows.push([sg.name,sg.studentId,sg.branch,'','','','','','']);
+    } else {
+      sg.contracts.forEach(c=>{
+        const teacher=teachers.find(t=>t.id===c.teacherId);
+        const cSess=ptSessions.filter(s=>s.teacherId===c.teacherId&&s.studentName===c.studentName);
+        const conducted=cSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
+        const condHrs=conducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+        const contractHrs=(c.totalHours!==null&&c.totalHours!==undefined)?c.totalHours:'';
+        const rem=contractHrs!==''?contractHrs-condHrs:'';
+        rows.push([sg.name,sg.studentId,sg.branch,teacher?teacher.name:'',teacher?teacher.campus:'',condHrs.toFixed(2),conducted.length,contractHrs,rem!==''?rem.toFixed(2):'']);
+      });
+    }
+  });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url; a.download='students_pt_overview.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Student ID inline edit
+function startAddStudentId(contractId) {
+  const span=document.getElementById('sid-span-'+contractId); if (!span) return;
+  span.innerHTML=`<input type="text" id="sid-input-${contractId}" placeholder="e.g. STU-001" style="font-size:12px;padding:2px 7px;border:1px solid #93c5fd;border-radius:4px;font-family:inherit;width:110px;">
+    <button onclick="saveStudentContractId('${contractId}')" style="margin-left:3px;font-size:11px;background:#1a1a2e;color:white;border:none;border-radius:4px;padding:2px 8px;cursor:pointer;">Save</button>
+    <button onclick="cancelAddStudentId('${contractId}')" style="margin-left:2px;font-size:11px;background:#f0f0f0;color:#555;border:1px solid #d0d0d0;border-radius:4px;padding:2px 6px;cursor:pointer;">✕</button>`;
+  document.getElementById('sid-input-'+contractId)?.focus();
+}
+
+async function saveStudentContractId(contractId) {
+  const val=(document.getElementById('sid-input-'+contractId)?.value||'').trim();
+  if (!val) { showToast('Please enter a Student ID.','error'); return; }
+  try {
+    await db.collection('pt_contracts').doc(contractId).update({studentId:val});
+    showToast('Student ID saved!','ok');
+  } catch(e) { showToast('Error saving ID.','error'); }
+}
+
+function cancelAddStudentId(contractId) {
+  const span=document.getElementById('sid-span-'+contractId); if (!span) return;
+  span.innerHTML=`<button class="manager-only" onclick="startAddStudentId('${contractId}')" style="margin-left:6px;font-size:11px;color:#6b7280;background:none;border:1px dashed #d1d5db;border-radius:4px;padding:1px 7px;cursor:pointer;">+ Add ID</button>`;
+}
+
+function startInlineTimeEdit(id) {
+  const s = sessions.find(x => x.id === id) || allPTSessionsGlobal.find(x => x.id === id) || subCoverageSessions.find(x => x.id === id);
+  if (!s) return;
+  const row = document.getElementById('detail-time-row');
+  if (!row) return;
+  row.innerHTML = `<strong>Time</strong>
+    <input type="time" id="it-start" value="${s.startTime}" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;">
+    <span style="color:#999;margin:0 4px;">–</span>
+    <input type="time" id="it-end" value="${s.endTime}" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;">
+    <button onclick="saveInlineTime('${id}')" style="margin-left:6px;background:#1a1a2e;color:white;border:none;border-radius:4px;padding:3px 9px;font-size:12px;cursor:pointer;">Save</button>
+    <button onclick="cancelInlineTimeEdit('${id}')" style="margin-left:4px;background:#f0f0f0;color:#555;border:1px solid #d0d0d0;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;">Cancel</button>`;
+  document.getElementById('it-start').focus();
+}
+
+async function saveInlineTime(id) {
+  if (currentRole !== 'manager') return;
+  const start = document.getElementById('it-start').value;
+  const end   = document.getElementById('it-end').value;
+  if (!start || !end) return;
+  if (timeToMins(end) <= timeToMins(start)) { showToast('End time must be after start time.', 'error'); return; }
+  try {
+    const snap = await db.collection('sessions').doc(id).get();
+    const s = snap.data() || {};
+    await db.collection('sessions').doc(id).update({ startTime: start, endTime: end });
+    await logAudit('update','sessions',id,`Updated session time: ${s.studentName||'?'} on ${s.date||'?'} → ${start}–${end}`);
+    showToast('Time updated!', 'ok');
+    closeDetailModal();
+  } catch(e) { showToast('Error saving time.', 'error'); }
+}
+
+function cancelInlineTimeEdit(id) {
+  const s = sessions.find(x => x.id === id) || allPTSessionsGlobal.find(x => x.id === id) || subCoverageSessions.find(x => x.id === id);
+  if (!s) return;
+  const row = document.getElementById('detail-time-row');
+  if (!row) return;
+  row.innerHTML = `<strong>Time</strong><span id="detail-time-display">${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime, s.type))})</span><button onclick="startInlineTimeEdit('${id}')" style="margin-left:6px;background:none;border:none;cursor:pointer;color:#aaa;font-size:12px;padding:1px 4px;border-radius:3px;line-height:1;" title="Edit time">✏️</button>`;
+}
+
+async function exportHoursOverviewCSV() {
+  const {from,to}=getHomeHoursDateRange();
+  if (!from||!to) { showToast('Select a period first.','error'); return; }
+  const includeMT=(document.getElementById('home-hours-include-mt')||{checked:true}).checked;
+  let inRangeSessions;
+  try { inRangeSessions=await getRangeSessions(from,to); }
+  catch(e) { console.error('CSV range load error:',e); showToast('Error loading data.','error'); return; }
+  const campusOrder=['IRV','RH','LA'];
+  const grouped={};
+  teachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
+  const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
+  const filteredCampuses=homeHoursCampus==='all'?campuses:campuses.filter(c=>c===homeHoursCampus);
+  const rows=[['Campus','Group','Teacher','Regular (hrs)','Regular (sessions)','Paid Leave (hrs)','PT (hrs)','PT (sessions)','Meeting/Training (hrs)','Meeting/Training (sessions)','Sub Covered (hrs)','Sub Covered (sessions)','Total (hrs)']];
+  filteredCampuses.forEach(campus=>{
+    const allT=[...grouped[campus].filter(t=>!t.isSubstitute),...grouped[campus].filter(t=>t.isSubstitute)];
+    allT.forEach(t=>{
+      const tSess=inRangeSessions.filter(s=>s.teacherId===t.id);
+      const regSess=tSess.filter(s=>s.type==='Regular');
+      const ptSess=tSess.filter(s=>s.type==='PT');
+      const mtSess=tSess.filter(s=>s.type==='Meeting'||s.type==='Training');
+      const regHeld=regSess.filter(s=>!s.absenceType);
+      const regPaid=regSess.filter(s=>s.absenceType==='paid');
+      const ptCond=ptSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
+      const mtHeld=mtSess.filter(s=>!s.absenceType);
+      const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
+      const regHrs=regHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const paidHrs=regPaid.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const ptHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const mtHrs=mtHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const subHrs=subSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const total=regHrs+paidHrs+ptHrs+(includeMT?mtHrs:0)+subHrs;
+      rows.push([
+        campus, t.isSubstitute?'Substitute':'Regular', t.name,
+        regHrs.toFixed(2), regHeld.length,
+        paidHrs.toFixed(2),
+        ptHrs.toFixed(2), ptCond.length,
+        mtHrs.toFixed(2), mtHeld.length,
+        subHrs.toFixed(2), subSess.length,
+        total.toFixed(2)
+      ]);
+    });
+  });
+  const csv=rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+  const blob=new Blob(['﻿'+csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`hours_${from}_${to}.csv`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Global PT-sessions listener (all teachers) — PT only, used by PT tracker and
+// rename/delete cascades. Regular sessions are queried on demand by the Hours report.
 function initAllSessionsListener() {
-  if (unsubAllSessionsGlobal) return;
-  unsubAllSessionsGlobal=db.collection('sessions').onSnapshot(snap=>{
-    allSessionsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
+  if (unsubAllPTSessionsGlobal) return;
+  unsubAllPTSessionsGlobal=db.collection('sessions').where('type','==','PT').onSnapshot(snap=>{
+    allPTSessionsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
+    invalidateHoursCache(); // PT hours may have changed
     if (document.getElementById('home-tab-hours').classList.contains('active')) renderAllTeachersHours();
-  }, err=>console.error('allSessionsGlobal error:',err));
+  }, err=>console.error('allPTSessionsGlobal error:',err));
+}
+
+// Fetch all sessions (any type) within a date range — for the Hours report.
+// One indexed range query instead of holding every session ever in memory.
+// Cached by range so in-memory filter toggles don't re-query; invalidated on
+// tab switch (fresh after edits elsewhere) and on PT-session changes.
+let _hoursRangeCache = null; // { key, sessions }
+function invalidateHoursCache() { _hoursRangeCache = null; }
+async function getRangeSessions(from, to) {
+  const key = from + '|' + to;
+  if (_hoursRangeCache && _hoursRangeCache.key === key) return _hoursRangeCache.sessions;
+  const snap = await db.collection('sessions')
+    .where('date','>=',from).where('date','<=',to).get();
+  const arr = snap.docs.map(d=>({id:d.id,...d.data()}));
+  _hoursRangeCache = { key, sessions: arr };
+  return arr;
 }
 
 // Close on outside click
@@ -2556,7 +4023,12 @@ const _modalClosers = {
   'teacher-modal': closeTeacherModal,
   'pt-miss-modal': closePTMissModal,
   'edit-session-modal': closeEditModal,
-  'school-calendar-modal': closeCalendarModal
+  'school-calendar-modal': closeCalendarModal,
+  'register-student-modal': closeRegisterStudentModal,
+  'add-pt-contract-modal': closeAddPTContractModal,
+  'hours-filter-modal': ()=>document.getElementById('hours-filter-modal').classList.remove('open'),
+  'tl-filter-modal': ()=>document.getElementById('tl-filter-modal').classList.remove('open'),
+  'import-schedule-modal': closeImportModal
 };
 Object.entries(_modalClosers).forEach(([id,fn]) => {
   document.getElementById(id).addEventListener('click', function(e) { if (e.target===this) fn(); });
@@ -2592,6 +4064,164 @@ function doSignOut() {
 
 let currentRole = null;
 
+// ── Audit Log ──────────────────────────────────────────────────────────────
+async function logAudit(action, collection, docId, summary, snapshot) {
+  try {
+    const rec = {
+      action, collection, docId, summary,
+      changedBy: firebase.auth().currentUser?.email || '',
+      changedAt: firebase.firestore.FieldValue.serverTimestamp()
+    };
+    if (snapshot && snapshot.length) rec.snapshot = snapshot;
+    await db.collection('scheduler_audit').add(rec);
+  } catch(e) { console.error('Audit log error:', e); }
+}
+
+// Build one restorable snapshot entry. Strips the listener-added `id` field and
+// any undefined values (Firestore rejects undefined). Returns { collection, id, data }.
+function snapDoc(collection, id, data) {
+  const clean = {};
+  for (const k in data) {
+    if (k === 'id' || data[k] === undefined) continue;
+    clean[k] = data[k];
+  }
+  return { collection, id, data: clean };
+}
+
+let auditFilter = 'all';
+let auditData = [];
+
+function setAuditFilter(f) {
+  auditFilter = f;
+  ['all','create','update','delete'].forEach(k => {
+    const b = document.getElementById('audbtn-' + k);
+    if (b) b.classList.toggle('active', k === f);
+  });
+  renderAuditTable();
+}
+
+async function renderAuditLog() {
+  const el = document.getElementById('audit-log-content');
+  el.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const snap = await db.collection('scheduler_audit').orderBy('changedAt','desc').limit(500).get();
+    auditData = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    renderAuditTable();
+  } catch(e) {
+    el.innerHTML = '<div class="empty-state">Error loading history.</div>';
+  }
+}
+
+function renderAuditTable() {
+  const el = document.getElementById('audit-log-content');
+  const rows = auditFilter === 'all' ? auditData : auditData.filter(r => r.action === auditFilter);
+  if (!rows.length) { el.innerHTML = '<div class="empty-state">No records found.</div>'; return; }
+
+  const mgr = currentRole === 'manager';
+
+  const actionBadge = a => {
+    const cfg = { create: ['#16a34a','#dcfce7','Create'], update: ['#2563eb','#dbeafe','Update'], delete: ['#dc2626','#fee2e2','Delete'] };
+    const [color, bg, label] = cfg[a] || ['#6b7280','#f3f4f6', a];
+    return `<span style="background:${bg};color:${color};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${label}</span>`;
+  };
+
+  const collLabel = c => ({ sessions:'Session', pt_contracts:'PT Contract', quarters:'Quarter', school_events:'School Event', teachers:'Teacher', students:'Student' }[c] || c);
+
+  const fmtUser = email => email ? email.replace('@lascusa.com','') : '—';
+
+  const fmtTs = ts => {
+    if (!ts) return '—';
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    return d.toLocaleString('en-US', { timeZone:'America/Los_Angeles', month:'2-digit', day:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit', hour12:true });
+  };
+
+  el.innerHTML = `<div style="overflow-x:auto;">
+    <table class="hours-table" style="font-size:12px;width:100%;">
+      <thead><tr>
+        <th style="white-space:nowrap;">Date / Time</th>
+        <th>User</th>
+        <th>Action</th>
+        <th>Type</th>
+        <th>Description</th>
+        ${mgr ? '<th></th>' : ''}
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr>
+          <td style="white-space:nowrap;color:#888;">${fmtTs(r.changedAt)}</td>
+          <td style="white-space:nowrap;">${fmtUser(r.changedBy)}</td>
+          <td>${actionBadge(r.action)}</td>
+          <td style="color:#6b7280;">${collLabel(r.collection)}</td>
+          <td>${escHtml(r.summary || '')}</td>
+          ${mgr ? `<td style="white-space:nowrap;">
+            ${r.action==='delete'&&r.snapshot&&r.snapshot.length&&!r.restored
+              ? `<button class="btn btn-sm" style="font-size:11px;padding:2px 6px;background:#16a34a;color:#fff;border:none;" onclick="restoreAuditRecord('${r._id}')">Restore</button>`
+              : (r.restored ? `<span style="font-size:11px;color:#16a34a;font-weight:600;margin-right:4px;">✓ Restored</span>` : '')}
+            <button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editAuditRecord('${r._id}')">Edit</button>
+            <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteAuditRecord('${r._id}')">Del</button>
+          </td>` : ''}
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>`;
+}
+
+let _editAuditId = null;
+
+function editAuditRecord(id) {
+  const r = auditData.find(x => x._id === id);
+  if (!r) return;
+  _editAuditId = id;
+  document.getElementById('edit-audit-summary').value = r.summary || '';
+  document.getElementById('edit-audit-modal').classList.add('open');
+}
+
+async function saveAuditRecord() {
+  if (!_editAuditId) return;
+  const summary = document.getElementById('edit-audit-summary').value.trim();
+  try {
+    await db.collection('scheduler_audit').doc(_editAuditId).update({ summary });
+    const r = auditData.find(x => x._id === _editAuditId);
+    if (r) r.summary = summary;
+    closeEditAuditModal();
+    renderAuditTable();
+    showToast('Record updated.', 'ok');
+  } catch(e) { showToast('Error updating record.', 'error'); }
+}
+
+function closeEditAuditModal() {
+  document.getElementById('edit-audit-modal').classList.remove('open');
+  _editAuditId = null;
+}
+
+async function restoreAuditRecord(id) {
+  if (currentRole !== 'manager') return;
+  const r = auditData.find(x => x._id === id);
+  if (!r || !r.snapshot || !r.snapshot.length) return;
+  if (r.restored) { showToast('Already restored.', 'error'); return; }
+  const n = r.snapshot.length;
+  if (!confirm(`Restore ${n} item(s)?\n\n${r.summary || ''}\n\nThis re-creates the deleted record(s) with their original data.`)) return;
+  try {
+    const batch = db.batch();
+    r.snapshot.forEach(d => batch.set(db.collection(d.collection).doc(d.id), d.data));
+    await batch.commit();
+    await db.collection('scheduler_audit').doc(id).update({ restored: true });
+    r.restored = true;
+    await logAudit('create', r.collection, r.snapshot[0].id, `Restored: ${r.summary || ''}`);
+    renderAuditTable();
+    showToast(`Restored ${n} item(s).`, 'ok');
+  } catch(e) { showToast('Error restoring record.', 'error'); console.error(e); }
+}
+
+async function deleteAuditRecord(id) {
+  if (!confirm('Delete this history record?')) return;
+  try {
+    await db.collection('scheduler_audit').doc(id).delete();
+    auditData = auditData.filter(x => x._id !== id);
+    renderAuditTable();
+    showToast('Record deleted.', 'ok');
+  } catch(e) { showToast('Error deleting record.', 'error'); }
+}
+
 firebase.auth().onAuthStateChanged(async user => {
   if (user && user.email.endsWith('@lascusa.com')) {
     let role = 'staff';
@@ -2604,9 +4234,11 @@ firebase.auth().onAuthStateChanged(async user => {
       }
     } catch(e) {}
     currentRole = role;
-    if (role === 'staff') { window.location.replace('/inventory'); return; }
+    // staff can view scheduler but has limited write access (manager-only elements are hidden)
     initSchoolEventsListener();
     initAllSessionsListener();
+    initAllContractsListener();
+    initStudentsListener();
     initQuartersListener();
     document.body.classList.add('role-' + role);
     document.getElementById('user-email-display').textContent = user.email;
@@ -2616,6 +4248,11 @@ firebase.auth().onAuthStateChanged(async user => {
     document.getElementById('user-info').style.display = 'flex';
     document.getElementById('login-overlay').style.display = 'none';
     initTeacherListener();
+    // Restore last home tab (unless opening a specific teacher via hash)
+    if (!pendingTeacherId) {
+      const savedTab = localStorage.getItem('scheduler_home_tab');
+      if (savedTab && savedTab !== 'teachers') switchHomeTab(savedTab);
+    }
   } else {
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('login-overlay').style.display = 'flex';
