@@ -21,6 +21,12 @@ Both pages share a top navigation bar (Scheduler | Inventory tabs) and the same 
 - **`utils.js`** — `escHtml` / `showToast` utilities, included by both pages
 - **`firebase-init.js`** — Firebase app init and `db` export, included by both pages
 
+## Language
+
+- **All program text must be in English** — UI labels, button text, placeholder text, toast messages, comments, variable names, everything in the code
+- Conversation with the user is in Korean; the codebase and application are entirely in English
+- Never write Korean characters inside `.html`, `.css`, or `.js` files
+
 ## Key Conventions
 
 - No build tools, bundlers, or transpilers — plain `.html`, `.css`, `.js` files

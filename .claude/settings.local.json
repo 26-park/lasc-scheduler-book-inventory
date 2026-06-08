@@ -33,7 +33,12 @@
       "Bash(dir C:\\\\lasc-scheduler\\\\*.html C:\\\\lasc-scheduler\\\\*.js C:\\\\lasc-scheduler\\\\*.css /b)",
       "PowerShell(Get-ChildItem *)",
       "PowerShell(Get-ChildItem \"C:\\\\lasc-scheduler\" | Where-Object { $_.Extension -in '.html','.js','.css' } | Select-Object Name)",
-      "Bash(firebase firestore:delete *)"
+      "Bash(firebase firestore:delete *)",
+      "Bash(grep *)",
+      "Bash(firebase firestore:get users/esl@lascusa.com)",
+      "Bash(firebase --version)",
+      "Bash(firebase use *)",
+      "Bash(xxd)"
     ]
   }
 }
