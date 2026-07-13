@@ -38,7 +38,10 @@
       "Bash(firebase firestore:get users/esl@lascusa.com)",
       "Bash(firebase --version)",
       "Bash(firebase use *)",
-      "Bash(xxd)"
+      "Bash(xxd)",
+      "mcp__ide__getDiagnostics",
+      "Bash(firebase projects:list)",
+      "Bash(firebase login:list)"
     ]
   }
 }

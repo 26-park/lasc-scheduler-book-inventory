@@ -178,6 +178,8 @@
 </head>
 <body>
 
+<div id="app-loading" style="position:fixed;inset:0;z-index:10000;background:#f4f5f7;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;">Loading…</div>
+
 <!-- Login Overlay -->
 <div id="login-overlay" style="display:none;">
   <div class="login-card">
@@ -233,10 +235,11 @@
             <button class="btn btn-primary btn-sm manager-only" onclick="openAddTeacherModal()">+ Add Teacher</button>
           </div>
         </div>
-        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
           <button id="tl-filter-btn" class="btn btn-secondary btn-sm" onclick="openTLFilterModal()" style="position:relative;">
             &#9776; Filter<span id="tl-filter-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#1a1a2e;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;align-items:center;justify-content:center;"></span>
           </button>
+          <input type="search" id="tl-search" placeholder="Search teacher…" oninput="renderTeacherList()" style="font-size:13px;padding:5px 10px;border:1px solid #d0d0d0;border-radius:5px;font-family:inherit;width:180px;">
           <div id="tl-filter-summary" style="font-size:12px;color:#6b7280;"></div>
         </div>
         <div id="teacher-list"><div class="empty-state">Loading…</div></div>
@@ -270,6 +273,7 @@
           <button id="hours-filter-btn" class="btn btn-secondary btn-sm" onclick="openHoursFilterModal()" style="position:relative;">
             &#9776; Filter<span id="hours-filter-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#1a1a2e;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;display:none;align-items:center;justify-content:center;"></span>
           </button>
+          <input type="search" id="hours-search" placeholder="Search teacher…" oninput="renderAllTeachersHours()" style="font-size:13px;padding:5px 10px;border:1px solid #d0d0d0;border-radius:5px;font-family:inherit;width:180px;">
           <div id="hours-filter-summary" style="font-size:12px;color:#6b7280;"></div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-left:auto;">
             <label style="display:flex;align-items:center;gap:5px;font-size:12px;color:#555;cursor:pointer;user-select:none;">
@@ -306,18 +310,19 @@
   <div id="home-tab-students" class="detail-tab-content">
     <main>
       <div class="card">
-        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px;">
           <h2 style="margin:0;font-size:16px;">Students PT Overview</h2>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <div class="hours-period" style="margin-bottom:0;">
-              <button class="hours-period-btn active" id="scbtn-all" onclick="setStudentsCampus('all')">All</button>
-              <button class="hours-period-btn" id="scbtn-IRV" onclick="setStudentsCampus('IRV')">IRV</button>
-              <button class="hours-period-btn" id="scbtn-RH" onclick="setStudentsCampus('RH')">RH</button>
-              <button class="hours-period-btn" id="scbtn-LA" onclick="setStudentsCampus('LA')">LA</button>
-            </div>
             <button class="btn btn-primary btn-sm" onclick="openRegisterStudentModal()">+ Register Student</button>
             <button class="btn btn-secondary btn-sm" onclick="exportStudentsOverviewCSV()">&#8595; Export CSV</button>
           </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap;">
+          <button id="student-filter-btn" class="btn btn-secondary btn-sm" onclick="openStudentFilterModal()" style="position:relative;">
+            &#9776; Filter<span id="student-filter-badge" style="display:none;position:absolute;top:-5px;right:-5px;background:#1a1a2e;color:white;border-radius:50%;width:16px;height:16px;font-size:10px;font-weight:700;align-items:center;justify-content:center;"></span>
+          </button>
+          <input type="search" id="student-search" placeholder="Search student…" oninput="renderStudentsOverview()" style="font-size:13px;padding:5px 10px;border:1px solid #d0d0d0;border-radius:5px;font-family:inherit;width:180px;">
+          <div id="student-filter-summary" style="font-size:12px;color:#6b7280;"></div>
         </div>
         <div id="students-overview-content"><div class="empty-state">Loading…</div></div>
       </div>
@@ -450,6 +455,7 @@
       </div>
       <div style="margin-bottom:6px;">
         <label style="font-size:11px;font-weight:600;color:#666;text-transform:uppercase;letter-spacing:0.4px;">Time Slots</label>
+        <span style="font-size:11px;color:#999;margin-left:6px;">(start – end &nbsp;·&nbsp; credit hours)</span>
       </div>
       <div id="time-slots-container"></div>
       <button class="btn btn-secondary btn-sm" onclick="addTimeSlotRow()" style="margin-bottom:10px;">+ Add Time Slot</button>
@@ -462,11 +468,12 @@
           <select id="sess-student-select" onchange="validateForm()">
             <option value="">-- Select student --</option>
           </select>
-          <div id="pt-no-students-msg" style="display:none;font-size:12px;color:#c2410c;margin-top:4px;">No registered students. Register students in the Students tab first.</div>
+          <div id="pt-no-students-msg" style="display:none;font-size:12px;color:#c2410c;margin-top:4px;">No PT contracts for this teacher. Add a contract first.</div>
         </div>
         <div class="form-group"><label>Date</label><input type="date" id="sess-date" oninput="validateForm()"></div>
-        <div class="form-group"><label>Start Time</label><input type="time" id="sess-start" value="09:00" oninput="validateForm()"></div>
-        <div class="form-group"><label>End Time</label><input type="time" id="sess-end" value="10:00" oninput="validateForm()"></div>
+        <div class="form-group"><label>Start Time</label><input type="time" id="sess-start" value="09:00" oninput="syncHoursSelect('sess-hours','sess-start','sess-end');validateForm()"></div>
+        <div class="form-group"><label>End Time</label><input type="time" id="sess-end" value="10:00" oninput="syncHoursSelect('sess-hours','sess-start','sess-end');validateForm()"></div>
+        <div class="form-group"><label>Credit Hours</label><select id="sess-hours" onchange="this.dataset.touched='1'"></select></div>
       </div>
     </div>
 
@@ -561,10 +568,14 @@
         <strong>Required columns:</strong> teacher, days, start, end, class_name<br>
         <strong>Optional:</strong> classroom, class_code, level, notes<br>
         <strong>days format:</strong> Mon / Tue / Wed / Thu / Fri / Sat (comma-separated)<br>
-        <strong>time format:</strong> 09:00
-        <div style="margin-top:8px;">
+        <strong>time format:</strong> 09:00<br>
+        <strong>level values:</strong> Beginner / Intermediate / Advanced / Advanced-EAP / EAP / BE (or blank)<br>
+        <strong>teacher:</strong> if a name isn't found in the selected branch, a new teacher is created automatically on import
+        <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-secondary btn-sm" onclick="downloadCSVTemplate()" style="font-size:11px;">&#8595; Download Template</button>
+          <button class="btn btn-secondary btn-sm" onclick="copyImportPrompt()" style="font-size:11px;">&#128203; Copy AI Prompt</button>
         </div>
+        <div style="margin-top:6px;color:#888;font-size:10.5px;">Paste the AI prompt + your schedule PDF into an AI tool to get a ready-to-upload CSV.</div>
       </div>
       <div class="modal-actions">
         <button class="btn btn-secondary btn-sm" onclick="closeImportModal()">Cancel</button>
@@ -602,8 +613,8 @@
       <div>
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Status</div>
         <div class="hours-period" style="margin-bottom:0;">
-          <button class="hours-period-btn active" id="hsfbtn-all"      onclick="hfSet('status','all')">All</button>
-          <button class="hours-period-btn"        id="hsfbtn-active"   onclick="hfSet('status','active')">Active</button>
+          <button class="hours-period-btn"        id="hsfbtn-all"      onclick="hfSet('status','all')">All</button>
+          <button class="hours-period-btn active" id="hsfbtn-active"   onclick="hfSet('status','active')">Active</button>
           <button class="hours-period-btn"        id="hsfbtn-inactive" onclick="hfSet('status','inactive')">Inactive</button>
         </div>
       </div>
@@ -657,6 +668,36 @@
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="tlFilterReset()">Reset</button>
       <button class="btn btn-primary btn-sm" onclick="applyTLFilter()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Students Filter Modal -->
+<div class="modal-overlay" id="student-filter-modal">
+  <div class="modal" style="width:320px;">
+    <h3>Filter Students</h3>
+    <div style="display:flex;flex-direction:column;gap:14px;margin-bottom:16px;">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Branch</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="stfbtn-branch-all" onclick="stuDraftSet('branch','all')">All</button>
+          <button class="hours-period-btn" id="stfbtn-branch-IRV" onclick="stuDraftSet('branch','IRV')">IRV</button>
+          <button class="hours-period-btn" id="stfbtn-branch-RH"  onclick="stuDraftSet('branch','RH')">RH</button>
+          <button class="hours-period-btn" id="stfbtn-branch-LA"  onclick="stuDraftSet('branch','LA')">LA</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin-bottom:6px;">Status</div>
+        <div class="hours-period" style="margin-bottom:0;">
+          <button class="hours-period-btn active" id="stfbtn-status-all"      onclick="stuDraftSet('status','all')">All</button>
+          <button class="hours-period-btn" id="stfbtn-status-active"   onclick="stuDraftSet('status','active')">Active</button>
+          <button class="hours-period-btn" id="stfbtn-status-inactive" onclick="stuDraftSet('status','inactive')">Inactive</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary btn-sm" onclick="studentFilterReset()">Reset</button>
+      <button class="btn btn-primary btn-sm" onclick="applyStudentFilter()">Apply</button>
     </div>
   </div>
 </div>
@@ -745,9 +786,10 @@
       <label>Date</label>
       <input type="date" id="edit-date">
     </div>
-    <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:10px;">
-      <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time"></div>
-      <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time"></div>
+    <div class="form-grid" style="grid-template-columns:1fr 1fr 1fr;margin-bottom:10px;">
+      <div class="form-group"><label>Start Time</label><input type="time" id="edit-start-time" oninput="syncHoursSelect('edit-hours','edit-start-time','edit-end-time')"></div>
+      <div class="form-group"><label>End Time</label><input type="time" id="edit-end-time" oninput="syncHoursSelect('edit-hours','edit-start-time','edit-end-time')"></div>
+      <div class="form-group"><label>Credit Hours</label><select id="edit-hours" onchange="this.dataset.touched='1'"></select></div>
     </div>
 
     <div class="form-group" style="margin-bottom:10px;">
@@ -842,7 +884,7 @@
         <button id="pt-miss-out-cancel" class="miss-toggle active" onclick="setPTMissOutcome('cancel')">Cancel</button>
         <button id="pt-miss-out-deduct" class="miss-toggle" onclick="setPTMissOutcome('deduct')">Hours Deducted</button>
       </div>
-      <div style="font-size:11px;color:#888;margin-top:6px;" id="pt-miss-outcome-hint">Cancel: does not count toward contract hours</div>
+      <div style="font-size:11px;color:#888;margin-top:6px;" id="pt-miss-outcome-hint">Cancel: does not count toward total hours</div>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closePTMissModal()">Cancel</button>
@@ -865,6 +907,12 @@
           <option value="RH">RH</option>
           <option value="LA">LA</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;">
+          <input type="checkbox" id="reg-stu-inactive" style="width:15px;height:15px;">
+          <span style="color:#6b7280;">Inactive</span>
+        </label>
       </div>
     </div>
     <div class="modal-actions" style="justify-content:space-between;">
@@ -891,15 +939,12 @@
       <div class="form-group" id="add-ptc-teacher-fixed" style="display:none;"><label>Teacher</label>
         <div id="add-ptc-teacher-name" style="padding:7px 10px;background:#f3f4f6;border-radius:5px;font-size:13px;color:#374151;"></div>
       </div>
-      <div class="form-group"><label>Contract Hours <span style="font-weight:400;color:#aaa;">(optional)</span></label>
-        <input type="number" id="add-ptc-hours" min="0" step="0.5" placeholder="e.g. 20">
-      </div>
     </div>
     <div class="modal-actions" style="justify-content:space-between;">
       <button class="btn btn-sm" id="add-ptc-delete-btn" onclick="deletePTContractFromModal()" style="display:none;background:#fff5f5;color:#dc2626;border:1px solid #fca5a5;">Delete</button>
       <div style="display:flex;gap:8px;">
-        <button class="btn btn-secondary btn-sm" onclick="closeAddPTContractModal()">Cancel</button>
-        <button class="btn btn-primary btn-sm" onclick="saveAddPTContract()">Save</button>
+        <button class="btn btn-secondary btn-sm" onclick="closeAddPTContractModal()">Close</button>
+        <button class="btn btn-primary btn-sm" id="add-ptc-save-btn" onclick="saveAddPTContract()">Save</button>
       </div>
     </div>
   </div>
@@ -928,7 +973,7 @@ let calendarYear = new Date().getFullYear();
 let homeHoursPeriod = 'week';
 let homeHoursWeekOffset = 0, homeHoursMonthOffset = 0;
 let homeHoursCampus = 'all';
-let homeHoursStatusFilter = 'all';
+let homeHoursStatusFilter = 'active';
 let homeHoursTypeFilter = 'all';
 let homeHoursHoursFilter = 'all';
 // PT sessions only (all time, live). PT volume is small and is the only data that
@@ -938,7 +983,7 @@ let homeHoursHoursFilter = 'all';
 let allPTSessionsGlobal = [], unsubAllPTSessionsGlobal = null;
 let allPTContractsGlobal = [], unsubAllContractsGlobal = null;
 let allStudentsGlobal = [], unsubStudentsGlobal = null;
-let homeStudentsCampus = 'all';
+let studentFilter = { branch: 'all', status: 'all' };
 let studentsOverviewData = [];
 let quarters=[], currentQuarter=null, scheduleQuarterYear=new Date().getFullYear(), unsubQuarters=null;
 
@@ -962,15 +1007,67 @@ function formatTime(t) {
   return m===0 ? `${hr}${ap}` : `${hr}:${String(m).padStart(2,'0')}${ap}`;
 }
 function fmtDate(s) { if(!s) return ''; const [y,m,d]=s.split('-'); return `${m.padStart(2,'0')}/${d.padStart(2,'0')}/${y}`; }
-// Regular/Meeting/Training: 50-min = 1 credit hour
-// PT: 30-min increments (30 min = 0.5 hr, 60 min = 1.0 hr, 90 min = 1.5 hr, etc.)
+// Legacy auto-calc for sessions saved before the credit-hours field existed.
+// All types (Regular/Meeting/Training/PT) unified to 30-min increments:
+// 30 min = 0.5 hr, 60 min = 1.0 hr, 90 min = 1.5 hr (50-min class = 1 hr).
+// Keep this formula stable so old sessions don't suddenly show new decimals.
 function calcHours(s, e, type) {
   const dur = timeToMins(e) - timeToMins(s);
-  if (type === 'PT') return Math.round(dur / 30) / 2;
-  return Math.round((dur + 10) / 60);
+  return Math.round(dur / 30) / 2;
+}
+// Credit hours for a session: use the manually-chosen creditHours when present,
+// otherwise fall back to the legacy 30-min auto formula (old sessions).
+function sessionHours(s) {
+  if (s && typeof s.creditHours === 'number' && !isNaN(s.creditHours)) return s.creditHours;
+  return calcHours(s.startTime, s.endTime, s.type);
+}
+// Auto-fill default for the credit-hours selector (new sessions only), in
+// 15-min steps: 15 min = 0.25 hr … 60 min = 1.0 hr. 50-min class = 1 hr.
+function defaultCreditHours(start, end) {
+  if (!start || !end || timeToMins(end) <= timeToMins(start)) return 0.25;
+  const dur = timeToMins(end) - timeToMins(start);
+  const h = dur === 50 ? 1 : Math.round(dur / 15) / 4;
+  return Math.min(8, Math.max(0.25, h));
+}
+// Human-friendly duration label from minutes: "45 min", "1 hr", "1 hr 15 min".
+function minsToLabel(mins) {
+  const h = Math.floor(mins / 60), m = mins % 60;
+  if (h === 0) return `${m} min`;
+  if (m === 0) return `${h} hr${h !== 1 ? 's' : ''}`;
+  return `${h} hr ${m} min`;
+}
+// Build <option> tags for a credit-hours <select> in 15-min (0.25 hr) steps.
+// The value stays in hours (e.g. 0.75) while the label is shown in minutes.
+function hoursSelectOptions(selected) {
+  let html = '';
+  for (let q = 1; q <= 32; q++) {
+    const v = q / 4;
+    const sel = (selected != null && Math.abs(v - Number(selected)) < 0.001) ? ' selected' : '';
+    html += `<option value="${v}"${sel}>${minsToLabel(v * 60)}</option>`;
+  }
+  return html;
+}
+// Re-sync a time-slot row's credit-hours select to the auto default,
+// unless the user has manually overridden it.
+function onSlotTimeChange(el) {
+  const row = el.closest('.time-slot-row'); if (!row) return;
+  const hsel = row.querySelector('.slot-hours'); if (!hsel || hsel.dataset.touched) return;
+  const start = row.querySelector('.slot-start').value;
+  const end = row.querySelector('.slot-end').value;
+  if (start && end && timeToMins(end) > timeToMins(start)) hsel.value = String(defaultCreditHours(start, end));
+}
+// Re-sync a credit-hours select (by id) to the auto default for given time inputs,
+// unless the user has manually overridden it.
+function syncHoursSelect(selId, startId, endId) {
+  const hsel = document.getElementById(selId); if (!hsel || hsel.dataset.touched) return;
+  const start = document.getElementById(startId).value;
+  const end = document.getElementById(endId).value;
+  if (start && end && timeToMins(end) > timeToMins(start)) hsel.value = String(defaultCreditHours(start, end));
 }
 function fmtHours(h) {
-  const v = Math.round(h * 10) / 10;
+  // Round to 2 decimals (preserves 15-min credit steps like 0.75) and drop
+  // trailing zeros so whole hours stay clean (1, 1.5, 0.75, 2.25, …).
+  const v = Math.round(h * 100) / 100;
   return v + ' hr' + (v !== 1 ? 's' : '');
 }
 // Overlap detection
@@ -1080,22 +1177,26 @@ function goHome() {
 
 function _showTeacherDetailView(teacher) {
   currentTeacher = teacher;
-  const today = dateToStr(new Date());
-  const todayQ = quarters.find(q => q.startDate <= today && q.endDate >= today);
-  if (todayQ) {
-    currentQuarter = todayQ;
-    scheduleQuarterYear = todayQ.year;
+  // Restore the last-viewed week (and derive its quarter), else default to today.
+  const savedWeek = localStorage.getItem('scheduler_week');
+  currentWeekStart = savedWeek ? getWeekStart(strToDate(savedWeek)) : getWeekStart(new Date());
+  const wq = getQuarterForWeek(currentWeekStart);
+  if (wq) {
+    currentQuarter = wq;
+    scheduleQuarterYear = wq.year;
   } else {
-    if (!currentQuarter) scheduleQuarterYear = new Date().getFullYear();
+    const today = dateToStr(new Date());
+    const todayQ = quarters.find(q => q.startDate <= today && q.endDate >= today);
+    if (todayQ) { currentQuarter = todayQ; scheduleQuarterYear = todayQ.year; }
+    else if (!currentQuarter) scheduleQuarterYear = new Date(currentWeekStart).getFullYear();
   }
-  currentWeekStart = getWeekStart(new Date());
   document.getElementById('view-home').classList.remove('active');
   document.getElementById('view-detail').classList.add('active');
   document.getElementById('back-btn').style.display = '';
   document.getElementById('header-teacher-name').textContent = `${teacher.name} (${teacher.campus})`;
   document.getElementById('teacher-context-bar').style.display = 'block';
   document.querySelectorAll('#home-tabs .detail-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
-  switchDetailTab('schedule');
+  switchDetailTab(localStorage.getItem('scheduler_detail_tab') || 'schedule');
   startTeacherListeners(teacher.id);
 }
 function openTeacherDetail(teacher) {
@@ -1115,6 +1216,7 @@ window.addEventListener('popstate', function() {
 });
 
 function switchDetailTab(name) {
+  localStorage.setItem('scheduler_detail_tab', name);
   document.querySelectorAll('#view-detail .detail-tab').forEach(el => el.classList.remove('active'));
   document.querySelectorAll('#view-detail .detail-tab-content').forEach(el => el.classList.remove('active'));
   const idx={schedule:0,pt:1};
@@ -1145,11 +1247,13 @@ function initTeacherListener() {
         const teacher = teachers.find(t => t.id===pendingTeacherId);
         if (teacher) { pendingTeacherId=null; _showTeacherDetailView(teacher); }
       }
+      const ld = document.getElementById('app-loading'); if (ld) ld.style.display = 'none';
     },
     err => {
       console.error('Firestore teachers error:', err);
       document.getElementById('teacher-list').innerHTML =
         '<div class="empty-state" style="color:#dc2626;">Firebase error: ' + escHtml(err.message) + '</div>';
+      const ld = document.getElementById('app-loading'); if (ld) ld.style.display = 'none';
     }
   );
 }
@@ -1191,18 +1295,42 @@ const DAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 
 function updateWeekLabel() {
   const end = new Date(currentWeekStart); end.setDate(end.getDate()+6);
-  document.getElementById('week-label').textContent =
+  const labelEl = document.getElementById('week-label');
+  labelEl.textContent =
     `${currentWeekStart.getMonth()+1}/${currentWeekStart.getDate()} – ${end.getMonth()+1}/${end.getDate()}/${end.getFullYear()}`;
+  // Flag inter-quarter break weeks (the visible week is not within any quarter).
+  if (quarters.length && !getQuarterForWeek(currentWeekStart)) {
+    labelEl.insertAdjacentHTML('beforeend',
+      ' <span style="font-size:11px;font-weight:700;color:#92400e;background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:1px 8px;vertical-align:middle;">Break</span>');
+  }
 }
+// The quarter that the given week falls into (overlaps), or null during an
+// inter-quarter break. Prefers the quarter containing the week's start day.
+function getQuarterForWeek(weekStart) {
+  const ws = dateToStr(weekStart);
+  const endD = new Date(weekStart); endD.setDate(endD.getDate() + 6);
+  const we = dateToStr(endD);
+  const overlapping = quarters.filter(q => q.startDate <= we && q.endDate >= ws);
+  if (!overlapping.length) return null;
+  return overlapping.find(q => q.startDate <= ws && q.endDate >= ws) || overlapping[0];
+}
+
+// Auto-switch the selected quarter to match the visible week. During a break
+// (no quarter contains the week) the last-selected quarter stays highlighted.
+function syncQuarterToWeek() {
+  const q = getQuarterForWeek(currentWeekStart);
+  if (q && (!currentQuarter || currentQuarter.id !== q.id)) {
+    currentQuarter = q;
+    scheduleQuarterYear = q.year;
+    renderQuarterSelector();
+  }
+}
+
 function changeWeek(dir) {
   const next = new Date(currentWeekStart);
   next.setDate(next.getDate() + dir * 7);
-  if (currentQuarter) {
-    const qStartWeek = getWeekStart(strToDate(currentQuarter.startDate));
-    const qEndWeek = getWeekStart(strToDate(currentQuarter.endDate));
-    if (next < qStartWeek || next > qEndWeek) return;
-  }
   currentWeekStart = next;
+  syncQuarterToWeek();
   renderSchedule();
 }
 function goToToday() {
@@ -1220,21 +1348,14 @@ function updateWeekNavState() {
   const prev = document.getElementById('week-prev-btn');
   const next = document.getElementById('week-next-btn');
   if (!prev || !next) return;
-  if (currentQuarter) {
-    const qStartWeek = getWeekStart(strToDate(currentQuarter.startDate));
-    const qEndWeek = getWeekStart(strToDate(currentQuarter.endDate));
-    prev.disabled = currentWeekStart <= qStartWeek;
-    next.disabled = currentWeekStart >= qEndWeek;
-    prev.style.opacity = prev.disabled ? '0.35' : '';
-    next.style.opacity = next.disabled ? '0.35' : '';
-  } else {
-    prev.disabled = false; next.disabled = false;
-    prev.style.opacity = ''; next.style.opacity = '';
-  }
+  // Free navigation — never block; the quarter auto-switches to match the week.
+  prev.disabled = false; next.disabled = false;
+  prev.style.opacity = ''; next.style.opacity = '';
 }
 
 function renderSchedule() {
   if (!document.getElementById('dtab-schedule').classList.contains('active')) return;
+  localStorage.setItem('scheduler_week', dateToStr(currentWeekStart));
   updateWeekLabel();
   const grid=document.getElementById('schedule-grid'), today=dateToStr(new Date());
   let html='<div class="time-column"><div class="col-header"></div><div class="grid-body">';
@@ -1246,7 +1367,9 @@ function renderSchedule() {
   for (let i=0;i<7;i++) {
     const d=new Date(currentWeekStart); d.setDate(d.getDate()+i);
     const dateStr=dateToStr(d), isToday=dateStr===today;
-    const qFilter = s => !currentQuarter || (s.date>=currentQuarter.startDate && s.date<=currentQuarter.endDate);
+    // Show every session on the visible day (the grid is already week-scoped),
+    // so PT/sessions that fall in inter-quarter break weeks remain visible.
+    const qFilter = s => true;
     const ownSessions = sessions.filter(s=>s.date===dateStr && qFilter(s));
     // Sessions where this teacher is the substitute (from global sessions list)
     const subCovSessions = currentTeacher ? subCoverageSessions.filter(s=>
@@ -1279,7 +1402,7 @@ function renderSchedule() {
         ? (sess.studentName ? escHtml(sess.studentName) : sess.type)
         : escHtml(sess.studentName);
       const isPending = sess.type==='PT' && sess.conducted===false && !sess.missedReason;
-      const hrs = calcHours(sess.startTime, sess.endTime, sess.type);
+      const hrs = sessionHours(sess);
       const isPTNotHeld = sess.type==='PT' && sess.conducted===false && !!sess.missedReason;
       const absClass = (sess.absenceType || isPTNotHeld) ? ' not-held' : '';
       let metaLines = '';
@@ -1307,7 +1430,7 @@ function renderSchedule() {
       const height=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
       if (top<0||top>=TOTAL_SLOTS*SLOT_H) return;
       const origTeacher = teachers.find(t=>t.id===sess.teacherId);
-      const hrs = calcHours(sess.startTime, sess.endTime, sess.type);
+      const hrs = sessionHours(sess);
       const label = (sess.type==='Regular'||sess.type==='Meeting'||sess.type==='Training')
         ? (sess.studentName ? escHtml(sess.studentName) : sess.type)
         : escHtml(sess.studentName);
@@ -1345,6 +1468,11 @@ function openAddModal() {
   document.getElementById('regular-form').style.display='';
   document.getElementById('pt-form').style.display='none';
   if(document.getElementById('sess-student-select')) document.getElementById('sess-student-select').value='';
+  document.getElementById('sess-start').value='09:00';
+  document.getElementById('sess-end').value='10:00';
+  const sh=document.getElementById('sess-hours');
+  delete sh.dataset.touched;
+  sh.innerHTML=hoursSelectOptions(defaultCreditHours('09:00','10:00'));
   document.getElementById('sess-type-group').style.display='';
   document.getElementById('add-session-btn').classList.add('manager-only');
   if (currentRole!=='manager') document.getElementById('add-session-btn').style.display='none';
@@ -1387,9 +1515,10 @@ function addTimeSlotRow() {
   const div=document.createElement('div');
   div.className='time-slot-row';
   div.innerHTML=`
-    <div class="form-group"><input type="time" class="slot-start" value="09:00" oninput="validateForm()"></div>
+    <div class="form-group"><input type="time" class="slot-start" value="09:00" oninput="onSlotTimeChange(this);validateForm()"></div>
     <span style="color:#999;font-size:13px;flex-shrink:0;">–</span>
-    <div class="form-group"><input type="time" class="slot-end" value="10:00" oninput="validateForm()"></div>
+    <div class="form-group"><input type="time" class="slot-end" value="10:00" oninput="onSlotTimeChange(this);validateForm()"></div>
+    <div class="form-group" style="flex:0 0 auto;"><select class="slot-hours" title="Credit hours" onchange="this.dataset.touched='1'" style="padding:6px;border:1px solid #d0d0d0;border-radius:5px;font-family:inherit;font-size:13px;">${hoursSelectOptions(1)}</select></div>
     <button class="btn btn-secondary btn-sm" onclick="removeTimeSlotRow(this)" style="flex-shrink:0;">×</button>`;
   container.appendChild(div);
   validateForm();
@@ -1403,7 +1532,8 @@ function removeTimeSlotRow(btn) {
 function getTimeSlots() {
   return Array.from(document.querySelectorAll('.time-slot-row')).map(row=>({
     start: row.querySelector('.slot-start').value,
-    end:   row.querySelector('.slot-end').value
+    end:   row.querySelector('.slot-end').value,
+    creditHours: parseFloat(row.querySelector('.slot-hours').value)
   }));
 }
 
@@ -1532,24 +1662,40 @@ function getRuleWarnings({date,startTime,endTime,type,teacherId,studentName}, ex
 function populatePTStudentDropdown(selectId, branchFilter) {
   const sel = document.getElementById(selectId);
   if (!sel) return;
-  // Use allStudentsGlobal; fall back to ptContracts for legacy data
-  let students = allStudentsGlobal.length > 0
-    ? [...allStudentsGlobal].sort((a,b)=>a.name.localeCompare(b.name))
-    : ptContracts.map(c=>({name:c.studentName, branch:''})).sort((a,b)=>a.name.localeCompare(b.name));
-  // Filter by branch if specified
-  if (branchFilter) students = students.filter(s => s.branch === branchFilter);
+  // Only students who have a PT contract with the current teacher.
+  // ptContracts is already scoped to the selected teacher (teacherId query),
+  // so cross-branch students show up here as long as a contract exists.
+  const branchOf = {};
+  allStudentsGlobal.forEach(s => { branchOf[s.name] = s.branch || ''; });
+  const seen = new Set();
+  let students = ptContracts
+    .map(c => c.studentName)
+    .filter(n => n && !seen.has(n) && seen.add(n))
+    .map(n => ({ name: n, branch: branchOf[n] || '' }))
+    .sort((a,b)=>a.name.localeCompare(b.name));
   const noMsg = document.getElementById('pt-no-students-msg');
   if (students.length === 0) {
-    sel.innerHTML = '<option value="">— No students in this branch —</option>';
+    sel.innerHTML = '<option value="">— No contracted students —</option>';
     sel.disabled = true;
     if (noMsg) noMsg.style.display='';
-  } else {
-    sel.disabled = false;
-    if (noMsg) noMsg.style.display='none';
-    const current = sel.value;
-    sel.innerHTML = '<option value="">-- Select student --</option>' +
-      students.map(s=>`<option value="${escHtml(s.name)}" ${s.name===current?'selected':''}>${escHtml(s.name)}${s.branch?' ('+s.branch+')':''}</option>`).join('');
+    return;
   }
+  sel.disabled = false;
+  if (noMsg) noMsg.style.display='none';
+  const current = sel.value;
+  const opt = s => `<option value="${escHtml(s.name)}" ${s.name===current?'selected':''}>${escHtml(s.name)}${s.branch?' ('+s.branch+')':''}</option>`;
+  let html = '<option value="">-- Select student --</option>';
+  // Show the teacher's own branch first, then students from other branches
+  // (online/Zoom classes can be with students of any branch).
+  if (branchFilter) {
+    const own = students.filter(s => s.branch === branchFilter);
+    const others = students.filter(s => s.branch !== branchFilter);
+    if (own.length) html += `<optgroup label="${escHtml(branchFilter)} students">${own.map(opt).join('')}</optgroup>`;
+    if (others.length) html += `<optgroup label="Other branches">${others.map(opt).join('')}</optgroup>`;
+  } else {
+    html += students.map(opt).join('');
+  }
+  sel.innerHTML = html;
 }
 
 function openAddPTFromTracker() {
@@ -1651,6 +1797,7 @@ async function addSession() {
           studentName:titleName,
           type,
           date, startTime:ts.start, endTime:ts.end, notes,
+          creditHours:(typeof ts.creditHours==='number'&&!isNaN(ts.creditHours))?ts.creditHours:defaultCreditHours(ts.start,ts.end),
           createdAt:firebase.firestore.FieldValue.serverTimestamp()
         };
         if (type==='Regular') {
@@ -1685,9 +1832,11 @@ async function addSession() {
       if (!ok) return;
     }
     try {
+      const ptHours=parseFloat(document.getElementById('sess-hours').value);
       const ref = await db.collection('sessions').add({
         teacherId:currentTeacher.id, studentName:stud, type:'PT',
         date, startTime:start, endTime:end, notes, conducted:false,
+        creditHours:(!isNaN(ptHours))?ptHours:defaultCreditHours(start,end),
         createdAt:firebase.firestore.FieldValue.serverTimestamp()
       });
       await logAudit('create','sessions',ref.id,`Added PT session: ${stud} on ${date} ${start}–${end} (${currentTeacher.name})`);
@@ -1714,7 +1863,7 @@ function openDetailModal(id) {
     ${(s.type==='Meeting'||s.type==='Training')&&s.studentName&&s.studentName!==s.type?`<div class="modal-row"><strong>Title</strong>${escHtml(s.studentName)}</div>`:''}
     ${s.type==='PT'?`<div class="modal-row"><strong>Student</strong>${escHtml(s.studentName)}</div>`:''}
     <div class="modal-row"><strong>Date</strong>${fmtDate(s.date)} (${dayName})</div>
-    <div class="modal-row" id="detail-time-row"><strong>Time</strong><span id="detail-time-display">${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime, s.type))})</span>${currentRole==='manager'?`<button onclick="startInlineTimeEdit('${s.id}')" style="margin-left:6px;background:none;border:none;cursor:pointer;color:#aaa;font-size:12px;padding:1px 4px;border-radius:3px;line-height:1;" title="Edit time">✏️</button>`:''}</div>
+    <div class="modal-row" id="detail-time-row"><strong>Time</strong><span id="detail-time-display">${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(sessionHours(s))})</span>${currentRole==='manager'?`<button onclick="startInlineTimeEdit('${s.id}')" style="margin-left:6px;background:none;border:none;cursor:pointer;color:#aaa;font-size:12px;padding:1px 4px;border-radius:3px;line-height:1;" title="Edit time">✏️</button>`:''}</div>
     <div class="modal-row"><strong>Type</strong>${s.type}${isPending?' <span style="color:#6b7280;font-size:12px;">(scheduled)</span>':''}${absLabel}</div>
     ${s.notes?`<div class="modal-row"><strong>Notes</strong>${escHtml(s.notes)}</div>`:''}
   `;
@@ -1924,6 +2073,9 @@ function openEditModal(id, scope) {
   document.getElementById('edit-class-level').value=s.classLevel||'';
   document.getElementById('edit-start-time').value=s.startTime;
   document.getElementById('edit-end-time').value=s.endTime;
+  const eh=document.getElementById('edit-hours');
+  delete eh.dataset.touched;
+  eh.innerHTML=hoursSelectOptions(sessionHours(s));
   document.getElementById('edit-notes').value=s.notes||'';
 
   if (scope==='all') {
@@ -1956,12 +2108,14 @@ async function saveEditedSession() {
   const name=document.getElementById('edit-name').value.trim();
   const startTime=document.getElementById('edit-start-time').value;
   const endTime=document.getElementById('edit-end-time').value;
+  const editHours=parseFloat(document.getElementById('edit-hours').value);
+  const creditHours=(!isNaN(editHours))?editHours:defaultCreditHours(startTime,endTime);
   const notes=document.getElementById('edit-notes').value.trim();
   if (isRegular&&!name) return showToast('Please enter a class name.','error');
   if (isPT&&!name) return showToast('Please enter a student name.','error');
   if (timeToMins(endTime)<=timeToMins(startTime)) return showToast('End time must be after start time.','error');
   try {
-    const updateData={type,studentName:name||type,startTime,endTime,notes};
+    const updateData={type,studentName:name||type,startTime,endTime,notes,creditHours};
     if (isRegular) {
       updateData.classroom=document.getElementById('edit-classroom').value.trim();
       updateData.classCode=document.getElementById('edit-class-code').value.trim();
@@ -1974,7 +2128,7 @@ async function saveEditedSession() {
     if (editScope==='all') {
       const recurring=getRecurringSessions(s);
       const batch=db.batch();
-      const shared={type,studentName:name||type,startTime,endTime,notes};
+      const shared={type,studentName:name||type,startTime,endTime,notes,creditHours};
       recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),shared));
       await batch.commit();
       await logAudit('update','sessions','(batch)',`Updated ${recurring.length} ${type} session(s): ${name||type} (${currentTeacher.name})`);
@@ -2038,7 +2192,7 @@ function renderHoursReport() {
     html+=`<table class="hours-table"><thead><tr><th>Class Name</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
     classes.forEach(cn=>{
       const list=byClass[cn];
-      const hrs=list.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const hrs=list.reduce((n,s)=>n+sessionHours(s),0);
       totalRegHrs+=hrs;
       html+=`<tr><td>${escHtml(cn)}</td><td>${list.length}</td><td>${fmtHours(hrs)}</td></tr>`;
     });
@@ -2052,9 +2206,9 @@ function renderHoursReport() {
   const ptConducted=ptSessions.filter(s=>s.conducted!==false);
   const ptNotHeld=ptSessions.filter(s=>s.conducted===false&&!!s.missedReason);
   const ptScheduled=ptSessions.filter(s=>s.conducted===false&&!s.missedReason);
-  const ptCondHrs=ptConducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-  const ptNotHeldHrs=ptNotHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-  const ptSchedHrs=ptScheduled.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+  const ptCondHrs=ptConducted.reduce((n,s)=>n+sessionHours(s),0);
+  const ptNotHeldHrs=ptNotHeld.reduce((n,s)=>n+sessionHours(s),0);
+  const ptSchedHrs=ptScheduled.reduce((n,s)=>n+sessionHours(s),0);
 
   html+=`<div class="hours-section-title">PT Sessions</div>`;
   if (ptSessions.length>0) {
@@ -2070,7 +2224,7 @@ function renderHoursReport() {
 
   // Meeting / Training sessions
   const allMTSessions=[...meetingSessions,...trainingSessions];
-  const mtHrs=allMTSessions.filter(s=>!s.absenceType).reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+  const mtHrs=allMTSessions.filter(s=>!s.absenceType).reduce((n,s)=>n+sessionHours(s),0);
   if (allMTSessions.length>0) {
     const byTitle={};
     allMTSessions.forEach(s=>{ const k=s.studentName&&s.studentName!==s.type?s.studentName:s.type; if (!byTitle[k]) byTitle[k]=[]; byTitle[k].push(s); });
@@ -2078,7 +2232,7 @@ function renderHoursReport() {
     html+=`<table class="hours-table"><thead><tr><th>Title</th><th>Sessions</th><th>Hours</th></tr></thead><tbody>`;
     Object.keys(byTitle).sort().forEach(k=>{
       const list=byTitle[k];
-      const hrs=list.filter(s=>!s.absenceType).reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const hrs=list.filter(s=>!s.absenceType).reduce((n,s)=>n+sessionHours(s),0);
       html+=`<tr><td>${escHtml(k)}</td><td>${list.length}</td><td>${fmtHours(hrs)}</td></tr>`;
     });
     html+=`<tr class="hours-total-row"><td>Total</td><td>${allMTSessions.length}</td><td>${fmtHours(mtHrs)}</td></tr>`;
@@ -2133,7 +2287,7 @@ function setPTMissOutcome(val) {
   document.getElementById('pt-miss-out-cancel').classList.toggle('active',val==='cancel');
   document.getElementById('pt-miss-out-deduct').classList.toggle('active',val==='deduct');
   document.getElementById('pt-miss-outcome-hint').textContent=
-    val==='cancel'?'Cancel: does not count toward contract hours':'Hours Deducted: counts toward contract hours';
+    val==='cancel'?'Cancel: does not count toward total hours':'Hours Deducted: counts toward total hours';
 }
 function openPTMissModal(sessionId) {
   ptMissTargetId = sessionId;
@@ -2181,11 +2335,8 @@ function renderPTTracker() {
   students.forEach(student => {
     const list=studentSessions[student];
     const contract=ptContracts.find(c=>c.studentName===student);
-    const total=contract?contract.totalHours:null;
     const conductedList=list.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
-    const totalUsed=conductedList.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-    const pct=total?Math.min(totalUsed/total*100,100):0;
-    const fillCls=pct>=100?'over':pct>=80?'warn':'';
+    const totalUsed=conductedList.reduce((n,s)=>n+sessionHours(s),0);
 
     const idBadge = contract?.studentId
       ? `<span style="font-size:11px;color:#6b7280;background:#f3f4f6;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;">ID: ${escHtml(contract.studentId)}</span>`
@@ -2198,32 +2349,23 @@ function renderPTTracker() {
           </button>${idBadge}
         </h2>
         <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
-          <span>Contract: <strong>${total!==null?total+' hrs':'—'}</strong></span>
-          <span>Used: <strong>${totalUsed.toFixed(1)} hrs</strong></span>
-          <span>Remaining: <strong>${total!==null
-            ?(total-totalUsed<0?`<span class="hours-over">${Math.abs(total-totalUsed).toFixed(1)} hrs over</span>`:`${(total-totalUsed).toFixed(1)} hrs`)
-            :'—'}</strong></span>
+          <span>Total hours: <strong>${totalUsed.toFixed(1)} hrs</strong></span>
         </div>
-      </div>
-      ${total?`<div class="progress-bar" style="margin-bottom:12px;height:9px;"><div class="progress-fill ${fillCls}" style="width:${pct}%"></div></div>`:''}`;
+      </div>`;
 
     if (list.length===0) {
       html+=`<div style="color:#aaa;font-size:13px;padding:8px 0;">No sessions yet.</div>`;
     } else {
       html+=`<table class="pt-table"><thead><tr>
-        <th>#</th><th>Date</th><th>Time</th><th>Duration</th><th>Status</th><th>Used (cumul.)</th><th>Remaining</th><th class="manager-only"></th>
+        <th>#</th><th>Date</th><th>Time</th><th>Duration</th><th>Status</th><th>Total (cumul.)</th><th class="manager-only"></th>
       </tr></thead><tbody>`;
       let running=0;
       list.forEach((sess,idx) => {
-        const dur=calcHours(sess.startTime,sess.endTime,sess.type);
+        const dur=sessionHours(sess);
         const isConducted=sess.conducted!==false;
         const isMissed=sess.conducted===false&&!!sess.missedReason;
         const isDeducted=sess.missOutcome==='deduct';
         if (isConducted||isDeducted) running+=dur;
-        const rem=total!==null?total-running:null;
-        const remVal=rem===null?null:Math.round(rem*10)/10;
-        const remCell=remVal===null?'<span style="color:#bbb">—</span>'
-          :remVal<0?`<span class="hours-over">${Math.abs(remVal)} over</span>`:`${remVal} hrs`;
         const rowCls=isConducted||isDeducted?'':isMissed?'missed-row':'pending-row';
         let statusCell;
         if (isConducted) {
@@ -2250,7 +2392,6 @@ function renderPTTracker() {
           <td>${fmtHours(dur)}</td>
           <td>${statusCell}</td>
           <td>${isConducted||isDeducted?fmtHours(running):'<span style="color:#bbb">—</span>'}</td>
-          <td>${isConducted||isDeducted?remCell:'<span style="color:#bbb">—</span>'}</td>
           <td><button class="btn btn-danger btn-sm manager-only" style="font-size:11px;padding:2px 7px;" onclick="deletePTSessionRow('${sess.id}')">Del</button></td>
         </tr>`;
       });
@@ -2438,6 +2579,13 @@ function initQuartersListener() {
     quarters = snap.docs.map(d => ({id:d.id,...d.data()}));
     quarters.sort((a,b) => a.year !== b.year ? a.year - b.year : a.quarter - b.quarter);
     detectCurrentQuarter();
+    // If a teacher's schedule is already open (e.g. restored via URL hash before
+    // quarters finished loading), align the quarter to the restored week.
+    if (currentTeacher && document.getElementById('dtab-schedule')?.classList.contains('active')) {
+      const wq = getQuarterForWeek(currentWeekStart);
+      if (wq) { currentQuarter = wq; scheduleQuarterYear = wq.year; }
+      renderSchedule();
+    }
     renderQuarterSelector();
     renderCalendarQuarters();
   }, err => console.error('quarters error:',err));
@@ -2756,6 +2904,8 @@ function renderTeacherList() {
   if (tlFilter.branch!=='all') filtered=filtered.filter(t=>t.campus===tlFilter.branch);
   if (tlFilter.status==='active') filtered=filtered.filter(t=>!isTeacherCurrentlyInactive(t));
   else if (tlFilter.status==='inactive') filtered=filtered.filter(t=>isTeacherCurrentlyInactive(t));
+  const tlQuery=(document.getElementById('tl-search')?.value||'').trim().toLowerCase();
+  if (tlQuery) filtered=filtered.filter(t=>t.name.toLowerCase().includes(tlQuery));
   const grouped={};
   filtered.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
   const campuses=[...campusOrder.filter(c=>grouped[c]),...Object.keys(grouped).filter(c=>!campusOrder.includes(c))];
@@ -2907,6 +3057,7 @@ async function saveTeacher() {
 }
 // ── CSV Schedule Import ──────────────────────────────────────────
 let _importRows = [];
+let _importBranch = '';
 
 function openImportModal() {
   if (currentRole !== 'manager') return;
@@ -2936,9 +3087,114 @@ function downloadCSVTemplate() {
   a.download = 'schedule_template.csv';
   a.click();
 }
+const IMPORT_AI_PROMPT = `You are a data-entry assistant. I will attach a PDF of a class schedule.
+Convert it into a CSV file that exactly matches the template below.
 
-const DAY_MAP = { mon:'Mon',tue:'Mon',monday:'Mon', tue:'Tue',tuesday:'Tue', wed:'Wed',wednesday:'Wed', thu:'Thu',thursday:'Thu', fri:'Fri',friday:'Fri', sat:'Sat',saturday:'Sat', sun:'Sun',sunday:'Sun' };
+OUTPUT RULES — FOLLOW EXACTLY
+- Create and output an actual downloadable .csv file (use your file-creation /
+  code-interpreter / analysis tool if you have one). Do NOT just print the
+  CSV as chat text — I need a file I can download and upload elsewhere.
+- Do not describe what you're doing, don't summarize the schedule, don't ask
+  clarifying questions before producing the file. If a field is unclear, use
+  your best guess for that one field and leave only that field blank rather
+  than stopping to ask or dropping the row.
+- If you truly cannot produce a downloadable file in this environment, then
+  as a fallback respond with the CSV data as plain text ONLY — reply must
+  start with the header row and contain nothing else (no greeting, no
+  "Here is your CSV", no markdown code fences) — but always prefer producing
+  an actual file first.
+- Do not skip or omit any class you can find in the PDF.
+- If the schedule spans multiple pages, read every page and combine all
+  classes into ONE single CSV file (one header row total, not per page).
+- First row must be this exact header:
+  teacher,days,start,end,class_name,classroom,class_code,level,notes
+- Wrap every value in double quotes. One class = one row.
+- If a class meets at different times on different days, split it into
+  separate rows (one row per distinct time block).
+- Leave optional fields as empty quotes "" if the PDF doesn't show them.
+
+COLUMN RULES
+- teacher: the instructor's full name exactly as written in the PDF.
+- days: subset of Mon, Tue, Wed, Thu, Fri, Sat, listed inside ONE quoted cell
+  separated by commas, e.g. "Mon,Wed,Fri" (this is a single CSV column even
+  though it contains commas — keep it inside the quotes). Use these 3-letter
+  forms only. All days a class meets at the SAME time go in this one cell;
+  only create separate rows when the time differs.
+- start / end: 24-hour HH:MM, zero-padded. e.g. "09:00", "14:30".
+  Convert any AM/PM times to 24-hour (1:00 PM -> "13:00").
+- class_name: the class/course title.
+- classroom: room name/number if shown, else "".
+- class_code: course code if shown, else "".
+- level: MUST be EXACTLY one of these values, or "" if unknown.
+  Do NOT invent or reword. Allowed values (case- and spelling-sensitive):
+    "Beginner"
+    "Intermediate"
+    "Advanced"
+    "Advanced-EAP"
+    "EAP"
+    "BE"            <- use this for Business English
+  Map the PDF's level wording to the closest allowed value. If it clearly
+  doesn't match any, leave it "".
+- notes: anything extra (e.g. "Zoom", "Online"), else "".
+
+EXAMPLE OUTPUT
+teacher,days,start,end,class_name,classroom,class_code,level,notes
+"Jane Smith","Mon,Wed,Fri","09:00","10:00","Conversation A","Room 1","C101","Intermediate",""
+"Tom Lee","Mon,Tue,Wed,Thu,Fri","14:00","15:00","Business English","","","BE","Zoom"
+
+Now read the attached PDF and produce the CSV.`;
+function copyImportPrompt() {
+  const done = () => showToast('AI prompt copied to clipboard.', 'ok');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(IMPORT_AI_PROMPT).then(done).catch(() => fallbackCopyPrompt());
+  } else {
+    fallbackCopyPrompt();
+  }
+  function fallbackCopyPrompt() {
+    const ta = document.createElement('textarea');
+    ta.value = IMPORT_AI_PROMPT;
+    ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); done(); }
+    catch(e) { showToast('Copy failed — please copy manually.', 'error'); }
+    document.body.removeChild(ta);
+  }
+}
+
+const DAY_MAP = { mon:'Mon',monday:'Mon', tue:'Tue',tuesday:'Tue', wed:'Wed',wednesday:'Wed', thu:'Thu',thursday:'Thu', fri:'Fri',friday:'Fri', sat:'Sat',saturday:'Sat', sun:'Sun',sunday:'Sun' };
 const DAY_FULL = { Mon:'Monday',Tue:'Tuesday',Wed:'Wednesday',Thu:'Thursday',Fri:'Friday',Sat:'Saturday',Sun:'Sunday' };
+
+// Parses one CSV line, honoring double-quoted fields (so commas/quotes inside a
+// quoted value, e.g. a "Mon,Wed,Fri" days cell, don't split into extra columns).
+function parseCSVLine(line) {
+  const result = []; let cur = ''; let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') { if (line[i+1] === '"') { cur += '"'; i++; } else { inQuotes = false; } }
+      else cur += c;
+    } else {
+      if (c === '"') inQuotes = true;
+      else if (c === ',') { result.push(cur); cur = ''; }
+      else cur += c;
+    }
+  }
+  result.push(cur);
+  return result;
+}
+
+// All dates within the quarter that fall on one of `days`, skipping blocked dates
+function getImportDates(days, quarter) {
+  const dates = [];
+  const cur = strToDate(quarter.startDate);
+  const end = strToDate(quarter.endDate);
+  while (cur <= end) {
+    const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][cur.getDay()];
+    if (days.includes(dow) && !isDateBlocked(dateToStr(cur))) dates.push(dateToStr(cur));
+    cur.setDate(cur.getDate() + 1);
+  }
+  return dates;
+}
 
 function parseImportCSV() {
   const qId = document.getElementById('import-quarter').value;
@@ -2949,21 +3205,21 @@ function parseImportCSV() {
 
   const quarter = quarters.find(q => q.id === qId);
   const reader = new FileReader();
-  reader.onload = e => {
+  reader.onload = async e => {
     const text = e.target.result;
     const lines = text.split(/\r?\n/).filter(l => l.trim());
     if (lines.length < 2) return showToast('CSV is empty.', 'error');
 
     // Parse header
-    const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/[^a-z_]/g,''));
+    const headers = parseCSVLine(lines[0]).map(h => h.trim().toLowerCase().replace(/[^a-z_]/g,''));
     const idx = h => headers.indexOf(h);
     const required = ['teacher','days','start','end','class_name'];
     const missing = required.filter(h => idx(h) === -1);
     if (missing.length) return showToast(`Missing columns: ${missing.join(', ')}`, 'error');
 
-    const errors = [], rows = [];
+    const errors = [], rows = [], newTeacherNames = new Map();
     for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split(',').map(c => c.trim());
+      const cols = parseCSVLine(lines[i]).map(c => c.trim());
       const get = h => (cols[idx(h)] || '').trim();
       const teacherName = get('teacher');
       const teacher = teachers.find(t => t.name.toLowerCase() === teacherName.toLowerCase() && t.campus === branch);
@@ -2972,24 +3228,46 @@ function parseImportCSV() {
       const className = get('class_name');
       const rowErrors = [];
       if (!teacherName) continue;
-      if (!teacher) rowErrors.push(`Teacher "${teacherName}" not found in ${branch}`);
       if (!dayRaw.length) rowErrors.push(`Invalid days: "${get('days')}"`);
       if (!start.match(/^\d{2}:\d{2}$/)) rowErrors.push(`Invalid start time: "${start}"`);
       if (!end.match(/^\d{2}:\d{2}$/)) rowErrors.push(`Invalid end time: "${end}"`);
       if (!className) rowErrors.push('class_name is required');
       if (rowErrors.length) { errors.push(`Row ${i+1}: ${rowErrors.join('; ')}`); continue; }
-      rows.push({ teacher, days: dayRaw, start, end, className, classroom: get('classroom'), classCode: get('class_code'), level: get('class_level')||get('level'), notes: get('notes'), quarter });
+      if (!teacher && !newTeacherNames.has(teacherName.toLowerCase())) newTeacherNames.set(teacherName.toLowerCase(), teacherName);
+      rows.push({ teacher, teacherName, days: dayRaw, start, end, className, classroom: get('classroom'), classCode: get('class_code'), level: get('class_level')||get('level'), notes: get('notes'), quarter, dates: getImportDates(dayRaw, quarter), conflictDates: [] });
     }
 
+    // Check for conflicts against sessions the teacher already has in this quarter
+    // (only possible for teachers that already exist — new teachers can't have any yet)
+    const teacherIds = [...new Set(rows.filter(r => r.teacher).map(r => r.teacher.id))];
+    const existingByTeacher = {};
+    for (const tid of teacherIds) {
+      const snap = await db.collection('sessions').where('teacherId','==',tid)
+        .where('date','>=',quarter.startDate).where('date','<=',quarter.endDate).get();
+      existingByTeacher[tid] = snap.docs.map(d => d.data());
+    }
+    let totalConflicts = 0;
+    rows.forEach(r => {
+      if (!r.teacher) return;
+      const rStart = timeToMins(r.start), rEnd = timeToMins(r.end);
+      const existing = existingByTeacher[r.teacher.id] || [];
+      r.conflictDates = r.dates.filter(date =>
+        existing.some(s => s.date === date && timeToMins(s.startTime) < rEnd && timeToMins(s.endTime) > rStart));
+      totalConflicts += r.conflictDates.length;
+    });
+
     _importRows = rows;
+    _importBranch = branch;
     // Show preview
     document.getElementById('import-step1').style.display = 'none';
     document.getElementById('import-step2').style.display = '';
     document.getElementById('import-preview-summary').innerHTML =
-      `<strong>${rows.length}</strong> schedule(s) ready to import for <strong>${branch}</strong> · <strong>${quarter.year} Q${quarter.quarter}</strong> (${fmtDate(quarter.startDate)} – ${fmtDate(quarter.endDate)})`;
+      `<strong>${rows.length}</strong> schedule(s) ready to import for <strong>${branch}</strong> · <strong>${quarter.year} Q${quarter.quarter}</strong> (${fmtDate(quarter.startDate)} – ${fmtDate(quarter.endDate)})`
+      + (newTeacherNames.size ? `<br><span style="color:#b45309;">${newTeacherNames.size} new teacher(s) will be added to ${branch}: ${[...newTeacherNames.values()].map(escHtml).join(', ')}</span>` : '')
+      + (totalConflicts ? `<br><span style="color:#dc2626;font-weight:700;">⛔ ${totalConflicts} conflict(s) with existing sessions found — fix your CSV and re-upload before importing.</span>` : '');
     document.getElementById('import-preview-errors').innerHTML = errors.length
       ? errors.map(e => `<div class="error-item">${escHtml(e)}</div>`).join('') : '';
-    document.getElementById('import-confirm-btn').disabled = rows.length === 0;
+    document.getElementById('import-confirm-btn').disabled = rows.length === 0 || totalConflicts > 0;
 
     let table = `<table style="width:100%;border-collapse:collapse;">
       <thead><tr style="background:#f8f8f8;font-size:11px;font-weight:700;text-transform:uppercase;color:#888;">
@@ -2997,13 +3275,15 @@ function parseImportCSV() {
         <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Class</th>
         <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Days</th>
         <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Time</th>
+        <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #eee;">Conflicts</th>
       </tr></thead><tbody>`;
     rows.forEach(r => {
-      table += `<tr style="border-bottom:1px solid #f3f4f6;">
-        <td style="padding:5px 8px;">${escHtml(r.teacher.name)}</td>
+      table += `<tr style="border-bottom:1px solid #f3f4f6;${r.conflictDates.length ? 'background:#fef2f2;' : ''}">
+        <td style="padding:5px 8px;">${escHtml(r.teacherName)}${r.teacher ? '' : ' <span style="color:#b45309;font-weight:700;">(new)</span>'}</td>
         <td style="padding:5px 8px;">${escHtml(r.className)}</td>
         <td style="padding:5px 8px;">${r.days.join(', ')}</td>
         <td style="padding:5px 8px;">${r.start} – ${r.end}</td>
+        <td style="padding:5px 8px;color:#dc2626;font-weight:700;">${r.conflictDates.length ? `${r.conflictDates.length} day(s): ${r.conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${r.conflictDates.length>3?' …':''}` : ''}</td>
       </tr>`;
     });
     document.getElementById('import-preview-table').innerHTML = table + '</tbody></table>';
@@ -3013,24 +3293,29 @@ function parseImportCSV() {
 
 async function confirmImport() {
   if (!_importRows.length) return;
+  if (_importRows.some(r => r.conflictDates.length > 0)) return showToast('Resolve conflicts before importing.', 'error');
   document.getElementById('import-confirm-btn').disabled = true;
   document.getElementById('import-confirm-btn').textContent = 'Importing…';
   try {
+    // Create any teachers that don't exist yet (one per distinct name, case-insensitive)
+    const newNamesByKey = new Map();
+    _importRows.filter(r => !r.teacher).forEach(r => {
+      const key = r.teacherName.toLowerCase();
+      if (!newNamesByKey.has(key)) newNamesByKey.set(key, r.teacherName);
+    });
+    const newTeacherIds = {};
+    for (const [key, name] of newNamesByKey) {
+      const ref = await db.collection('teachers').add({ name, campus: _importBranch, isSubstitute: false, isInactive: false });
+      await logAudit('create','teachers',ref.id,`Added teacher: ${name} (${_importBranch}) — via schedule import`);
+      newTeacherIds[key] = ref.id;
+    }
+
     const BATCH_SIZE = 400;
     let batch = db.batch(); let count = 0; let total = 0;
     for (const r of _importRows) {
-      const q = r.quarter;
-      // Generate all matching dates in the quarter
-      const dates = [];
-      const cur = strToDate(q.startDate);
-      const end = strToDate(q.endDate);
-      while (cur <= end) {
-        const dow = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][cur.getDay()];
-        if (r.days.includes(dow) && !isDateBlocked(dateToStr(cur))) dates.push(dateToStr(cur));
-        cur.setDate(cur.getDate() + 1);
-      }
-      for (const date of dates) {
-        const docData = { teacherId: r.teacher.id, studentName: r.className, type: 'Regular', date, startTime: r.start, endTime: r.end, notes: r.notes || '', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
+      const teacherId = r.teacher ? r.teacher.id : newTeacherIds[r.teacherName.toLowerCase()];
+      for (const date of r.dates) {
+        const docData = { teacherId, studentName: r.className, type: 'Regular', date, startTime: r.start, endTime: r.end, notes: r.notes || '', createdAt: firebase.firestore.FieldValue.serverTimestamp() };
         if (r.classroom) docData.classroom = r.classroom;
         if (r.classCode)  docData.classCode  = r.classCode;
         if (r.level)      docData.classLevel  = r.level;
@@ -3071,27 +3356,23 @@ function getPTData() {
 function exportPTCSV() {
   const {studentSessions, students} = getPTData();
   if (students.length===0) return showToast('No PT data to export.','error');
-  const rows=[['Student','Contract (hrs)','Date','Start','End','Duration (hrs)','Status','Note','Cumul. Used (hrs)','Remaining (hrs)']];
+  const rows=[['Student','Date','Start','End','Duration (hrs)','Status','Note','Cumul. Total (hrs)']];
   students.forEach(function(student) {
     var list=studentSessions[student];
-    var contract=ptContracts.find(function(c){return c.studentName===student;});
-    var total=contract?contract.totalHours:'';
     var running=0;
     if (list.length===0) {
-      rows.push([student,total,'','','','','','','','']);
+      rows.push([student,'','','','','','','']);
     } else {
       list.forEach(function(sess) {
-        var dur=calcHours(sess.startTime,sess.endTime,sess.type);
+        var dur=sessionHours(sess);
         var isConducted=sess.conducted!==false;
         var isMissed=sess.conducted===false&&!!sess.missedReason;
         if (isConducted) running+=dur;
-        var rem=total!==''?Math.round((total-running)*10)/10:'';
         var status=isConducted?'Done':isMissed?'Not held':'Scheduled';
-        rows.push([student,total,sess.date,sess.startTime,sess.endTime,dur,
+        rows.push([student,sess.date,sess.startTime,sess.endTime,dur,
           status,
           isMissed?(sess.missedReason||''):'',
-          isConducted?running:'',
-          isConducted&&rem!==''?rem:'']);
+          isConducted?running:'']);
       });
     }
   });
@@ -3112,16 +3393,11 @@ function buildPrintHTML(teacherName, students, studentSessions) {
   var rows='';
   students.forEach(function(student) {
     var list=studentSessions[student];
-    var contract=ptContracts.find(function(c){return c.studentName===student;});
-    var total=contract?contract.totalHours:null;
     var conducted=list.filter(function(s){return s.conducted!==false||s.missOutcome==='deduct';});
-    var used=conducted.reduce(function(n,s){return n+(timeToMins(s.endTime)-timeToMins(s.startTime))/60;},0);
-    var rem=total!==null?total-used:null;
+    var used=conducted.reduce(function(n,s){return n+sessionHours(s);},0);
     rows+='<div style="margin-bottom:28px;page-break-inside:avoid;">';
     rows+='<h2 style="font-size:15px;margin-bottom:6px;">'+escHtml(student)+'</h2>';
-    rows+='<div style="font-size:12px;margin-bottom:8px;color:#555;">Contract: <strong>'+(total!==null?total+' hrs':'&mdash;')+'</strong> &nbsp;|&nbsp; ';
-    rows+='Conducted: <strong>'+used.toFixed(1)+' hrs</strong> &nbsp;|&nbsp; ';
-    rows+='Remaining: <strong>'+(rem!==null?(rem<0?Math.abs(rem).toFixed(1)+' hrs over':rem.toFixed(1)+' hrs'):'&mdash;')+'</strong></div>';
+    rows+='<div style="font-size:12px;margin-bottom:8px;color:#555;">Total hours: <strong>'+used.toFixed(1)+' hrs</strong></div>';
     if (list.length===0) {
       rows+='<p style="color:#aaa;font-size:12px;">No sessions.</p>';
     } else {
@@ -3129,15 +3405,14 @@ function buildPrintHTML(teacherName, students, studentSessions) {
       rows+='<thead><tr>';
       rows+='<th style="'+th+'">#</th><th style="'+th+'">Date</th><th style="'+th+'">Time</th>';
       rows+='<th style="'+th+'">Duration</th><th style="'+th+'">Status</th>';
-      rows+='<th style="'+th+'">Used (cumul.)</th><th style="'+th+'">Remaining</th>';
+      rows+='<th style="'+th+'">Total (cumul.)</th>';
       rows+='</tr></thead><tbody>';
       var running=0;
       list.forEach(function(sess,idx) {
-        var dur=calcHours(sess.startTime,sess.endTime,sess.type);
+        var dur=sessionHours(sess);
         var ok=sess.conducted!==false;
         var missed=sess.conducted===false&&!!sess.missedReason;
         if (ok) running+=dur;
-        var r=total!==null?Math.round((total-running)*10)/10:null;
         var rs=ok?'':'color:#aaa;';
         var statusText=ok?'&#10003; Done':missed?('&#10007; Not held: '+escHtml(sess.missedReason)):'Scheduled';
         rows+='<tr style="'+rs+'">';
@@ -3147,7 +3422,6 @@ function buildPrintHTML(teacherName, students, studentSessions) {
         rows+='<td style="'+td+'">'+fmtHours(dur)+'</td>';
         rows+='<td style="'+td+'">'+statusText+'</td>';
         rows+='<td style="'+td+'">'+(ok?fmtHours(running):'&mdash;')+'</td>';
-        rows+='<td style="'+td+'">'+(ok&&r!==null?(r<0?Math.abs(r)+' over':r+' hrs'):'&mdash;')+'</td>';
         rows+='</tr>';
       });
       rows+='</tbody></table>';
@@ -3268,7 +3542,7 @@ function _hfSync() {
 function hfSetCampus(v) { _hfDraft.campus=v; _hfSync(); }
 function hfSet(kind, v) { _hfDraft[kind]=v; _hfSync(); }
 function hfReset() {
-  _hfDraft={campus:'all',status:'all',type:'all',hours:'all'};
+  _hfDraft={campus:'all',status:'active',type:'all',hours:'all'};
   _hfSync();
 }
 function applyHoursFilter() {
@@ -3281,7 +3555,7 @@ function applyHoursFilter() {
   renderAllTeachersHours();
 }
 function _updateHoursFilterBadge() {
-  const active=[ homeHoursCampus!=='all', homeHoursStatusFilter!=='all', homeHoursTypeFilter!=='all', homeHoursHoursFilter!=='all' ].filter(Boolean);
+  const active=[ homeHoursCampus!=='all', homeHoursStatusFilter!=='active', homeHoursTypeFilter!=='all', homeHoursHoursFilter!=='all' ].filter(Boolean);
   const badge=document.getElementById('hours-filter-badge');
   const btn=document.getElementById('hours-filter-btn');
   const summary=document.getElementById('hours-filter-summary');
@@ -3294,7 +3568,7 @@ function _updateHoursFilterBadge() {
   if (btn) btn.style.borderColor=active.length?'#1a1a2e':'';
   const parts=[];
   if (homeHoursCampus!=='all') parts.push(homeHoursCampus);
-  if (homeHoursStatusFilter!=='all') parts.push(homeHoursStatusFilter);
+  if (homeHoursStatusFilter!=='active') parts.push(homeHoursStatusFilter);
   if (homeHoursTypeFilter!=='all') parts.push(homeHoursTypeFilter);
   if (homeHoursHoursFilter==='has') parts.push('has hours');
   if (homeHoursHoursFilter==='none') parts.push('no hours');
@@ -3349,6 +3623,8 @@ async function renderAllTeachersHours() {
   if (homeHoursStatusFilter==='inactive') filteredTeachers=filteredTeachers.filter(t=>isTeacherCurrentlyInactive(t));
   if (homeHoursTypeFilter==='regular')    filteredTeachers=filteredTeachers.filter(t=>!t.isSubstitute);
   if (homeHoursTypeFilter==='substitute') filteredTeachers=filteredTeachers.filter(t=>t.isSubstitute);
+  const hoursQuery=(document.getElementById('hours-search')?.value||'').trim().toLowerCase();
+  if (hoursQuery) filteredTeachers=filteredTeachers.filter(t=>t.name.toLowerCase().includes(hoursQuery));
 
   const grouped={};
   filteredTeachers.forEach(t=>{ if (!grouped[t.campus]) grouped[t.campus]=[]; grouped[t.campus].push(t); });
@@ -3364,13 +3640,13 @@ async function renderAllTeachersHours() {
     const regHeld=regSess.filter(s=>!s.absenceType);
     const regPaid=regSess.filter(s=>s.absenceType==='paid');
     const ptCond=ptSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
-    const regHrs=regHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-    const paidHrs=regPaid.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-    const ptCondHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const regHrs=regHeld.reduce((n,s)=>n+sessionHours(s),0);
+    const paidHrs=regPaid.reduce((n,s)=>n+sessionHours(s),0);
+    const ptCondHrs=ptCond.reduce((n,s)=>n+sessionHours(s),0);
     const mtHeld=mtSess.filter(s=>!s.absenceType);
-    const mtHrs=mtHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const mtHrs=mtHeld.reduce((n,s)=>n+sessionHours(s),0);
     const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
-    const subHrs=subSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+    const subHrs=subSess.reduce((n,s)=>n+sessionHours(s),0);
     const total=regHrs+paidHrs+ptCondHrs+(includeMT?mtHrs:0)+subHrs;
     return {regHrs,regHeld,paidHrs,regPaid,ptCondHrs,ptCond,mtHrs,mtHeld,subHrs,subSess,total};
   }
@@ -3430,13 +3706,38 @@ async function renderAllTeachersHours() {
 // ==========================================
 // STUDENTS OVERVIEW
 // ==========================================
-function setStudentsCampus(campus) {
-  homeStudentsCampus=campus;
-  ['all','IRV','RH','LA'].forEach(c=>{
-    const b=document.getElementById('scbtn-'+c);
-    if (b) b.classList.toggle('active',c===campus);
-  });
+function isStudentInactive(sg) { return !!(sg && sg.isInactive); }
+
+let _stuDraft = {};
+function openStudentFilterModal() {
+  _stuDraft = { branch: studentFilter.branch, status: studentFilter.status };
+  _stuDraftSync();
+  document.getElementById('student-filter-modal').classList.add('open');
+}
+function _stuDraftSync() {
+  ['all','IRV','RH','LA'].forEach(v=>{ const b=document.getElementById('stfbtn-branch-'+v); if(b) b.classList.toggle('active', v===_stuDraft.branch); });
+  ['all','active','inactive'].forEach(v=>{ const b=document.getElementById('stfbtn-status-'+v); if(b) b.classList.toggle('active', v===_stuDraft.status); });
+}
+function stuDraftSet(kind, val) { _stuDraft[kind]=val; _stuDraftSync(); }
+function studentFilterReset() { _stuDraft={branch:'all',status:'all'}; _stuDraftSync(); }
+function applyStudentFilter() {
+  studentFilter.branch=_stuDraft.branch;
+  studentFilter.status=_stuDraft.status;
+  document.getElementById('student-filter-modal').classList.remove('open');
+  _updateStudentFilterBadge();
   renderStudentsOverview();
+}
+function _updateStudentFilterBadge() {
+  const active=[studentFilter.branch!=='all', studentFilter.status!=='all'].filter(Boolean);
+  const badge=document.getElementById('student-filter-badge');
+  const btn=document.getElementById('student-filter-btn');
+  const summary=document.getElementById('student-filter-summary');
+  if (badge) { badge.style.display=active.length?'inline-flex':'none'; badge.textContent=active.length||''; }
+  if (btn) { btn.style.background=active.length?'#1a1a2e':''; btn.style.color=active.length?'white':''; btn.style.borderColor=active.length?'#1a1a2e':''; }
+  const parts=[];
+  if (studentFilter.branch!=='all') parts.push(studentFilter.branch);
+  if (studentFilter.status!=='all') parts.push(studentFilter.status);
+  if (summary) summary.textContent=parts.length?parts.join(' · '):'';
 }
 
 function initAllContractsListener() {
@@ -3463,6 +3764,7 @@ function openRegisterStudentModal() {
   document.getElementById('reg-stu-name').value='';
   document.getElementById('reg-stu-id').value='';
   document.getElementById('reg-stu-branch').value='';
+  document.getElementById('reg-stu-inactive').checked=false;
   document.querySelector('#register-student-modal h3').textContent='Register Student';
   document.getElementById('reg-stu-save-btn').textContent='Register';
   document.getElementById('reg-stu-delete-btn').style.display='none';
@@ -3475,6 +3777,7 @@ function openEditStudentModal(gIdx) {
   document.getElementById('reg-stu-name').value=sg.name;
   document.getElementById('reg-stu-id').value=sg.studentId||'';
   document.getElementById('reg-stu-branch').value=sg.branch||'';
+  document.getElementById('reg-stu-inactive').checked=!!sg.isInactive;
   document.querySelector('#register-student-modal h3').textContent='Edit Student';
   document.getElementById('reg-stu-save-btn').textContent='Save';
   document.getElementById('reg-stu-delete-btn').style.display=currentRole==='manager'?'':'none';
@@ -3496,6 +3799,7 @@ async function saveStudentRegistration() {
   const name=document.getElementById('reg-stu-name').value.trim();
   const studentId=document.getElementById('reg-stu-id').value.trim();
   const branch=document.getElementById('reg-stu-branch').value;
+  const inactive=document.getElementById('reg-stu-inactive').checked;
   if (!name) return showToast('Please enter student name.','error');
 
   if (_regStuMode==='add') {
@@ -3505,6 +3809,7 @@ async function saveStudentRegistration() {
       const data={name,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
       if (studentId) data.studentId=studentId;
       if (branch) data.branch=branch;
+      if (inactive) data.isInactive=true;
       const ref = await db.collection('students').add(data);
       await logAudit('create','students',ref.id,`Registered student: ${name}${branch?' ('+branch+')':''}`);
       showToast('Student registered!','ok');
@@ -3519,12 +3824,14 @@ async function saveStudentRegistration() {
         // Registered student — update existing doc
         const stuUpd={name,branch:branch||firebase.firestore.FieldValue.delete()};
         if (studentId) stuUpd.studentId=studentId; else stuUpd.studentId=firebase.firestore.FieldValue.delete();
+        stuUpd.isInactive=inactive?true:firebase.firestore.FieldValue.delete();
         batch.update(db.collection('students').doc(_editStuDocId),stuUpd);
       } else {
         // Legacy student — create new students doc
         const data={name,createdAt:firebase.firestore.FieldValue.serverTimestamp()};
         if (studentId) data.studentId=studentId;
         if (branch) data.branch=branch;
+        if (inactive) data.isInactive=true;
         const ref=db.collection('students').doc();
         batch.set(ref,data);
       }
@@ -3589,10 +3896,12 @@ let addPTContractIdx=-1, addPTContractMode='add', editPTContractId=null;
 
 function _ptcSetMode(mode) {
   const isAdd=mode==='add';
-  document.getElementById('add-ptc-title').textContent=isAdd?'Add PT Contract':'Edit PT Contract';
+  document.getElementById('add-ptc-title').textContent=isAdd?'Add PT Contract':'PT Contract';
   document.getElementById('add-ptc-teacher-row').style.display=isAdd?'':'none';
   document.getElementById('add-ptc-teacher-fixed').style.display=isAdd?'none':'';
   document.getElementById('add-ptc-delete-btn').style.display=(isAdd||currentRole!=='manager')?'none':'';
+  // No editable fields remain once contract hours are removed; edit mode only allows delete.
+  document.getElementById('add-ptc-save-btn').style.display=isAdd?'':'none';
 }
 
 function openAddPTContractModal(gIdx) {
@@ -3610,7 +3919,6 @@ function openAddPTContractModal(gIdx) {
   if (sameBranch.length) optHtml+=`<optgroup label="${sg.branch||'Teachers'}">${sameBranch.map(toOpt).join('')}</optgroup>`;
   if (otherBranch.length) optHtml+=`<optgroup label="Other Branches">${otherBranch.map(toOpt).join('')}</optgroup>`;
   sel.innerHTML=optHtml;
-  document.getElementById('add-ptc-hours').value='';
   document.getElementById('add-pt-contract-modal').classList.add('open');
   setTimeout(()=>document.getElementById('add-ptc-teacher').focus(),50);
 }
@@ -3625,10 +3933,7 @@ function openEditPTContract(contractId) {
     `<span style="font-weight:700;">${escHtml(sg.name)}</span>${sg.branch?` <span style="font-size:12px;color:#6b7280;background:#f3f4f6;border-radius:4px;padding:1px 7px;">${escHtml(sg.branch)}</span>`:''}`;
   document.getElementById('add-ptc-teacher-name').textContent=
     teacher?(teacher.name+(teacher.campus?' ('+teacher.campus+')':'')):'(unknown)';
-  document.getElementById('add-ptc-hours').value=
-    (c.totalHours!==null&&c.totalHours!==undefined)?c.totalHours:'';
   document.getElementById('add-pt-contract-modal').classList.add('open');
-  setTimeout(()=>document.getElementById('add-ptc-hours').focus(),50);
 }
 
 function closeAddPTContractModal() {
@@ -3663,42 +3968,24 @@ async function deletePTContractFromModal() {
 }
 
 async function saveAddPTContract() {
-  const hoursRaw=document.getElementById('add-ptc-hours').value;
-  const hours=hoursRaw===''?null:parseFloat(hoursRaw);
-  if (hours!==null&&(isNaN(hours)||hours<0)) return showToast('Invalid hours.','error');
-
-  if (addPTContractMode==='edit') {
-    if (!editPTContractId) return;
-    try {
-      const snap = await db.collection('pt_contracts').doc(editPTContractId).get();
-      const c = snap.data() || {};
-      await db.collection('pt_contracts').doc(editPTContractId).update({totalHours:hours});
-      await logAudit('update','pt_contracts',editPTContractId,`Updated PT contract: ${c.studentName||'?'} — ${hours??'unlimited'}h`);
-      showToast('Contract updated!','ok');
-      closeAddPTContractModal();
-    } catch(e) { showToast('Error updating contract.','error'); console.error(e); }
-    return;
-  }
+  // Edit mode has no editable fields (contract hours removed); nothing to save.
+  if (addPTContractMode==='edit') { closeAddPTContractModal(); return; }
 
   const sg=studentsOverviewData[addPTContractIdx]; if (!sg) return;
   const teacherId=document.getElementById('add-ptc-teacher').value;
   if (!teacherId) return showToast('Please select a teacher.','error');
   const existing=allPTContractsGlobal.find(c=>c.teacherId===teacherId&&c.studentName===sg.name);
   const tName = teachers.find(t=>t.id===teacherId)?.name||teacherId;
+  if (existing) {
+    closeAddPTContractModal();
+    return showToast('This student already has a PT contract with this teacher.','ok');
+  }
   try {
-    if (existing) {
-      const upd={totalHours:hours};
-      if (sg.studentId) upd.studentId=sg.studentId;
-      await db.collection('pt_contracts').doc(existing.id).update(upd);
-      await logAudit('update','pt_contracts',existing.id,`Updated PT contract: ${sg.name} — ${hours??'unlimited'}h (${tName})`);
-      showToast('PT contract updated!','ok');
-    } else {
-      const data={teacherId,studentName:sg.name,totalHours:hours};
-      if (sg.studentId) data.studentId=sg.studentId;
-      const ref = await db.collection('pt_contracts').add(data);
-      await logAudit('create','pt_contracts',ref.id,`Added PT contract: ${sg.name} — ${hours??'unlimited'}h (${tName})`);
-      showToast('PT contract added!','ok');
-    }
+    const data={teacherId,studentName:sg.name};
+    if (sg.studentId) data.studentId=sg.studentId;
+    const ref = await db.collection('pt_contracts').add(data);
+    await logAudit('create','pt_contracts',ref.id,`Added PT contract: ${sg.name} (${tName})`);
+    showToast('PT contract added!','ok');
     closeAddPTContractModal();
   } catch(e) { showToast('Error saving contract.','error'); console.error(e); }
 }
@@ -3709,7 +3996,7 @@ function renderStudentsOverview() {
   // Build master list: registered students + legacy (from contracts only)
   const studentMap={};
   allStudentsGlobal.forEach(s=>{
-    studentMap[s.id]={name:s.name,studentId:s.studentId||'',branch:s.branch||'',contracts:[],isRegistered:true,docId:s.id};
+    studentMap[s.id]={name:s.name,studentId:s.studentId||'',branch:s.branch||'',contracts:[],isRegistered:true,docId:s.id,isInactive:!!s.isInactive};
   });
   allPTContractsGlobal.forEach(c=>{
     const reg=allStudentsGlobal.find(s=>
@@ -3726,20 +4013,32 @@ function renderStudentsOverview() {
     }
   });
 
-  let studentList=Object.values(studentMap).sort((a,b)=>a.name.localeCompare(b.name));
+  let studentList=Object.values(studentMap).sort((a,b)=>
+    (a.isInactive?1:0)-(b.isInactive?1:0)||a.name.localeCompare(b.name));
 
-  // Apply campus filter
-  if (homeStudentsCampus!=='all') {
-    studentList=studentList.filter(sg=>{
-      if (sg.branch) return sg.branch===homeStudentsCampus;
-      return sg.contracts.some(c=>{ const t=teachers.find(x=>x.id===c.teacherId); return t&&t.campus===homeStudentsCampus; });
-    });
+  const studentBranchOf=sg=>{
+    if (sg.branch) return sg.branch;
+    const c=sg.contracts.find(c=>{ const t=teachers.find(x=>x.id===c.teacherId); return t&&t.campus; });
+    if (c) { const t=teachers.find(x=>x.id===c.teacherId); return t?t.campus:''; }
+    return '';
+  };
+
+  // Apply branch filter
+  if (studentFilter.branch!=='all') {
+    studentList=studentList.filter(sg=>studentBranchOf(sg)===studentFilter.branch);
   }
+  // Apply status filter
+  if (studentFilter.status==='active')   studentList=studentList.filter(sg=>!isStudentInactive(sg));
+  else if (studentFilter.status==='inactive') studentList=studentList.filter(sg=>isStudentInactive(sg));
+  // Apply search
+  const stuQuery=(document.getElementById('student-search')?.value||'').trim().toLowerCase();
+  if (stuQuery) studentList=studentList.filter(sg=>
+    sg.name.toLowerCase().includes(stuQuery)||(sg.studentId||'').toLowerCase().includes(stuQuery));
 
   if (studentList.length===0) {
     el.innerHTML=allStudentsGlobal.length===0&&allPTContractsGlobal.length===0
       ?'<div class="empty-state">No students registered yet. Click "Register Student" to add one.</div>'
-      :'<div class="empty-state">No students for this campus.</div>';
+      :'<div class="empty-state">No students match the selected filters.</div>';
     return;
   }
 
@@ -3748,11 +4047,11 @@ function renderStudentsOverview() {
   const BRANCH_ORDER=['IRV','RH','LA'];
 
   // Group by branch when showing all
-  const showGroups=homeStudentsCampus==='all';
+  const showGroups=studentFilter.branch==='all';
   let displaySections;
   if (showGroups) {
     const byBranch={};
-    studentList.forEach(sg=>{ const b=sg.branch||'__none__'; if(!byBranch[b])byBranch[b]=[]; byBranch[b].push(sg); });
+    studentList.forEach(sg=>{ const b=studentBranchOf(sg)||'__none__'; if(!byBranch[b])byBranch[b]=[]; byBranch[b].push(sg); });
     const ordered=[
       ...BRANCH_ORDER.filter(b=>byBranch[b]),
       ...Object.keys(byBranch).filter(b=>!BRANCH_ORDER.includes(b)&&b!=='__none__'),
@@ -3764,40 +4063,38 @@ function renderStudentsOverview() {
   }
 
   let html=`<table class="hours-table" style="width:100%"><thead><tr>
-    <th>Teacher</th><th>Campus</th><th>Conducted (hrs)</th><th>Sessions</th><th>Contract (hrs)</th><th>Remaining</th><th class="manager-only" style="width:1px;"></th>
+    <th>Teacher</th><th>Campus</th><th>Conducted (hrs)</th><th>Sessions</th><th class="manager-only" style="width:1px;"></th>
   </tr></thead><tbody>`;
 
   // Render one student group
   const renderSG=(sg)=>{
     const gIdx=studentsOverviewData.indexOf(sg);
-    let totalCondHrs=0, totalContractHrs=0, hasContract=false;
+    let totalCondHrs=0;
     const rows=sg.contracts.map(c=>{
       const teacher=teachers.find(t=>t.id===c.teacherId);
       const tName=teacher?teacher.name:'(unknown)';
       const campus=teacher?teacher.campus:'—';
       const cSess=ptSessions.filter(s=>s.teacherId===c.teacherId&&s.studentName===c.studentName);
       const conducted=cSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
-      const condHrs=conducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const condHrs=conducted.reduce((n,s)=>n+sessionHours(s),0);
       totalCondHrs+=condHrs;
-      const contractHrs=(c.totalHours!==null&&c.totalHours!==undefined)?c.totalHours:null;
-      if (contractHrs!==null){totalContractHrs+=contractHrs;hasContract=true;}
-      const rem=contractHrs!==null?contractHrs-condHrs:null;
-      const remCell=rem===null?'—':rem<0
-        ?`<span style="color:#c2410c;font-weight:600;">${Math.abs(rem).toFixed(1)} over</span>`
-        :`${rem.toFixed(1)} hrs`;
-      return {tName,campus,condHrs,condCount:conducted.length,contractHrs,remCell,contractId:c.id,teacherId:c.teacherId};
+      return {tName,campus,condHrs,condCount:conducted.length,contractId:c.id,teacherId:c.teacherId};
     });
 
     const idBadge=sg.studentId
       ?`<span style="font-size:12px;color:#374151;background:#e5e7eb;border-radius:4px;padding:1px 8px;font-weight:600;">${escHtml(sg.studentId)}</span>`:'';
     const branchBadge=(!showGroups&&sg.branch)
       ?`<span style="font-size:11px;color:#6b7280;background:#f3f4f6;border-radius:4px;padding:1px 7px;">${escHtml(sg.branch)}</span>`:'';
+    const inactive=isStudentInactive(sg);
+    const inactiveBadge=inactive
+      ?`<span style="font-size:11px;color:#9ca3af;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:4px;padding:1px 7px;">Inactive</span>`:'';
+    const nameColor=inactive?'#9ca3af':'#111827';
 
-    html+=`<tr>
-      <td colspan="7" style="background:#f4f4f5;padding:8px 14px;border-top:3px solid #9ca3af;border-bottom:1px solid #e4e4e7;">
+    html+=`<tr${inactive?' style="opacity:0.6;"':''}>
+      <td colspan="5" style="background:#f4f4f5;padding:8px 14px;border-top:3px solid ${inactive?'#d1d5db':'#9ca3af'};border-bottom:1px solid #e4e4e7;">
         <span style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span style="font-weight:700;font-size:14px;color:#111827;">${escHtml(sg.name)}</span>
-          ${branchBadge}${idBadge}
+          <span style="font-weight:700;font-size:14px;color:${nameColor};">${escHtml(sg.name)}</span>
+          ${branchBadge}${idBadge}${inactiveBadge}
           <span style="margin-left:auto;display:flex;gap:6px;">
             <button onclick="openEditStudentModal(${gIdx})" style="font-size:12px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:5px;padding:3px 11px;cursor:pointer;">Edit</button>
             <button onclick="openAddPTContractModal(${gIdx})" style="font-size:12px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:5px;padding:3px 11px;cursor:pointer;">+ Add PT</button>
@@ -3807,7 +4104,7 @@ function renderStudentsOverview() {
     </tr>`;
 
     if (rows.length===0) {
-      html+=`<tr><td colspan="7" style="color:#aaa;font-size:13px;padding:10px 20px;font-style:italic;">No PT contracts yet.</td></tr>`;
+      html+=`<tr><td colspan="5" style="color:#aaa;font-size:13px;padding:10px 20px;font-style:italic;">No PT contracts yet.</td></tr>`;
     } else {
       rows.forEach(r=>{
         html+=`<tr>
@@ -3815,24 +4112,16 @@ function renderStudentsOverview() {
           <td style="color:#888;font-size:12px;">${escHtml(r.campus)}</td>
           <td>${fmtHours(r.condHrs)}</td>
           <td style="color:#aaa;font-size:12px;">${r.condCount}</td>
-          <td>${r.contractHrs!==null?r.contractHrs+' hrs':'—'}</td>
-          <td>${r.remCell}</td>
           <td style="white-space:nowrap;padding:4px 8px;">
-            <button onclick="openEditPTContract('${r.contractId}')" style="font-size:11px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;cursor:pointer;">Edit</button>
+            <button class="manager-only" onclick="openEditPTContract('${r.contractId}')" style="font-size:11px;color:#374151;background:#fff;border:1px solid #d1d5db;border-radius:4px;padding:2px 8px;cursor:pointer;">Manage</button>
           </td>
         </tr>`;
       });
       if (rows.length>1) {
-        const totalRem=hasContract?totalContractHrs-totalCondHrs:null;
-        const totalRemCell=totalRem===null?'—':totalRem<0
-          ?`<span style="color:#c2410c;font-weight:600;">${Math.abs(totalRem).toFixed(1)} over</span>`
-          :`${totalRem.toFixed(1)} hrs`;
         html+=`<tr style="background:#f9fafb;border-bottom:2px solid #d1d5db;">
           <td colspan="2" style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.5px;padding-left:20px;">↳ Total</td>
           <td style="font-weight:600;">${fmtHours(totalCondHrs)}</td>
           <td></td>
-          <td style="font-weight:600;">${hasContract?totalContractHrs+' hrs':'—'}</td>
-          <td style="font-weight:600;">${totalRemCell}</td>
           <td></td>
         </tr>`;
       }
@@ -3841,7 +4130,7 @@ function renderStudentsOverview() {
 
   displaySections.forEach(({label,students})=>{
     if (label) {
-      html+=`<tr><td colspan="7" style="background:#f9fafb;padding:5px 14px;border-top:2px solid #e5e7eb;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;">${escHtml(label)}</td></tr>`;
+      html+=`<tr><td colspan="5" style="background:#f9fafb;padding:5px 14px;border-top:2px solid #e5e7eb;font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.8px;">${escHtml(label)}</td></tr>`;
     }
     students.forEach(sg=>renderSG(sg));
   });
@@ -3854,19 +4143,18 @@ function renderStudentsOverview() {
 function exportStudentsOverviewCSV() {
   if (studentsOverviewData.length===0) { showToast('No data to export.','error'); return; }
   const ptSessions=allPTSessionsGlobal.filter(s=>s.type==='PT');
-  const rows=[['Student Name','Student ID','Branch','Teacher','Campus','Conducted (hrs)','Conducted (sessions)','Contract (hrs)','Remaining (hrs)']];
+  const rows=[['Student Name','Student ID','Branch','Status','Teacher','Campus','Conducted (hrs)','Conducted (sessions)']];
   studentsOverviewData.forEach(sg=>{
+    const status=isStudentInactive(sg)?'Inactive':'Active';
     if (sg.contracts.length===0) {
-      rows.push([sg.name,sg.studentId,sg.branch,'','','','','','']);
+      rows.push([sg.name,sg.studentId,sg.branch,status,'','','','']);
     } else {
       sg.contracts.forEach(c=>{
         const teacher=teachers.find(t=>t.id===c.teacherId);
         const cSess=ptSessions.filter(s=>s.teacherId===c.teacherId&&s.studentName===c.studentName);
         const conducted=cSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
-        const condHrs=conducted.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-        const contractHrs=(c.totalHours!==null&&c.totalHours!==undefined)?c.totalHours:'';
-        const rem=contractHrs!==''?contractHrs-condHrs:'';
-        rows.push([sg.name,sg.studentId,sg.branch,teacher?teacher.name:'',teacher?teacher.campus:'',condHrs.toFixed(2),conducted.length,contractHrs,rem!==''?rem.toFixed(2):'']);
+        const condHrs=conducted.reduce((n,s)=>n+sessionHours(s),0);
+        rows.push([sg.name,sg.studentId,sg.branch,status,teacher?teacher.name:'',teacher?teacher.campus:'',condHrs.toFixed(2),conducted.length]);
       });
     }
   });
@@ -3906,9 +4194,10 @@ function startInlineTimeEdit(id) {
   const row = document.getElementById('detail-time-row');
   if (!row) return;
   row.innerHTML = `<strong>Time</strong>
-    <input type="time" id="it-start" value="${s.startTime}" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;">
+    <input type="time" id="it-start" value="${s.startTime}" oninput="syncHoursSelect('it-hours','it-start','it-end')" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;">
     <span style="color:#999;margin:0 4px;">–</span>
-    <input type="time" id="it-end" value="${s.endTime}" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;">
+    <input type="time" id="it-end" value="${s.endTime}" oninput="syncHoursSelect('it-hours','it-start','it-end')" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;">
+    <select id="it-hours" onchange="this.dataset.touched='1'" style="font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;margin-left:4px;">${hoursSelectOptions(sessionHours(s))}</select>
     <button onclick="saveInlineTime('${id}')" style="margin-left:6px;background:#1a1a2e;color:white;border:none;border-radius:4px;padding:3px 9px;font-size:12px;cursor:pointer;">Save</button>
     <button onclick="cancelInlineTimeEdit('${id}')" style="margin-left:4px;background:#f0f0f0;color:#555;border:1px solid #d0d0d0;border-radius:4px;padding:3px 8px;font-size:12px;cursor:pointer;">Cancel</button>`;
   document.getElementById('it-start').focus();
@@ -3920,10 +4209,12 @@ async function saveInlineTime(id) {
   const end   = document.getElementById('it-end').value;
   if (!start || !end) return;
   if (timeToMins(end) <= timeToMins(start)) { showToast('End time must be after start time.', 'error'); return; }
+  const ih=parseFloat(document.getElementById('it-hours').value);
+  const creditHours=(!isNaN(ih))?ih:defaultCreditHours(start,end);
   try {
     const snap = await db.collection('sessions').doc(id).get();
     const s = snap.data() || {};
-    await db.collection('sessions').doc(id).update({ startTime: start, endTime: end });
+    await db.collection('sessions').doc(id).update({ startTime: start, endTime: end, creditHours });
     await logAudit('update','sessions',id,`Updated session time: ${s.studentName||'?'} on ${s.date||'?'} → ${start}–${end}`);
     showToast('Time updated!', 'ok');
     closeDetailModal();
@@ -3935,7 +4226,7 @@ function cancelInlineTimeEdit(id) {
   if (!s) return;
   const row = document.getElementById('detail-time-row');
   if (!row) return;
-  row.innerHTML = `<strong>Time</strong><span id="detail-time-display">${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(calcHours(s.startTime, s.endTime, s.type))})</span><button onclick="startInlineTimeEdit('${id}')" style="margin-left:6px;background:none;border:none;cursor:pointer;color:#aaa;font-size:12px;padding:1px 4px;border-radius:3px;line-height:1;" title="Edit time">✏️</button>`;
+  row.innerHTML = `<strong>Time</strong><span id="detail-time-display">${formatTime(s.startTime)} – ${formatTime(s.endTime)} (${fmtHours(sessionHours(s))})</span><button onclick="startInlineTimeEdit('${id}')" style="margin-left:6px;background:none;border:none;cursor:pointer;color:#aaa;font-size:12px;padding:1px 4px;border-radius:3px;line-height:1;" title="Edit time">✏️</button>`;
 }
 
 async function exportHoursOverviewCSV() {
@@ -3963,11 +4254,11 @@ async function exportHoursOverviewCSV() {
       const ptCond=ptSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
       const mtHeld=mtSess.filter(s=>!s.absenceType);
       const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
-      const regHrs=regHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-      const paidHrs=regPaid.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-      const ptHrs=ptCond.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-      const mtHrs=mtHeld.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
-      const subHrs=subSess.reduce((n,s)=>n+calcHours(s.startTime,s.endTime,s.type),0);
+      const regHrs=regHeld.reduce((n,s)=>n+sessionHours(s),0);
+      const paidHrs=regPaid.reduce((n,s)=>n+sessionHours(s),0);
+      const ptHrs=ptCond.reduce((n,s)=>n+sessionHours(s),0);
+      const mtHrs=mtHeld.reduce((n,s)=>n+sessionHours(s),0);
+      const subHrs=subSess.reduce((n,s)=>n+sessionHours(s),0);
       const total=regHrs+paidHrs+ptHrs+(includeMT?mtHrs:0)+subHrs;
       rows.push([
         campus, t.isSubstitute?'Substitute':'Regular', t.name,
@@ -4028,6 +4319,7 @@ const _modalClosers = {
   'add-pt-contract-modal': closeAddPTContractModal,
   'hours-filter-modal': ()=>document.getElementById('hours-filter-modal').classList.remove('open'),
   'tl-filter-modal': ()=>document.getElementById('tl-filter-modal').classList.remove('open'),
+  'student-filter-modal': ()=>document.getElementById('student-filter-modal').classList.remove('open'),
   'import-schedule-modal': closeImportModal
 };
 Object.entries(_modalClosers).forEach(([id,fn]) => {
@@ -4256,6 +4548,7 @@ firebase.auth().onAuthStateChanged(async user => {
   } else {
     document.getElementById('user-info').style.display = 'none';
     document.getElementById('login-overlay').style.display = 'flex';
+    const ld = document.getElementById('app-loading'); if (ld) ld.style.display = 'none';
   }
 });
 </script>

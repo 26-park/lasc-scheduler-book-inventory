@@ -78,6 +78,8 @@
 </head>
 <body>
 
+<div id="app-loading" style="position:fixed;inset:0;z-index:10000;background:#f4f5f7;display:flex;align-items:center;justify-content:center;color:#94a3b8;font-size:13px;">Loading…</div>
+
 <div id="login-overlay" style="display:none;">
   <div class="login-card">
     <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPoAAAA6CAYAAACZBESJAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAA4ZpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDkuMS1jMDAzIDc5Ljk2OTBhODdmYywgMjAyNS8wMy8wNi0yMDo1MDoxNiAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wTU09Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9tbS8iIHhtbG5zOnN0UmVmPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvc1R5cGUvUmVzb3VyY2VSZWYjIiB4bWxuczp4bXA9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC8iIHhtcE1NOk9yaWdpbmFsRG9jdW1lbnRJRD0ieG1wLmRpZDpkNzBmN2Y2MS0xNWRmLTRmZWUtYTUyMi1jYTEwYzdiMWRiYzkiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6QTA1RUFDMjlBNUY1MTFGMEFFMjc4QTU3Q0MzRUZGQkYiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6QTA1RUFDMjhBNUY1MTFGMEFFMjc4QTU3Q0MzRUZGQkYiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIDI2LjggKE1hY2ludG9zaCkiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDpkMzNiYTAzYS1jNThmLTQzZmEtYTBlZi00MDAxYmI2ODA4MDciIHN0UmVmOmRvY3VtZW50SUQ9ImFkb2JlOmRvY2lkOnBob3Rvc2hvcDpmNWVjMjFiYy1lNDg5LTg1NDctYjM4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" alt="LASC" style="height:38px;margin-bottom:22px;">
@@ -114,36 +116,32 @@
   <button class="nav-tab" onclick="switchTab('books')">Books</button>
 </nav>
 
-<script>
-(function() {
-  var saved = new URLSearchParams(location.search).get('tab') || localStorage.getItem('inventory_tab');
-  if (saved && saved !== 'inventory') {
-    document.querySelector('.nav-tab.active').classList.remove('active');
-    var btn = document.querySelector('.nav-tab[onclick="switchTab(\'' + saved + '\')"]');
-    if (btn) btn.classList.add('active');
-    document.getElementById('view-inventory').classList.remove('active');
-    var view = document.getElementById('view-' + saved);
-    if (view) view.classList.add('active');
-  }
-})();
-</script>
-
 <!-- ======== INVENTORY ======== -->
 <div id="view-inventory" class="view active">
   <main>
     <div class="card" style="padding:12px 16px;">
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
           <button class="branch-btn active" data-branch="LA" onclick="setBranch('LA')">LA</button>
           <button class="branch-btn" data-branch="RH" onclick="setBranch('RH')">RH</button>
           <button class="branch-btn" data-branch="IRV" onclick="setBranch('IRV')">IRV</button>
           <button class="branch-btn manager-only" data-branch="ALL" onclick="setBranch('ALL')">All</button>
+          <label style="display:flex;align-items:center;gap:5px;margin-left:8px;font-size:13px;color:#475569;cursor:pointer;white-space:nowrap;">
+            <input type="checkbox" id="inv-instock-only" checked onchange="toggleInStockOnly()" style="cursor:pointer;">
+            In-stock only
+          </label>
         </div>
         <button class="btn btn-secondary btn-sm" onclick="exportInventoryCSV()">&#8595; Export CSV</button>
       </div>
-      <div class="filters" style="margin:0;">
+      <div class="filters" style="margin:0;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
         <input type="text" id="inv-search" placeholder="Search title / ISBN…" oninput="renderInventory()" style="width:220px;">
+        <span style="color:#cbd5e1;">|</span>
+        <label style="font-size:12px;color:#64748b;">As of</label>
+        <input type="datetime-local" id="inv-asof" style="font-size:12px;padding:4px 6px;">
+        <button class="btn btn-secondary btn-sm" onclick="applyAsOf()">View Past Stock</button>
+        <button class="btn btn-secondary btn-sm" id="inv-asof-reset" onclick="resetAsOf()" style="display:none;">Show Current</button>
       </div>
+      <div id="inv-asof-banner" style="display:none;margin-top:8px;padding:6px 10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;font-size:12px;color:#92400e;"></div>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="tbl-wrap">
@@ -218,6 +216,10 @@
           <div class="form-group">
             <label>Date <span style="font-weight:400;color:#888;">(leave blank for today)</span></label>
             <input type="date" id="sell-date">
+          </div>
+          <div class="form-group">
+            <label>Time <span style="font-weight:400;color:#888;">(defaults to now)</span></label>
+            <input type="time" id="sell-time">
           </div>
         </div>
 
@@ -322,6 +324,8 @@
       </div>
       <div style="padding:12px 16px;">
         <div class="filters">
+          <input type="text" id="hist-search" oninput="onHistSearchInput()" placeholder="Search title, student, note…" style="font-size:12px;padding:5px 8px;border:1px solid #d0d0d0;border-radius:5px;font-family:inherit;width:200px;">
+          <span style="color:#ccc;font-size:13px;align-self:center;">|</span>
           <select id="hist-year" onchange="onHistYearQuarterChange()" style="font-size:12px;padding:5px 8px;">
             <option value="ALL">All Years</option>
           </select>
@@ -420,6 +424,22 @@
     </div>
   </main>
 </div>
+
+<script>
+(function() {
+  var saved = new URLSearchParams(location.search).get('tab') || localStorage.getItem('inventory_tab');
+  if (saved && saved !== 'inventory') {
+    var activeBtn = document.querySelector('.nav-tab.active');
+    if (activeBtn) activeBtn.classList.remove('active');
+    var btn = document.querySelector('.nav-tab[onclick="switchTab(\'' + saved + '\')"]');
+    if (btn) btn.classList.add('active');
+    var invView = document.getElementById('view-inventory');
+    if (invView) invView.classList.remove('active');
+    var view = document.getElementById('view-' + saved);
+    if (view) view.classList.add('active');
+  }
+})();
+</script>
 
 <!-- Adjust Stock Modal -->
 <div class="modal-overlay" id="modal-adjust">
@@ -529,6 +549,7 @@ let currentBranch = 'LA';
 let editingBookIsbn = null, receivingOrderId = null;
 let historyData = [];
 let currentUser = null, currentRole = null;
+let asOfMode = false, asOfLabel = '', asOfStockMap = null;
 
 function getQuarter(dateStr) {
   const m = parseInt((dateStr || '').substring(5,7), 10);
@@ -538,6 +559,7 @@ function getQuarter(dateStr) {
 
 function fmtMoney(v) { return '$' + Number(v||0).toFixed(2); }
 function fmtDate(s) { if(!s) return ''; const p=s.substring(0,10).split('-'); if(p.length<3) return s.substring(0,10); return `${p[1].padStart(2,'0')}/${p[2].padStart(2,'0')}/${p[0]}`; }
+function fmtDateTime(s) { if(!s) return ''; const time = s.substring(11,16); return fmtDate(s) + (time ? ' ' + time : ''); }
 function nowLA() {
   return new Date().toLocaleString('sv-SE', {timeZone:'America/Los_Angeles'}).replace('T',' ').substring(0,16);
 }
@@ -563,7 +585,7 @@ async function loadInventory() {
 
 async function loadPendingOrders() {
   const snap = await db.collection('pending_orders').orderBy('orderedAt','desc').get();
-  pendingOrders = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  pendingOrders = snap.docs.map(d => { const data = d.data(); return { ...data, id: d.id, id_num: data.id }; });
 }
 
 function getStock(isbn, branch) {
@@ -613,6 +635,7 @@ function renderCurrentTab() {
 
 function setBranch(b) {
   currentBranch = b;
+  localStorage.setItem('inventory_branch', b);
   document.querySelectorAll('.branch-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.branch === b);
   });
@@ -631,9 +654,15 @@ function renderInventory() {
   const isAll = currentBranch === 'ALL';
   const isMgr = currentRole === 'manager';
 
+  const stockOf = (isbn, branch) => asOfMode ? (asOfStockMap[isbn + '|' + branch] || 0) : getStock(isbn, branch);
+  const inStockOnly = document.getElementById('inv-instock-only')?.checked !== false;
+
   let rows = books.filter(b => {
     if (search && !b.title.toLowerCase().includes(search) && !b.isbn.includes(search)) return false;
-    if (!isAll && getStock(b.isbn, currentBranch) === 0) return false;
+    if (inStockOnly) {
+      const hasStock = isAll ? BRANCHES.some(br => stockOf(b.isbn, br) > 0) : stockOf(b.isbn, currentBranch) > 0;
+      if (!hasStock) return false;
+    }
     return true;
   });
 
@@ -649,10 +678,10 @@ function renderInventory() {
     document.getElementById('inv-thead-row').innerHTML =
       `<th>ISBN</th><th>Title</th>${costTh}<th style="text-align:right;">Price</th>` +
       `<th style="text-align:right;">Stock</th>` +
-      (isMgr ? `<th></th>` : '');
+      ((isMgr && !asOfMode) ? `<th></th>` : '');
   }
 
-  const colCount = isAll ? (isMgr ? 8 : 7) : (isMgr ? 6 : 4);
+  const colCount = isAll ? (isMgr ? 8 : 7) : ((isMgr && !asOfMode) ? 6 : (isMgr ? 5 : 4));
 
   if (!rows.length) {
     document.getElementById('inv-tbody').innerHTML = `<tr><td colspan="${colCount}" class="empty-state">No books in stock.</td></tr>`;
@@ -663,8 +692,8 @@ function renderInventory() {
   rows.forEach(book => {
     let branchCells = '';
     if (isAll) {
-      const stocks = BRANCHES.map(br => getStock(book.isbn, br));
-      const pendings = BRANCHES.map(br => getPending(book.isbn, br));
+      const stocks = BRANCHES.map(br => stockOf(book.isbn, br));
+      const pendings = BRANCHES.map(br => asOfMode ? 0 : getPending(book.isbn, br));
       const total = stocks.reduce((a, b) => a + b, 0);
       BRANCHES.forEach((br, i) => {
         const s = stocks[i], p = pendings[i];
@@ -673,13 +702,13 @@ function renderInventory() {
       });
       branchCells += `<td style="text-align:right;font-weight:600;">${total}</td>`;
     } else {
-      const s = getStock(book.isbn, currentBranch);
-      const p = getPending(book.isbn, currentBranch);
+      const s = stockOf(book.isbn, currentBranch);
+      const p = asOfMode ? 0 : getPending(book.isbn, currentBranch);
       const cls = s <= 2 ? 'stock-low' : '';
       branchCells = `<td style="text-align:right;"><span class="${cls}">${s}</span>${p > 0 ? ` <span class="pending-badge">(+${p})</span>` : ''}</td>`;
     }
 
-    const actionCell = (!isAll && isMgr)
+    const actionCell = (!isAll && isMgr && !asOfMode)
       ? `<td style="padding:4px 8px;"><div style="display:flex;gap:4px;">
           <button class="btn btn-secondary btn-sm" onclick="openAdjustModal('${esc(book.isbn)}')">Adjust</button>
           <button class="btn btn-secondary btn-sm" onclick="openTransferModal('${esc(book.isbn)}')">Transfer</button>
@@ -696,6 +725,92 @@ function renderInventory() {
     </tr>`;
   });
   document.getElementById('inv-tbody').innerHTML = html;
+}
+
+function toggleInStockOnly() {
+  const on = document.getElementById('inv-instock-only').checked;
+  localStorage.setItem('inv_instock_only', on ? '1' : '0');
+  renderInventory();
+}
+
+// ==========================================
+// PAST STOCK (as-of historical view)
+// ==========================================
+// Reconstruct stock at a past point in time by starting from current stock
+// and reversing every transaction that happened AFTER the chosen moment.
+async function applyAsOf() {
+  const val = document.getElementById('inv-asof').value; // YYYY-MM-DDTHH:MM
+  if (!val) { showToast('Pick a date and time first.', 'error'); return; }
+  const asOf = val.replace('T', ' ').substring(0, 16);
+  try {
+    await computeAsOfStock(asOf);
+    asOfMode = true;
+    asOfLabel = asOf;
+    document.getElementById('inv-asof-reset').style.display = '';
+    updateAsOfBanner();
+    renderInventory();
+  } catch(e) {
+    console.error(e);
+    showToast('Error loading past stock.', 'error');
+  }
+}
+
+function resetAsOf() {
+  asOfMode = false;
+  asOfStockMap = null;
+  document.getElementById('inv-asof-reset').style.display = 'none';
+  updateAsOfBanner();
+  renderInventory();
+}
+
+function updateAsOfBanner() {
+  const el = document.getElementById('inv-asof-banner');
+  if (asOfMode) {
+    el.textContent = `Showing stock as of ${fmtDate(asOfLabel.substring(0,10))} ${asOfLabel.substring(11,16)} — read only (pending orders not shown)`;
+    el.style.display = '';
+  } else {
+    el.style.display = 'none';
+  }
+}
+
+async function computeAsOfStock(asOf) {
+  const map = {};
+  inventory.forEach(r => { map[r.isbn + '|' + r.branch] = (Number(r.stock) || 0); });
+  const adj = (isbn, branch, qty) => {
+    if (!isbn || !branch) return;
+    const k = isbn + '|' + branch;
+    map[k] = (map[k] || 0) + qty;
+  };
+
+  const [salesSnap, inSnap, outSnap, trSnap] = await Promise.all([
+    db.collection('sales').orderBy('soldAt', 'desc').limit(5000).get(),
+    db.collection('stock_history').orderBy('createdAt', 'desc').limit(5000).get(),
+    db.collection('stock_out').orderBy('createdAt', 'desc').limit(5000).get(),
+    db.collection('transfers').orderBy('createdAt', 'desc').limit(5000).get()
+  ]);
+
+  // Reverse only transactions that occurred strictly after the chosen moment.
+  salesSnap.docs.forEach(d => {
+    const r = d.data();
+    if ((r.soldAt || '').substring(0, 16) > asOf) adj(r.isbn, r.branch, Number(r.quantity) || 0); // sale removed stock -> add back
+  });
+  inSnap.docs.forEach(d => {
+    const r = d.data();
+    if ((r.createdAt || '').substring(0, 16) > asOf) adj(r.isbn, r.branch, -(Number(r.quantity) || 0)); // restock added -> remove
+  });
+  outSnap.docs.forEach(d => {
+    const r = d.data();
+    if ((r.createdAt || '').substring(0, 16) > asOf) adj(r.isbn, r.branch, Number(r.quantity) || 0); // stock-out removed -> add back
+  });
+  trSnap.docs.forEach(d => {
+    const r = d.data();
+    if ((r.createdAt || '').substring(0, 16) > asOf) {
+      adj(r.isbn, r.fromBranch, Number(r.quantity) || 0); // from-branch lost stock -> add back
+      adj(r.isbn, r.toBranch, -(Number(r.quantity) || 0)); // to-branch gained -> remove
+    }
+  });
+
+  asOfStockMap = map;
 }
 
 // ==========================================
@@ -879,6 +994,7 @@ function resetSellForm() {
   document.getElementById('sell-discount').value = '0';
   document.getElementById('sell-note').value = '';
   document.getElementById('sell-date').value = '';
+  document.getElementById('sell-time').value = nowLA().substring(11,16);
   document.getElementById('sell-book-info').style.display = 'none';
   document.getElementById('cart-section').style.display = 'none';
   document.getElementById('cart-total-row').textContent = '';
@@ -911,7 +1027,8 @@ async function processSell() {
   const paymentSummary = isTeacher ? 'Teacher' : paymentRows.map(r => `${r.method}:$${r.amount}`).join(', ');
   const txnId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const sellDateVal = document.getElementById('sell-date').value;
-  const soldAt = sellDateVal ? sellDateVal + ' 00:00' : nowLA();
+  const sellTimeVal = document.getElementById('sell-time').value;
+  const soldAt = sellDateVal ? sellDateVal + ' ' + (sellTimeVal || nowLA().substring(11,16)) : nowLA();
 
   try {
     let discountRemaining = discount;
@@ -1274,6 +1391,20 @@ function clearHistDateRange() {
   loadHistory();
 }
 
+function restoreHistFilters() {
+  let f; try { f = JSON.parse(localStorage.getItem('inv_hist_filters') || 'null'); } catch(e) { f = null; }
+  if (!f) return;
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
+  set('hist-branch', f.branch);
+  set('hist-year', f.year);
+  set('hist-quarter', f.quarter);
+  set('hist-from', f.fromDate);
+  set('hist-to', f.toDate);
+  if (f.fromDate || f.toDate) {
+    const clr = document.getElementById('hist-date-clear'); if (clr) clr.style.display = '';
+  }
+}
+
 async function loadHistory() {
   if (currentTab !== 'history') return;
   const branch = document.getElementById('hist-branch').value;
@@ -1281,6 +1412,7 @@ async function loadHistory() {
   const quarter = document.getElementById('hist-quarter').value;
   const fromDate = document.getElementById('hist-from').value;
   const toDate = document.getElementById('hist-to').value;
+  localStorage.setItem('inv_hist_filters', JSON.stringify({ branch, year, quarter, fromDate, toDate }));
 
   const collMap = { sales: 'sales', stockin: 'stock_history', stockout: 'stock_out', transfers: 'transfers' };
   const coll = collMap[currentHistTab];
@@ -1306,8 +1438,49 @@ async function loadHistory() {
     if (quarter !== 'ALL') rows = rows.filter(r => getQuarter(r[dateField]) === quarter);
   }
 
+  if (currentHistTab === 'sales') rows = groupCartRows(rows);
+
   historyData = rows;
-  renderHistoryTable(rows);
+  renderHistoryTable(filterHistRows(rows));
+}
+
+let _histSearchTimer = null;
+function onHistSearchInput() {
+  clearTimeout(_histSearchTimer);
+  _histSearchTimer = setTimeout(() => renderHistoryTable(filterHistRows(historyData)), 200);
+}
+
+function filterHistRows(rows) {
+  const q = (document.getElementById('hist-search').value || '').trim().toLowerCase();
+  if (!q) return rows;
+  const matches = r => [r.title, r.isbn, r.student, r.note, r.branch, r.fromBranch, r.toBranch,
+    r.orderSource, r.paymentSummary, fmtBy(r.createdBy || ''), r.soldAt, r.createdAt]
+    .some(v => v && String(v).toLowerCase().includes(q));
+  if (currentHistTab === 'sales') {
+    // Keep whole cart transactions together when any item in the cart matches.
+    const matchedTxns = new Set(rows.filter(r => r.txnId && matches(r)).map(r => r.txnId));
+    return rows.filter(r => matches(r) || (r.txnId && matchedTxns.has(r.txnId)));
+  }
+  return rows.filter(matches);
+}
+
+// Cart items share a txnId but can be interleaved with unrelated sales when
+// soldAt timestamps are equal (same-day entries) — Firestore's secondary sort
+// order is undefined. Pull each txn's rows together at the group's first
+// appearance so the rendered cart block is always contiguous.
+function groupCartRows(rows) {
+  const byTxn = {};
+  rows.forEach(r => { if (r.txnId) (byTxn[r.txnId] = byTxn[r.txnId] || []).push(r); });
+  const emitted = new Set();
+  const out = [];
+  rows.forEach(r => {
+    if (r.txnId && byTxn[r.txnId].length > 1) {
+      if (!emitted.has(r.txnId)) { emitted.add(r.txnId); out.push(...byTxn[r.txnId]); }
+    } else {
+      out.push(r);
+    }
+  });
+  return out;
 }
 
 function fmtBy(email) {
@@ -1351,11 +1524,15 @@ function renderHistoryTable(rows) {
         const isFirst = isMulti && txnGroups[r.txnId][0] === i;
         const isLast  = isMulti && txnGroups[r.txnId][txnGroups[r.txnId].length - 1] === i;
         const rowBg = isMulti ? 'background:#f8fbff;' : '';
-        const borderLeft = isMulti ? 'border-left:3px solid #bae6fd;' : '';
+        const borderLeft = isMulti ? 'border-left:3px solid #7dd3fc;' : '';
+        const borderTop = isFirst ? 'border-top:2px solid #7dd3fc;' : '';
+        const cartBadge = isFirst
+          ? `<span style="display:inline-block;background:#0284c7;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:8px;margin-right:5px;vertical-align:1px;">CART ×${txnGroups[r.txnId].length}</span>`
+          : (isMulti ? '<span style="color:#38bdf8;margin-right:4px;">└</span>' : '');
 
-        html += `<tr style="${rowBg}${borderLeft}">
-          <td style="color:#888;font-size:11px;">${isFirst || !isMulti ? esc(r.id||'') : ''}</td>
-          <td>${esc(r.title)}</td>
+        html += `<tr style="${rowBg}${borderLeft}${borderTop}">
+          <td style="color:#888;font-size:11px;">${isFirst || !isMulti ? (rows.length - i) : ''}</td>
+          <td>${cartBadge}${esc(r.title)}</td>
           <td>${isFirst || !isMulti ? esc(r.branch) : ''}</td>
           <td>${isFirst || !isMulti ? esc(r.student||'') : ''}</td>
           <td style="text-align:right;">${r.quantity}</td>
@@ -1364,9 +1541,9 @@ function renderHistoryTable(rows) {
           <td style="text-align:right;font-weight:600;">${isMulti ? '' : fmtMoney(r.totalPaid)}</td>
           <td style="font-size:11px;">${isMulti ? '' : esc(r.paymentSummary||'')}</td>
           <td>${isFirst || !isMulti ? esc(r.note||'') : ''}</td>
-          <td style="font-size:11px;color:#888;">${isFirst || !isMulti ? fmtDate((r.soldAt||'').substring(0,10)) : ''}</td>
+          <td style="font-size:11px;color:#888;white-space:nowrap;">${isFirst || !isMulti ? fmtDateTime(r.soldAt) : ''}</td>
           <td style="font-size:11px;color:#888;">${isFirst || !isMulti ? esc(fmtBy(r.createdBy||'')) : ''}</td>
-          ${mgr ? `<td style="white-space:nowrap;">${isFirst||!isMulti ? `<button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','sales')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','sales')">Del</button>` : ''}</td>` : ''}
+          ${mgr ? `<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','sales')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','sales')">Del</button></td>` : ''}
         </tr>`;
 
         if (isLast) {
@@ -1374,7 +1551,7 @@ function renderHistoryTable(rows) {
           const grpTotal = grp.reduce((s, g) => s + Number(g.sellingPrice||0), 0);
           const grpPaid  = grp.reduce((s, g) => s + Number(g.totalPaid||0), 0);
           const grpDisc  = r.txnDiscount || 0;
-          html += `<tr style="background:#e0f2fe;border-left:3px solid #7dd3fc;border-top:1px solid #bae6fd;">
+          html += `<tr style="background:#e0f2fe;border-left:3px solid #7dd3fc;border-top:1px solid #bae6fd;border-bottom:2px solid #7dd3fc;">
             <td colspan="4" style="padding:5px 8px;"></td>
             <td style="text-align:right;font-size:11px;color:#0369a1;font-weight:600;padding:5px 8px;white-space:nowrap;">Cart total</td>
             <td style="text-align:right;padding:5px 8px;">${fmtMoney(grpTotal)}</td>
@@ -1382,6 +1559,7 @@ function renderHistoryTable(rows) {
             <td style="text-align:right;font-weight:700;padding:5px 8px;">${fmtMoney(grpPaid)}</td>
             <td style="font-size:11px;padding:5px 8px;">${esc(r.paymentSummary||'')}</td>
             <td colspan="3" style="padding:5px 8px;"></td>
+            ${mgr ? `<td style="white-space:nowrap;padding:5px 8px;"><button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteSalesTxn('${esc(r.txnId)}')">Del all</button></td>` : ''}
           </tr>`;
         }
       });
@@ -1391,12 +1569,12 @@ function renderHistoryTable(rows) {
   } else if (currentHistTab === 'stockin') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th style="text-align:right;">Qty</th><th>Source</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
-    tbody.innerHTML = rows.length ? rows.map(r => `<tr>
-      <td style="color:#888;font-size:11px;">${esc(r.id||'')}</td>
+    tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
+      <td style="color:#888;font-size:11px;">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td style="text-align:right;">${r.quantity}</td>
       <td>${esc(r.orderSource||'')}</td><td>${esc(r.note||'')}</td>
-      <td style="font-size:11px;color:#888;">${fmtDate((r.createdAt||'').substring(0,10))}</td>
+      <td style="font-size:11px;color:#888;white-space:nowrap;">${fmtDateTime(r.createdAt)}</td>
       <td style="font-size:11px;color:#888;">${esc(fmtBy(r.createdBy||''))}</td>
       ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','stockin')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','stockin')">Del</button></td>`:''}
     </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No stock-in records.</td></tr>';
@@ -1404,12 +1582,12 @@ function renderHistoryTable(rows) {
   } else if (currentHistTab === 'stockout') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th style="text-align:right;">Qty</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
-    tbody.innerHTML = rows.length ? rows.map(r => `<tr>
-      <td style="color:#888;font-size:11px;">${esc(r.id||'')}</td>
+    tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
+      <td style="color:#888;font-size:11px;">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td style="text-align:right;">${r.quantity}</td>
       <td>${esc(r.note||'')}</td>
-      <td style="font-size:11px;color:#888;">${fmtDate((r.createdAt||'').substring(0,10))}</td>
+      <td style="font-size:11px;color:#888;white-space:nowrap;">${fmtDateTime(r.createdAt)}</td>
       <td style="font-size:11px;color:#888;">${esc(fmtBy(r.createdBy||''))}</td>
       ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','stockout')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','stockout')">Del</button></td>`:''}
     </tr>`).join('') : '<tr><td colspan="'+(mgr?8:7)+'" class="empty-state">No stock-out records.</td></tr>';
@@ -1417,12 +1595,12 @@ function renderHistoryTable(rows) {
   } else if (currentHistTab === 'transfers') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th style="text-align:right;">Qty</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
-    tbody.innerHTML = rows.length ? rows.map(r => `<tr>
-      <td style="color:#888;font-size:11px;">${esc(r.id||'')}</td>
+    tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
+      <td style="color:#888;font-size:11px;">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.fromBranch)}</td><td>${esc(r.toBranch)}</td>
       <td style="text-align:right;">${r.quantity}</td>
       <td>${esc(r.note||'')}</td>
-      <td style="font-size:11px;color:#888;">${fmtDate((r.createdAt||'').substring(0,10))}</td>
+      <td style="font-size:11px;color:#888;white-space:nowrap;">${fmtDateTime(r.createdAt)}</td>
       <td style="font-size:11px;color:#888;">${esc(fmtBy(r.createdBy||''))}</td>
       ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-sm" style="font-size:11px;padding:2px 6px;" onclick="editHistoryRecord('${r._docId}','transfers')">Edit</button> <button class="btn btn-danger btn-sm" style="font-size:11px;padding:2px 6px;" onclick="deleteHistoryRecord('${r._docId}','transfers')">Del</button></td>`:''}
     </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No transfer records.</td></tr>';
@@ -1432,6 +1610,50 @@ function renderHistoryTable(rows) {
 // History Edit / Delete
 const _histCollMap = { sales:'sales', stockin:'stock_history', stockout:'stock_out', transfers:'transfers' };
 let _editHistDocId = null, _editHistTab = null;
+
+// Stock effect a history record HAS on inventory (positive = adds stock).
+function histStockEffects(tab, r) {
+  const q = Number(r.quantity) || 0;
+  if (!q || !r.isbn) return [];
+  if (tab === 'sales')     return [{ isbn:r.isbn, title:r.title, branch:r.branch, delta:-q }];
+  if (tab === 'stockin')   return [{ isbn:r.isbn, title:r.title, branch:r.branch, delta:+q }];
+  if (tab === 'stockout')  return [{ isbn:r.isbn, title:r.title, branch:r.branch, delta:-q }];
+  if (tab === 'transfers') return [
+    { isbn:r.isbn, title:r.title, branch:r.fromBranch, delta:-q },
+    { isbn:r.isbn, title:r.title, branch:r.toBranch,   delta:+q }
+  ];
+  return [];
+}
+
+// Apply effects to inventory; sign=+1 applies, sign=-1 reverses.
+async function applyStockEffects(effects, sign) {
+  for (const e of effects) {
+    if (!e.isbn || !e.branch || !e.delta) continue;
+    await updateStock(e.isbn, e.title || '', e.branch, sign * e.delta);
+  }
+}
+
+// Validate that applying these (already-signed) effects keeps every stock >= 0.
+// Returns an error message string if it would go negative, otherwise null.
+function validateStockEffects(effects) {
+  const agg = {};
+  for (const e of effects) {
+    if (!e.isbn || !e.branch || !e.delta) continue;
+    const key = e.isbn + '|' + e.branch;
+    if (!agg[key]) agg[key] = { isbn:e.isbn, title:e.title, branch:e.branch, delta:0 };
+    agg[key].delta += e.delta;
+  }
+  for (const key in agg) {
+    const a = agg[key];
+    const current = getStock(a.isbn, a.branch);
+    if (current + a.delta < 0) {
+      const book = books.find(b => b.isbn === a.isbn);
+      const name = (book ? book.title : a.title) || a.isbn;
+      return `Cannot apply: "${name}" stock at ${a.branch} would become ${current + a.delta} (current: ${current}).`;
+    }
+  }
+  return null;
+}
 
 function editHistoryRecord(docId, tab) {
   _editHistDocId = docId; _editHistTab = tab;
@@ -1495,6 +1717,7 @@ function closeEditHistModal() {
 async function saveHistoryEdit() {
   if (!_editHistDocId || !_editHistTab) return;
   const coll = _histCollMap[_editHistTab];
+  const oldRecord = historyData.find(x => x._docId === _editHistDocId);
   const g = id => { const el = document.getElementById(id); return el ? el.value : null; };
   const update = {};
   if (g('eh-title') !== null) {
@@ -1514,25 +1737,65 @@ async function saveHistoryEdit() {
   if (g('eh-paid')    !== null) update.totalPaid      = Number(g('eh-paid')) || 0;
   if (g('eh-payment') !== null) update.paymentSummary = g('eh-payment').trim();
   if (g('eh-date')    !== null && g('eh-date')) {
-    const dateVal = g('eh-date') + ' 00:00';
+    // Keep the record's original time-of-day; the picker only edits the date part.
+    const origTime = ((_editHistTab === 'sales' ? oldRecord?.soldAt : oldRecord?.createdAt) || '').substring(11,16);
+    const dateVal = g('eh-date') + ' ' + (origTime || '00:00');
     if (_editHistTab === 'sales') update.soldAt = dateVal;
     else update.createdAt = dateVal;
   }
+  // Build the net inventory change: reverse the old record's effect, apply the new one.
+  let applyList = [];
+  if (oldRecord) {
+    const newRecord = Object.assign({}, oldRecord, update);
+    applyList = histStockEffects(_editHistTab, oldRecord).map(e => ({ ...e, delta: -e.delta }))
+      .concat(histStockEffects(_editHistTab, newRecord));
+    const err = validateStockEffects(applyList);
+    if (err) { showToast(err, 'error'); return; }
+  }
   try {
     await db.collection(coll).doc(_editHistDocId).update(update);
-    showToast('Updated.', 'ok');
+    await applyStockEffects(applyList, +1);
+    showToast('Updated. Inventory adjusted.', 'ok');
     closeEditHistModal();
     loadHistory();
-  } catch(e) { showToast('Error saving.', 'error'); }
+    if (currentTab === 'inventory') renderInventory();
+  } catch(e) { console.error(e); showToast('Error saving.', 'error'); }
 }
 async function deleteHistoryRecord(docId, tab) {
-  if (!confirm('Delete this record?')) return;
   const coll = _histCollMap[tab];
+  const record = historyData.find(x => x._docId === docId);
+  // Reverse the deleted record's effect; block if it would drive stock negative.
+  const applyList = record ? histStockEffects(tab, record).map(e => ({ ...e, delta: -e.delta })) : [];
+  const err = validateStockEffects(applyList);
+  if (err) { showToast(err, 'error'); return; }
+  if (!confirm('Delete this record? Inventory will be adjusted accordingly.')) return;
   try {
     await db.collection(coll).doc(docId).delete();
-    showToast('Deleted.', 'ok');
+    await applyStockEffects(applyList, +1);
+    showToast('Deleted. Inventory adjusted.', 'ok');
     loadHistory();
-  } catch(e) { showToast('Error deleting.', 'error'); }
+    if (currentTab === 'inventory') renderInventory();
+  } catch(e) { console.error(e); showToast('Error deleting.', 'error'); }
+}
+
+// Delete every line item of a multi-item sale (shared txnId) at once.
+async function deleteSalesTxn(txnId) {
+  const recs = historyData.filter(x => x.txnId === txnId);
+  if (!recs.length) return;
+  let applyList = [];
+  recs.forEach(r => {
+    applyList = applyList.concat(histStockEffects('sales', r).map(e => ({ ...e, delta: -e.delta })));
+  });
+  if (!confirm(`Delete this entire order (${recs.length} item(s))? Inventory will be adjusted accordingly.`)) return;
+  try {
+    const batch = db.batch();
+    recs.forEach(r => batch.delete(db.collection('sales').doc(r._docId)));
+    await batch.commit();
+    await applyStockEffects(applyList, +1);
+    showToast(`Deleted order (${recs.length} item(s)). Inventory adjusted.`, 'ok');
+    loadHistory();
+    if (currentTab === 'inventory') renderInventory();
+  } catch(e) { console.error(e); showToast('Error deleting order.', 'error'); }
 }
 
 // ==========================================
@@ -1652,29 +1915,32 @@ async function getNextId(collection) {
 }
 
 function exportInventoryCSV() {
+  const stockOf = (isbn, branch) => asOfMode ? (asOfStockMap[isbn + '|' + branch] || 0) : getStock(isbn, branch);
   let csv = 'ISBN,Title,Cost Price,Selling Price,LA,RH,IRV,Total\n';
   books.forEach(b => {
-    const la = getStock(b.isbn,'LA'), rh = getStock(b.isbn,'RH'), irv = getStock(b.isbn,'IRV');
+    const la = stockOf(b.isbn,'LA'), rh = stockOf(b.isbn,'RH'), irv = stockOf(b.isbn,'IRV');
     csv += [b.isbn, `"${b.title}"`, b.costPrice||0, b.sellingPrice||0, la, rh, irv, la+rh+irv].join(',') + '\n';
   });
-  downloadCSV(csv, 'inventory.csv');
+  const fname = asOfMode ? `inventory_asof_${asOfLabel.substring(0,10)}.csv` : 'inventory.csv';
+  downloadCSV(csv, fname);
 }
 
 function exportHistoryCSV() {
-  if (!historyData.length) { showToast('No data to export.', 'error'); return; }
-  let csv = '', rows = historyData;
+  const rows = filterHistRows(historyData);
+  if (!rows.length) { showToast('No data to export.', 'error'); return; }
+  let csv = '';
   if (currentHistTab === 'sales') {
-    csv = 'ID,TxnID,Title,Branch,Student,Qty,Price,TxnDiscount,Paid,Payment,Note,Date\n';
-    rows.forEach(r => { csv += [r.id,r.txnId||'',`"${r.title}"`,r.branch,`"${r.student||''}"`,r.quantity,r.sellingPrice,r.txnDiscount||r.discount||0,r.totalPaid,`"${r.paymentSummary||''}"`,`"${r.note||''}"`,r.soldAt].join(',') + '\n'; });
+    csv = '#,TxnID,Title,Branch,Student,Qty,Price,TxnDiscount,Paid,Payment,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,r.txnId||'',`"${r.title}"`,r.branch,`"${r.student||''}"`,r.quantity,r.sellingPrice,r.txnDiscount||r.discount||0,r.totalPaid,`"${r.paymentSummary||''}"`,`"${r.note||''}"`,r.soldAt].join(',') + '\n'; });
   } else if (currentHistTab === 'stockin') {
-    csv = 'ID,Title,Branch,Qty,Source,Note,Date\n';
-    rows.forEach(r => { csv += [r.id,`"${r.title}"`,r.branch,r.quantity,`"${r.orderSource||''}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,Branch,Qty,Source,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,`"${r.orderSource||''}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   } else if (currentHistTab === 'stockout') {
-    csv = 'ID,Title,Branch,Qty,Note,Date\n';
-    rows.forEach(r => { csv += [r.id,`"${r.title}"`,r.branch,r.quantity,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,Branch,Qty,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   } else if (currentHistTab === 'transfers') {
-    csv = 'ID,Title,From,To,Qty,Note,Date\n';
-    rows.forEach(r => { csv += [r.id,`"${r.title}"`,r.fromBranch,r.toBranch,r.quantity,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,From,To,Qty,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.fromBranch,r.toBranch,r.quantity,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   }
   downloadCSV(csv, currentHistTab + '_history.csv');
 }
@@ -1727,13 +1993,28 @@ firebase.auth().onAuthStateChanged(async user => {
     badge.textContent = currentRole;
     badge.className = 'role-badge ' + currentRole;
     document.getElementById('user-info').style.display = 'flex';
+    const savedInStock = localStorage.getItem('inv_instock_only');
+    if (savedInStock !== null) document.getElementById('inv-instock-only').checked = savedInStock === '1';
+    document.getElementById('sell-time').value = nowLA().substring(11,16);
     loadAll().then(() => {
       const urlTab = new URLSearchParams(location.search).get('tab');
       const savedTab = localStorage.getItem('inventory_tab');
       const savedHistTab = localStorage.getItem('inventory_hist_tab');
       const tabToLoad = urlTab || savedTab || 'inventory';
+
+      // Restore the selected branch (ALL is manager-only).
+      const savedBranch = localStorage.getItem('inventory_branch');
+      const branchToUse = (savedBranch && ['LA','RH','IRV','ALL'].includes(savedBranch)
+        && (savedBranch !== 'ALL' || currentRole === 'manager')) ? savedBranch : currentBranch;
+      setBranch(branchToUse);
+
+      // Restore history filters before loading the history tab.
+      restoreHistFilters();
+
       if (tabToLoad !== 'inventory') switchTab(tabToLoad);
       if (savedHistTab && savedHistTab !== 'sales') switchHistoryTab(savedHistTab);
+    }).finally(() => {
+      const ld = document.getElementById('app-loading'); if (ld) ld.style.display = 'none';
     });
   } else {
     window.location.href = '/';
