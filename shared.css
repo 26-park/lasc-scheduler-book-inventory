@@ -8,6 +8,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 7px 10px; border: 1px solid #d0d0d0; border-radius: 5px; font-size: 13px; font-family: inherit; background: white; }
 .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: #1a1a2e; }
 .btn { padding: 7px 14px; border: none; border-radius: 5px; cursor: pointer; font-size: 13px; font-weight: 500; font-family: inherit; }
+.btn:disabled { opacity: 0.55; cursor: not-allowed; pointer-events: none; }
 .btn-primary { background: #1a1a2e; color: white; } .btn-primary:hover { background: #2e2e50; }
 .btn-secondary { background: #f0f0f0; color: #333; } .btn-secondary:hover { background: #e4e4e4; }
 .btn-danger { background: #dc2626; color: white; } .btn-danger:hover { background: #b91c1c; }

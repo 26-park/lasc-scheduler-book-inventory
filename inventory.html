@@ -585,7 +585,7 @@ async function loadInventory() {
 
 async function loadPendingOrders() {
   const snap = await db.collection('pending_orders').orderBy('orderedAt','desc').get();
-  pendingOrders = snap.docs.map(d => { const data = d.data(); return { ...data, id: d.id, id_num: data.id }; });
+  pendingOrders = snap.docs.map(d => ({ ...d.data(), id: d.id }));
 }
 
 function getStock(isbn, branch) {
@@ -599,16 +599,27 @@ function getPending(isbn, branch) {
     .reduce((s, o) => s + Number(o.quantity), 0);
 }
 
-async function updateStock(isbn, title, branch, delta) {
+// Queue a stock change on a write batch. Uses a server-side increment so
+// concurrent writes from other users/stale tabs never overwrite each other.
+// Returns a function that syncs the local cache; call it after commit succeeds.
+function batchStockUpdate(batch, isbn, title, branch, delta) {
   const existing = inventory.find(r => r.isbn === isbn && r.branch === branch);
   if (existing) {
-    const newStock = (Number(existing.stock) || 0) + delta;
-    await db.collection('inventory').doc(existing.id).update({ stock: newStock });
-    existing.stock = newStock;
-  } else {
-    const ref = await db.collection('inventory').add({ isbn, title, branch, stock: Math.max(0, delta) });
-    inventory.push({ id: ref.id, isbn, title, branch, stock: Math.max(0, delta) });
+    batch.update(db.collection('inventory').doc(existing.id),
+      { stock: firebase.firestore.FieldValue.increment(delta) });
+    return () => { existing.stock = (Number(existing.stock) || 0) + delta; };
   }
+  const ref = db.collection('inventory').doc();
+  const stock = Math.max(0, delta);
+  batch.set(ref, { isbn, title, branch, stock });
+  return () => { inventory.push({ id: ref.id, isbn, title, branch, stock }); };
+}
+
+async function updateStock(isbn, title, branch, delta) {
+  const batch = db.batch();
+  const applyLocal = batchStockUpdate(batch, isbn, title, branch, delta);
+  await batch.commit();
+  applyLocal();
 }
 
 // ==========================================
@@ -1031,21 +1042,26 @@ async function processSell() {
   const soldAt = sellDateVal ? sellDateVal + ' ' + (sellTimeVal || nowLA().substring(11,16)) : nowLA();
 
   try {
+    // Single atomic batch: all stock decrements + sale records commit together,
+    // so a mid-sale failure can never leave stock changed without a record.
+    const batch = db.batch();
+    const applyLocal = [];
     let discountRemaining = discount;
     for (const item of cartItems) {
-      await updateStock(item.isbn, item.title, branch, -item.qty);
+      applyLocal.push(batchStockUpdate(batch, item.isbn, item.title, branch, -item.qty));
       const itemSubtotal = item.unitPrice * item.qty;
       const itemPaid = isTeacher ? 0 : Math.max(0, itemSubtotal - discountRemaining);
       discountRemaining = 0;
-      const lastId = await getNextId('sales');
-      await db.collection('sales').add({
-        id: lastId, txnId, isbn: item.isbn, title: item.title, branch,
+      batch.set(db.collection('sales').doc(), {
+        txnId, isbn: item.isbn, title: item.title, branch,
         quantity: item.qty, sellingPrice: itemSubtotal,
         discount: 0, txnDiscount: discount, totalPaid: itemPaid,
         student, paymentSummary, note, soldAt,
         createdBy: currentUser ? currentUser.email : ''
       });
     }
+    await batch.commit();
+    applyLocal.forEach(fn => fn());
     const cartDesc = cartItems.length === 1
       ? `${cartItems[0].title} ×${cartItems[0].qty}`
       : `${cartItems.length} items`;
@@ -1102,24 +1118,26 @@ async function processAdjust() {
   }
 
   try {
-    await updateStock(isbn, book.title, branch, delta);
+    const batch = db.batch();
+    const applyLocal = batchStockUpdate(batch, isbn, book.title, branch, delta);
     if (delta > 0) {
-      const histId = await getNextId('stock_history');
-      await db.collection('stock_history').add({
-        id: histId, isbn, title: book.title, branch, quantity: delta,
+      batch.set(db.collection('stock_history').doc(), {
+        isbn, title: book.title, branch, quantity: delta,
         note, orderSource: '', createdAt: nowLA(),
         createdBy: currentUser ? currentUser.email : ''
       });
-      showToast(`Restocked: ${book.title} +${delta} at ${branch}`, 'ok');
     } else {
-      const histId = await getNextId('stock_out');
-      await db.collection('stock_out').add({
-        id: histId, isbn, title: book.title, branch, quantity: Math.abs(delta),
+      batch.set(db.collection('stock_out').doc(), {
+        isbn, title: book.title, branch, quantity: Math.abs(delta),
         note, createdAt: nowLA(),
         createdBy: currentUser ? currentUser.email : ''
       });
-      showToast(`Removed: ${book.title} ${delta} at ${branch}`, 'ok');
     }
+    await batch.commit();
+    applyLocal();
+    showToast(delta > 0
+      ? `Restocked: ${book.title} +${delta} at ${branch}`
+      : `Removed: ${book.title} ${delta} at ${branch}`, 'ok');
     closeAdjustModal();
     renderInventory();
   } catch(e) {
@@ -1181,14 +1199,16 @@ async function processTransfer() {
   if (current < qty) { warnEl.textContent = `Insufficient stock at ${fromBranch}. Current: ${current}`; warnEl.style.display = ''; return; }
 
   try {
-    await updateStock(isbn, book.title, fromBranch, -qty);
-    await updateStock(isbn, book.title, toBranch, qty);
-    const lastId = await getNextId('transfers');
-    await db.collection('transfers').add({
-      id: lastId, isbn, title: book.title, fromBranch, toBranch, quantity: qty,
+    const batch = db.batch();
+    const applyFrom = batchStockUpdate(batch, isbn, book.title, fromBranch, -qty);
+    const applyTo = batchStockUpdate(batch, isbn, book.title, toBranch, qty);
+    batch.set(db.collection('transfers').doc(), {
+      isbn, title: book.title, fromBranch, toBranch, quantity: qty,
       note, createdAt: nowLA(),
       createdBy: currentUser ? currentUser.email : ''
     });
+    await batch.commit();
+    applyFrom(); applyTo();
     showToast(`Transferred: ${book.title} ×${qty} ${fromBranch} → ${toBranch}`, 'ok');
     closeTransferModal();
     renderInventory();
@@ -1213,12 +1233,11 @@ async function addOrder() {
   if (!qty || qty < 1) { showToast('Invalid quantity.', 'error'); return; }
 
   try {
-    const lastId = await getNextId('pending_orders');
     const ref = await db.collection('pending_orders').add({
-      id: lastId, isbn, title: book.title, branch, quantity: qty,
+      isbn, title: book.title, branch, quantity: qty,
       orderSource: source, note, orderedAt: nowLA(), status: 'pending'
     });
-    pendingOrders.unshift({ id: ref.id, id_num: lastId, isbn, title: book.title, branch, quantity: qty,
+    pendingOrders.unshift({ id: ref.id, isbn, title: book.title, branch, quantity: qty,
       orderSource: source, note, orderedAt: nowLA(), status: 'pending' });
     showToast(`Order placed: ${book.title} ×${qty} for ${branch}`, 'ok');
     document.getElementById('ord-qty').value = '1';
@@ -1246,7 +1265,7 @@ function renderOrders() {
     return;
   }
 
-  document.getElementById('orders-tbody').innerHTML = rows.map(o => {
+  document.getElementById('orders-tbody').innerHTML = rows.map((o, i) => {
     const badgeCls = o.status === 'pending' ? 'badge-pending' : (o.status === 'received' ? 'badge-received' : 'badge-cancelled');
     const actions = currentRole !== 'manager' ? '' : o.status === 'pending'
       ? `<button class="btn btn-success btn-sm" onclick="openReceiveModal('${o.id}')">Receive</button>
@@ -1255,7 +1274,7 @@ function renderOrders() {
         ? `<button class="btn btn-secondary btn-sm" onclick="restoreOrder('${o.id}')">Restore</button>`
         : '');
     return `<tr>
-      <td style="color:#888;font-size:11px;">${esc(o.id_num||o.id)}</td>
+      <td style="color:#888;font-size:11px;">${rows.length - i}</td>
       <td>${esc(o.title)}</td>
       <td>${esc(o.branch)}</td>
       <td>${o.quantity}</td>
@@ -1302,28 +1321,34 @@ async function confirmReceive() {
     const book = books.find(b => b.isbn === order.isbn);
     const title = book ? book.title : order.title;
 
-    const stockNote = order.note ? order.note + ' (pending #' + (order.id_num||order.id) + ')' : 'From pending order';
-    await updateStock(order.isbn, title, order.branch, qtyToRecv);
-    const histId = await getNextId('stock_history');
-    await db.collection('stock_history').add({
-      id: histId, isbn: order.isbn, title, branch: order.branch,
+    const stockNote = order.note ? order.note + ' (from pending order)' : 'From pending order';
+    const batch = db.batch();
+    const applyLocal = batchStockUpdate(batch, order.isbn, title, order.branch, qtyToRecv);
+    batch.set(db.collection('stock_history').doc(), {
+      isbn: order.isbn, title, branch: order.branch,
       quantity: qtyToRecv, note: stockNote, orderSource: order.orderSource||'', createdAt: nowLA(),
       createdBy: currentUser ? currentUser.email : ''
     });
+    batch.update(db.collection('pending_orders').doc(receivingOrderId), { quantity: qtyToRecv, status: 'received' });
 
-    await db.collection('pending_orders').doc(receivingOrderId).update({ quantity: qtyToRecv, status: 'received' });
-    order.quantity = qtyToRecv; order.status = 'received';
-
+    let remainderRef = null, remainderNote = '';
     if (remaining > 0) {
-      const lastId = await getNextId('pending_orders');
-      const newNote = order.note ? order.note + ' (remainder)' : 'Remainder from order';
-      const ref = await db.collection('pending_orders').add({
-        id: lastId, isbn: order.isbn, title, branch: order.branch,
-        quantity: remaining, orderSource: order.orderSource||'', note: newNote,
+      remainderNote = order.note ? order.note + ' (remainder)' : 'Remainder from order';
+      remainderRef = db.collection('pending_orders').doc();
+      batch.set(remainderRef, {
+        isbn: order.isbn, title, branch: order.branch,
+        quantity: remaining, orderSource: order.orderSource||'', note: remainderNote,
         orderedAt: nowLA(), status: 'pending'
       });
-      pendingOrders.unshift({ id: ref.id, id_num: lastId, isbn: order.isbn, title, branch: order.branch,
-        quantity: remaining, orderSource: order.orderSource||'', note: newNote, orderedAt: nowLA(), status: 'pending' });
+    }
+
+    await batch.commit();
+    applyLocal();
+    order.quantity = qtyToRecv; order.status = 'received';
+
+    if (remainderRef) {
+      pendingOrders.unshift({ id: remainderRef.id, isbn: order.isbn, title, branch: order.branch,
+        quantity: remaining, orderSource: order.orderSource||'', note: remainderNote, orderedAt: nowLA(), status: 'pending' });
       showToast(`Received ${qtyToRecv}. New order for remaining ${remaining}.`, 'ok');
     } else {
       showToast(`Order fully received!`, 'ok');
@@ -1909,10 +1934,38 @@ async function deleteBook(docId) {
 // ==========================================
 // HELPERS
 // ==========================================
-async function getNextId(collection) {
-  const snap = await db.collection(collection).orderBy('id', 'desc').limit(1).get();
-  return snap.empty ? 1 : (Number(snap.docs[0].data().id || 0) + 1);
+// Prevent duplicate Firestore writes from double-clicks: ignore re-entry while
+// the wrapped async action is still in flight, and disable the clicked button.
+let _writesInFlight = 0;
+window.addEventListener('beforeunload', e => {
+  if (_writesInFlight > 0) { e.preventDefault(); e.returnValue = ''; }
+});
+function singleFlight(fn) {
+  let busy = false;
+  return async function(...args) {
+    if (busy) return;
+    const evt = window.event;
+    const btn = evt && evt.target && evt.target.closest ? evt.target.closest('button') : null;
+    busy = true;
+    _writesInFlight++;
+    if (btn) btn.disabled = true;
+    try {
+      return await fn.apply(this, args);
+    } finally {
+      busy = false;
+      _writesInFlight--;
+      if (btn) btn.disabled = false;
+    }
+  };
 }
+processSell = singleFlight(processSell);
+processAdjust = singleFlight(processAdjust);
+processTransfer = singleFlight(processTransfer);
+addOrder = singleFlight(addOrder);
+confirmReceive = singleFlight(confirmReceive);
+saveHistoryEdit = singleFlight(saveHistoryEdit);
+deleteHistoryRecord = singleFlight(deleteHistoryRecord);
+deleteSalesTxn = singleFlight(deleteSalesTxn);
 
 function exportInventoryCSV() {
   const stockOf = (isbn, branch) => asOfMode ? (asOfStockMap[isbn + '|' + branch] || 0) : getStock(isbn, branch);
