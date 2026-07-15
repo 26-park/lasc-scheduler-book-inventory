@@ -963,6 +963,27 @@ async function buildHistCache() {
   _histCache = cache;
 }
 
+// Signed stock change of a record from the perspective of the selected branch.
+function changeOf(tab, r) {
+  const q = Number(r.quantity) || 0;
+  if (tab === 'stockin') return q;
+  if (tab === 'sales' || tab === 'stockout') return -q;
+  if (tab === 'transfers') {
+    if (r.fromBranch === histBranch) return -q;
+    if (r.toBranch === histBranch) return q;
+  }
+  return 0;
+}
+
+// Like stockAfterOf, but transfers show only the selected branch when one is chosen.
+function stockAfterAllOf(tab, r) {
+  if (tab !== 'transfers' || histBranch === 'ALL') return stockAfterOf(tab, r);
+  const m = _histCache && _histCache.stockAfter['transfers|' + r._docId];
+  if (!m) return '';
+  const v = m[r.isbn + '|' + histBranch];
+  return v === undefined ? '' : String(v);
+}
+
 // Plain-text "stock after this transaction" for a history record.
 function stockAfterOf(tab, r) {
   const m = _histCache && _histCache.stockAfter[tab + '|' + r._docId];
@@ -1035,25 +1056,40 @@ async function loadHistory() {
   const toDate = document.getElementById('hist-to').value;
   localStorage.setItem('inv_hist_filters', JSON.stringify({ branch, year, quarter, fromDate, toDate }));
 
-  const dateField = currentHistTab === 'sales' ? 'soldAt' : 'createdAt';
   if (!_histCache) await buildHistCache();
-  let rows = _histCache[currentHistTab].slice();
+  let rows;
+  if (currentHistTab === 'all') {
+    // Merge all four record types into one timeline, newest first.
+    rows = [];
+    [['sales','soldAt'], ['stockin','createdAt'], ['stockout','createdAt'], ['transfers','createdAt']]
+      .forEach(([tab, df]) => {
+        _histCache[tab].forEach(r => rows.push({ ...r, _tab: tab, _date: r[df] || '' }));
+      });
+    rows.sort((a, b) => b._date.localeCompare(a._date) || a._docId.localeCompare(b._docId));
+  } else {
+    rows = _histCache[currentHistTab].slice();
+  }
+
+  const dateField = currentHistTab === 'sales' ? 'soldAt' : 'createdAt';
+  const dateOfRow = currentHistTab === 'all' ? (r => r._date) : (r => r[dateField] || '');
+  const tabOfRow = r => currentHistTab === 'all' ? r._tab : currentHistTab;
 
   if (branch !== 'ALL') {
-    if (currentHistTab === 'transfers') rows = rows.filter(r => r.fromBranch === branch || r.toBranch === branch);
-    else rows = rows.filter(r => r.branch === branch);
+    rows = rows.filter(r => tabOfRow(r) === 'transfers'
+      ? (r.fromBranch === branch || r.toBranch === branch)
+      : r.branch === branch);
   }
 
   if (fromDate || toDate) {
     rows = rows.filter(r => {
-      const d = (r[dateField] || '').substring(0, 10);
+      const d = dateOfRow(r).substring(0, 10);
       if (fromDate && d < fromDate) return false;
       if (toDate && d > toDate) return false;
       return true;
     });
   } else {
-    if (year !== 'ALL') rows = rows.filter(r => ((r[dateField]||'').substring(0,4)) === year);
-    if (quarter !== 'ALL') rows = rows.filter(r => getQuarter(r[dateField]) === quarter);
+    if (year !== 'ALL') rows = rows.filter(r => dateOfRow(r).substring(0, 4) === year);
+    if (quarter !== 'ALL') rows = rows.filter(r => getQuarter(dateOfRow(r)) === quarter);
   }
 
   if (currentHistTab === 'sales') rows = groupCartRows(rows);
@@ -1113,7 +1149,41 @@ function renderHistoryTable(rows) {
   const summEl = document.getElementById('hist-summary');
 
   const mgr = currentRole === 'manager';
-  if (currentHistTab === 'sales') {
+  if (currentHistTab === 'all') {
+    theadRow.innerHTML = '<th>#</th><th>Type</th><th>Title</th><th>Branch</th><th class="ta-r">Change</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Detail</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
+    summEl.style.display = 'none';
+    const typeMeta = {
+      sales:     { label: 'Sale',     cls: 't-sale' },
+      stockin:   { label: 'In',       cls: 't-in' },
+      stockout:  { label: 'Out',      cls: 't-out' },
+      transfers: { label: 'Transfer', cls: 't-tr' }
+    };
+    tbody.innerHTML = rows.length ? rows.map((r, i) => {
+      const t = r._tab;
+      const chg = changeOf(t, r);
+      const chgHtml = (t === 'transfers' && histBranch === 'ALL')
+        ? `<span class="td-dim">&#8596; ${Number(r.quantity) || 0}</span>`
+        : `<span style="color:${chg > 0 ? '#16a34a' : '#dc2626'};font-weight:600;">${chg > 0 ? '+' : ''}${chg}</span>`;
+      const branchTxt = t === 'transfers' ? `${r.fromBranch} → ${r.toBranch}` : (r.branch || '');
+      const detail = t === 'sales'
+        ? [r.student, r.paymentSummary, fmtMoney(r.totalPaid)].filter(Boolean).join(' · ')
+        : (t === 'stockin' ? (r.orderSource || '') : '');
+      return `<tr>
+        <td class="td-dim">${rows.length - i}</td>
+        <td><span class="type-badge ${typeMeta[t].cls}">${typeMeta[t].label}</span></td>
+        <td>${esc(r.title)}</td>
+        <td class="nowrap">${esc(branchTxt)}</td>
+        <td class="ta-r">${chgHtml}</td>
+        <td class="ta-r td-dim nowrap">${esc(stockAfterAllOf(t, r))}</td>
+        <td style="font-size:12px;">${esc(detail)}</td>
+        <td>${esc(r.note||'')}</td>
+        <td class="td-dim nowrap">${fmtDateTime(r._date)}</td>
+        <td class="td-dim">${esc(fmtBy(r.createdBy||''))}</td>
+        ${mgr ? `<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','${t}')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','${t}')">Del</button></td>` : ''}
+      </tr>`;
+    }).join('') : '<tr><td colspan="'+(mgr?11:10)+'" class="empty-state">No records.</td></tr>';
+
+  } else if (currentHistTab === 'sales') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th>Student</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th class="ta-r">Price</th><th class="ta-r">Discount</th><th class="ta-r">Paid</th><th>Payment</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
 
     const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
@@ -1626,7 +1696,19 @@ function exportHistoryCSV() {
   const rows = filterHistRows(historyData);
   if (!rows.length) { showToast('No data to export.', 'error'); return; }
   let csv = '';
-  if (currentHistTab === 'sales') {
+  if (currentHistTab === 'all') {
+    const label = { sales: 'Sale', stockin: 'Stock In', stockout: 'Stock Out', transfers: 'Transfer' };
+    csv = '#,Type,Title,Branch,Change,Stock After,Detail,Note,Date\n';
+    rows.forEach((r, i) => {
+      const t = r._tab;
+      const chg = (t === 'transfers' && histBranch === 'ALL') ? (Number(r.quantity) || 0) : changeOf(t, r);
+      const branchTxt = t === 'transfers' ? `${r.fromBranch} -> ${r.toBranch}` : (r.branch || '');
+      const detail = t === 'sales'
+        ? [r.student, r.paymentSummary, fmtMoney(r.totalPaid)].filter(Boolean).join(' / ')
+        : (t === 'stockin' ? (r.orderSource || '') : '');
+      csv += [rows.length-i, label[t], `"${r.title}"`, `"${branchTxt}"`, chg, `"${stockAfterAllOf(t, r)}"`, `"${detail}"`, `"${r.note||''}"`, r._date].join(',') + '\n';
+    });
+  } else if (currentHistTab === 'sales') {
     csv = '#,TxnID,Title,Branch,Student,Qty,Stock After,Price,TxnDiscount,Paid,Payment,Note,Date\n';
     rows.forEach((r, i) => { csv += [rows.length-i,r.txnId||'',`"${r.title}"`,r.branch,`"${r.student||''}"`,r.quantity,stockAfterOf('sales', r),r.sellingPrice,r.txnDiscount||r.discount||0,r.totalPaid,`"${r.paymentSummary||''}"`,`"${r.note||''}"`,r.soldAt].join(',') + '\n'; });
   } else if (currentHistTab === 'stockin') {

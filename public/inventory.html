@@ -100,6 +100,13 @@
     details.fold[open] > summary::before { transform: rotate(90deg); }
     details.fold > summary::-webkit-details-marker { display: none; }
 
+    /* History "All" tab: record-type badges */
+    .type-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 1px 7px; border-radius: 8px; text-transform: uppercase; letter-spacing: 0.3px; white-space: nowrap; }
+    .type-badge.t-sale { background: #e0f2fe; color: #0369a1; }
+    .type-badge.t-in   { background: #dcfce7; color: #15803d; }
+    .type-badge.t-out  { background: #fee2e2; color: #b91c1c; }
+    .type-badge.t-tr   { background: #ede9fe; color: #6d28d9; }
+
     /* History: collapsed cart transactions */
     .txn-summary { cursor: pointer; }
     .txn-summary td { background: #f8fbff; }
@@ -367,6 +374,7 @@
 
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="subtabs">
+        <button class="subtab" id="htab-all" onclick="switchHistoryTab('all')">All</button>
         <button class="subtab active" id="htab-sales" onclick="switchHistoryTab('sales')">Sales</button>
         <button class="subtab" id="htab-stockin" onclick="switchHistoryTab('stockin')">Stock In</button>
         <button class="subtab" id="htab-stockout" onclick="switchHistoryTab('stockout')">Stock Out</button>
