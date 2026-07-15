@@ -80,6 +80,7 @@ async function updateStock(isbn, title, branch, delta) {
   const applyLocal = batchStockUpdate(batch, isbn, title, branch, delta);
   await batch.commit();
   applyLocal();
+  invalidateHistCache();
 }
 
 // ==========================================
@@ -93,6 +94,7 @@ function switchTab(tab) {
   document.getElementById('view-' + tab).classList.add('active');
   currentTab = tab;
   localStorage.setItem('inventory_tab', tab);
+  if (tab === 'history') invalidateHistCache(); // fresh data each time the tab is entered
   renderCurrentTab();
 }
 
@@ -570,6 +572,7 @@ async function processSell() {
     }
     await batch.commit();
     applyLocal.forEach(fn => fn());
+    invalidateHistCache();
     const cartDesc = cartItems.length === 1
       ? `${cartItems[0].title} ×${cartItems[0].qty}`
       : `${cartItems.length} items`;
@@ -643,6 +646,7 @@ async function processAdjust() {
     }
     await batch.commit();
     applyLocal();
+    invalidateHistCache();
     showToast(delta > 0
       ? `Restocked: ${book.title} +${delta} at ${branch}`
       : `Removed: ${book.title} ${delta} at ${branch}`, 'ok');
@@ -717,6 +721,7 @@ async function processTransfer() {
     });
     await batch.commit();
     applyFrom(); applyTo();
+    invalidateHistCache();
     showToast(`Transferred: ${book.title} ×${qty} ${fromBranch} → ${toBranch}`, 'ok');
     closeTransferModal();
     renderInventory();
@@ -748,9 +753,7 @@ async function addOrder() {
     pendingOrders.unshift({ id: ref.id, isbn, title: book.title, branch, quantity: qty,
       orderSource: source, note, orderedAt: nowLA(), status: 'pending' });
     showToast(`Order placed: ${book.title} ×${qty} for ${branch}`, 'ok');
-    document.getElementById('ord-qty').value = '1';
-    document.getElementById('ord-source').value = '';
-    document.getElementById('ord-note').value = '';
+    closeOrderModal();
     renderOrders();
   } catch(e) {
     console.error(e);
@@ -793,6 +796,19 @@ function renderOrders() {
       <td><div style="display:flex;gap:4px;">${actions}</div></td>
     </tr>`;
   }).join('');
+}
+
+function openOrderModal() {
+  document.getElementById('ord-isbn').value = '';
+  document.getElementById('ord-qty').value = '1';
+  document.getElementById('ord-source').value = '';
+  document.getElementById('ord-note').value = '';
+  if (currentBranch !== 'ALL') document.getElementById('ord-branch').value = currentBranch;
+  document.getElementById('modal-order').classList.add('open');
+}
+
+function closeOrderModal() {
+  document.getElementById('modal-order').classList.remove('open');
 }
 
 function openReceiveModal(docId) {
@@ -852,6 +868,7 @@ async function confirmReceive() {
 
     await batch.commit();
     applyLocal();
+    invalidateHistCache();
     order.quantity = qtyToRecv; order.status = 'received';
 
     if (remainderRef) {
@@ -891,6 +908,73 @@ async function restoreOrder(docId) {
 // ==========================================
 // HISTORY
 // ==========================================
+let histBranch = 'LA';
+function setHistBranch(b) {
+  histBranch = b;
+  document.querySelectorAll('.hist-branch-btn').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.hb === b));
+  loadHistory();
+}
+
+// Cached raw history (all four collections) plus per-record stock-after
+// values. Rebuilt on entering the History tab and after any write that
+// touches inventory or history records; filter changes reuse the cache.
+let _histCache = null;
+function invalidateHistCache() { _histCache = null; }
+
+async function buildHistCache() {
+  const [salesSnap, inSnap, outSnap, trSnap] = await Promise.all([
+    db.collection('sales').orderBy('soldAt', 'desc').limit(5000).get(),
+    db.collection('stock_history').orderBy('createdAt', 'desc').limit(5000).get(),
+    db.collection('stock_out').orderBy('createdAt', 'desc').limit(5000).get(),
+    db.collection('transfers').orderBy('createdAt', 'desc').limit(5000).get()
+  ]);
+  const toRows = snap => snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
+  const cache = {
+    sales: toRows(salesSnap),
+    stockin: toRows(inSnap),
+    stockout: toRows(outSnap),
+    transfers: toRows(trSnap),
+    stockAfter: {}
+  };
+
+  // Stock AFTER each transaction: start from current stock and walk the
+  // combined timeline newest -> oldest, rolling back each record's effect.
+  const dateOf = { sales: r => r.soldAt, stockin: r => r.createdAt, stockout: r => r.createdAt, transfers: r => r.createdAt };
+  const events = [];
+  ['sales', 'stockin', 'stockout', 'transfers'].forEach(tab => {
+    cache[tab].forEach(r => {
+      const eff = histStockEffects(tab, r);
+      if (eff.length) events.push({ id: tab + '|' + r._docId, date: dateOf[tab](r) || '', eff });
+    });
+  });
+  events.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
+  const running = {};
+  events.forEach(ev => {
+    const after = {};
+    ev.eff.forEach(e => {
+      const key = e.isbn + '|' + e.branch;
+      if (!(key in running)) running[key] = getStock(e.isbn, e.branch);
+      after[key] = running[key];
+      running[key] -= e.delta;
+    });
+    cache.stockAfter[ev.id] = after;
+  });
+  _histCache = cache;
+}
+
+// Plain-text "stock after this transaction" for a history record.
+function stockAfterOf(tab, r) {
+  const m = _histCache && _histCache.stockAfter[tab + '|' + r._docId];
+  if (!m) return '';
+  if (tab === 'transfers') {
+    const f = m[r.isbn + '|' + r.fromBranch], t = m[r.isbn + '|' + r.toBranch];
+    return `${r.fromBranch} ${f === undefined ? '—' : f} · ${r.toBranch} ${t === undefined ? '—' : t}`;
+  }
+  const v = m[r.isbn + '|' + r.branch];
+  return v === undefined ? '' : String(v);
+}
+
 function switchHistoryTab(tab) {
   document.querySelectorAll('[id^="htab-"]').forEach(b => b.classList.remove('active'));
   document.getElementById('htab-' + tab).classList.add('active');
@@ -928,7 +1012,11 @@ function restoreHistFilters() {
   let f; try { f = JSON.parse(localStorage.getItem('inv_hist_filters') || 'null'); } catch(e) { f = null; }
   if (!f) return;
   const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
-  set('hist-branch', f.branch);
+  if (f.branch && ['LA','RH','IRV','ALL'].includes(f.branch) && (f.branch !== 'ALL' || currentRole === 'manager')) {
+    histBranch = f.branch;
+    document.querySelectorAll('.hist-branch-btn').forEach(btn =>
+      btn.classList.toggle('active', btn.dataset.hb === histBranch));
+  }
   set('hist-year', f.year);
   set('hist-quarter', f.quarter);
   set('hist-from', f.fromDate);
@@ -940,19 +1028,16 @@ function restoreHistFilters() {
 
 async function loadHistory() {
   if (currentTab !== 'history') return;
-  const branch = document.getElementById('hist-branch').value;
+  const branch = histBranch;
   const year = document.getElementById('hist-year').value;
   const quarter = document.getElementById('hist-quarter').value;
   const fromDate = document.getElementById('hist-from').value;
   const toDate = document.getElementById('hist-to').value;
   localStorage.setItem('inv_hist_filters', JSON.stringify({ branch, year, quarter, fromDate, toDate }));
 
-  const collMap = { sales: 'sales', stockin: 'stock_history', stockout: 'stock_out', transfers: 'transfers' };
-  const coll = collMap[currentHistTab];
-
   const dateField = currentHistTab === 'sales' ? 'soldAt' : 'createdAt';
-  const snap = await db.collection(coll).orderBy(dateField, 'desc').limit(2000).get();
-  let rows = snap.docs.map(d => ({_docId: d.id, ...d.data()}));
+  if (!_histCache) await buildHistCache();
+  let rows = _histCache[currentHistTab].slice();
 
   if (branch !== 'ALL') {
     if (currentHistTab === 'transfers') rows = rows.filter(r => r.fromBranch === branch || r.toBranch === branch);
@@ -1029,7 +1114,7 @@ function renderHistoryTable(rows) {
 
   const mgr = currentRole === 'manager';
   if (currentHistTab === 'sales') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th>Student</th><th class="ta-r">Qty</th><th class="ta-r">Price</th><th class="ta-r">Discount</th><th class="ta-r">Paid</th><th>Payment</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th>Student</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th class="ta-r">Price</th><th class="ta-r">Discount</th><th class="ta-r">Paid</th><th>Payment</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
 
     const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
     const totalRev = rows.reduce((s,r) => s + Number(r.totalPaid||0), 0);
@@ -1049,7 +1134,7 @@ function renderHistoryTable(rows) {
     });
 
     if (!rows.length) {
-      tbody.innerHTML = `<tr><td colspan="${mgr ? 13 : 12}" class="empty-state">No sales records.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="${mgr ? 14 : 13}" class="empty-state">No sales records.</td></tr>`;
     } else {
       let html = '';
       rows.forEach((r, i) => {
@@ -1063,6 +1148,7 @@ function renderHistoryTable(rows) {
             <td>${esc(r.branch)}</td>
             <td>${esc(r.student||'')}</td>
             <td class="ta-r">${r.quantity}</td>
+            <td class="ta-r td-dim">${esc(stockAfterOf('sales', r))}</td>
             <td class="ta-r">${fmtMoney(r.sellingPrice)}</td>
             <td class="ta-r">${(r.discount||r.txnDiscount) ? fmtMoney(r.discount||r.txnDiscount) : '—'}</td>
             <td class="ta-r" style="font-weight:600;">${fmtMoney(r.totalPaid)}</td>
@@ -1090,6 +1176,7 @@ function renderHistoryTable(rows) {
           <td>${esc(r.branch)}</td>
           <td>${esc(r.student||'')}</td>
           <td class="ta-r">${grpQty}</td>
+          <td></td>
           <td class="ta-r">${fmtMoney(grpTotal)}</td>
           <td class="ta-r">${grpDisc ? fmtMoney(grpDisc) : '—'}</td>
           <td class="ta-r" style="font-weight:600;">${fmtMoney(grpPaid)}</td>
@@ -1106,6 +1193,7 @@ function renderHistoryTable(rows) {
             <td style="padding-left:26px;color:#0369a1;">└ ${esc(g.title)}</td>
             <td></td><td></td>
             <td class="ta-r">${g.quantity}</td>
+            <td class="ta-r td-dim">${esc(stockAfterOf('sales', g))}</td>
             <td class="ta-r">${fmtMoney(g.sellingPrice)}</td>
             <td></td><td></td><td></td><td></td><td></td><td></td>
             ${mgr ? `<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${g._docId}','sales')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${g._docId}','sales')">Del</button></td>` : ''}
@@ -1116,43 +1204,46 @@ function renderHistoryTable(rows) {
     }
 
   } else if (currentHistTab === 'stockin') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th>Source</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Source</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
       <td class="td-dim">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td class="ta-r">${r.quantity}</td>
+      <td class="ta-r td-dim">${esc(stockAfterOf('stockin', r))}</td>
       <td>${esc(r.orderSource||'')}</td><td>${esc(r.note||'')}</td>
       <td class="td-dim nowrap">${fmtDateTime(r.createdAt)}</td>
       <td class="td-dim">${esc(fmtBy(r.createdBy||''))}</td>
-      ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','stockin')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','stockin')">Del</button></td>`:''}
-    </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No stock-in records.</td></tr>';
+      ${mgr?`<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','stockin')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','stockin')">Del</button></td>`:''}
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?10:9)+'" class="empty-state">No stock-in records.</td></tr>';
 
   } else if (currentHistTab === 'stockout') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
       <td class="td-dim">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td class="ta-r">${r.quantity}</td>
+      <td class="ta-r td-dim">${esc(stockAfterOf('stockout', r))}</td>
       <td>${esc(r.note||'')}</td>
       <td class="td-dim nowrap">${fmtDateTime(r.createdAt)}</td>
       <td class="td-dim">${esc(fmtBy(r.createdBy||''))}</td>
-      ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','stockout')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','stockout')">Del</button></td>`:''}
-    </tr>`).join('') : '<tr><td colspan="'+(mgr?8:7)+'" class="empty-state">No stock-out records.</td></tr>';
+      ${mgr?`<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','stockout')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','stockout')">Del</button></td>`:''}
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No stock-out records.</td></tr>';
 
   } else if (currentHistTab === 'transfers') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th class="ta-r">Qty</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th class="ta-r">Qty</th><th title="Stock at both branches right after this transfer">Stock</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
       <td class="td-dim">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.fromBranch)}</td><td>${esc(r.toBranch)}</td>
       <td class="ta-r">${r.quantity}</td>
+      <td class="td-dim nowrap">${esc(stockAfterOf('transfers', r))}</td>
       <td>${esc(r.note||'')}</td>
       <td class="td-dim nowrap">${fmtDateTime(r.createdAt)}</td>
       <td class="td-dim">${esc(fmtBy(r.createdBy||''))}</td>
-      ${mgr?`<td style="white-space:nowrap;"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','transfers')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','transfers')">Del</button></td>`:''}
-    </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No transfer records.</td></tr>';
+      ${mgr?`<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','transfers')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','transfers')">Del</button></td>`:''}
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?10:9)+'" class="empty-state">No transfer records.</td></tr>';
   }
 }
 
@@ -1314,6 +1405,7 @@ async function saveHistoryEdit() {
   try {
     await db.collection(coll).doc(_editHistDocId).update(update);
     await applyStockEffects(applyList, +1);
+    invalidateHistCache();
     showToast('Updated. Inventory adjusted.', 'ok');
     closeEditHistModal();
     loadHistory();
@@ -1331,6 +1423,7 @@ async function deleteHistoryRecord(docId, tab) {
   try {
     await db.collection(coll).doc(docId).delete();
     await applyStockEffects(applyList, +1);
+    invalidateHistCache();
     showToast('Deleted. Inventory adjusted.', 'ok');
     loadHistory();
     if (currentTab === 'inventory') renderInventory();
@@ -1351,6 +1444,7 @@ async function deleteSalesTxn(txnId) {
     recs.forEach(r => batch.delete(db.collection('sales').doc(r._docId)));
     await batch.commit();
     await applyStockEffects(applyList, +1);
+    invalidateHistCache();
     showToast(`Deleted order (${recs.length} item(s)). Inventory adjusted.`, 'ok');
     loadHistory();
     if (currentTab === 'inventory') renderInventory();
@@ -1388,6 +1482,16 @@ function renderBooks() {
   </tr>`).join('') : '<tr><td colspan="5" class="empty-state">No books.</td></tr>';
 }
 
+function openBookModal() {
+  cancelBookEdit();
+  document.getElementById('modal-book').classList.add('open');
+}
+
+function closeBookModal() {
+  document.getElementById('modal-book').classList.remove('open');
+  editingBookIsbn = null;
+}
+
 function editBook(docId) {
   const b = books.find(x => x.id === docId);
   if (!b) return;
@@ -1397,10 +1501,10 @@ function editBook(docId) {
   document.getElementById('bk-cost').value = b.costPrice || 0;
   document.getElementById('bk-sell').value = b.sellingPrice || 0;
   document.getElementById('book-form-title').textContent = 'Edit Book';
-  document.getElementById('cancel-book-btn').style.display = '';
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  document.getElementById('modal-book').classList.add('open');
 }
 
+// Clears the book form; also closes the modal (called after save/cancel).
 function cancelBookEdit() {
   editingBookIsbn = null;
   document.getElementById('bk-isbn').value = '';
@@ -1408,7 +1512,7 @@ function cancelBookEdit() {
   document.getElementById('bk-cost').value = '';
   document.getElementById('bk-sell').value = '';
   document.getElementById('book-form-title').textContent = 'Add Book';
-  document.getElementById('cancel-book-btn').style.display = 'none';
+  document.getElementById('modal-book').classList.remove('open');
 }
 
 async function saveBook() {
@@ -1500,6 +1604,12 @@ confirmReceive = singleFlight(confirmReceive);
 saveHistoryEdit = singleFlight(saveHistoryEdit);
 deleteHistoryRecord = singleFlight(deleteHistoryRecord);
 deleteSalesTxn = singleFlight(deleteSalesTxn);
+saveBook = singleFlight(saveBook);
+deleteBook = singleFlight(deleteBook);
+addUser = singleFlight(addUser);
+deleteUser = singleFlight(deleteUser);
+cancelOrder = singleFlight(cancelOrder);
+restoreOrder = singleFlight(restoreOrder);
 
 function exportInventoryCSV() {
   const stockOf = (isbn, branch) => asOfMode ? (asOfStockMap[isbn + '|' + branch] || 0) : getStock(isbn, branch);
@@ -1517,17 +1627,17 @@ function exportHistoryCSV() {
   if (!rows.length) { showToast('No data to export.', 'error'); return; }
   let csv = '';
   if (currentHistTab === 'sales') {
-    csv = '#,TxnID,Title,Branch,Student,Qty,Price,TxnDiscount,Paid,Payment,Note,Date\n';
-    rows.forEach((r, i) => { csv += [rows.length-i,r.txnId||'',`"${r.title}"`,r.branch,`"${r.student||''}"`,r.quantity,r.sellingPrice,r.txnDiscount||r.discount||0,r.totalPaid,`"${r.paymentSummary||''}"`,`"${r.note||''}"`,r.soldAt].join(',') + '\n'; });
+    csv = '#,TxnID,Title,Branch,Student,Qty,Stock After,Price,TxnDiscount,Paid,Payment,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,r.txnId||'',`"${r.title}"`,r.branch,`"${r.student||''}"`,r.quantity,stockAfterOf('sales', r),r.sellingPrice,r.txnDiscount||r.discount||0,r.totalPaid,`"${r.paymentSummary||''}"`,`"${r.note||''}"`,r.soldAt].join(',') + '\n'; });
   } else if (currentHistTab === 'stockin') {
-    csv = '#,Title,Branch,Qty,Source,Note,Date\n';
-    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,`"${r.orderSource||''}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,Branch,Qty,Stock After,Source,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,stockAfterOf('stockin', r),`"${r.orderSource||''}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   } else if (currentHistTab === 'stockout') {
-    csv = '#,Title,Branch,Qty,Note,Date\n';
-    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,Branch,Qty,Stock After,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,stockAfterOf('stockout', r),`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   } else if (currentHistTab === 'transfers') {
-    csv = '#,Title,From,To,Qty,Note,Date\n';
-    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.fromBranch,r.toBranch,r.quantity,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,From,To,Qty,Stock After,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.fromBranch,r.toBranch,r.quantity,`"${stockAfterOf('transfers', r)}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   }
   downloadCSV(csv, currentHistTab + '_history.csv');
 }
@@ -1549,6 +1659,15 @@ document.getElementById('modal-adjust').addEventListener('click', function(e) {
 });
 document.getElementById('modal-transfer').addEventListener('click', function(e) {
   if (e.target === this) closeTransferModal();
+});
+document.getElementById('modal-order').addEventListener('click', function(e) {
+  if (e.target === this) closeOrderModal();
+});
+document.getElementById('modal-book').addEventListener('click', function(e) {
+  if (e.target === this) closeBookModal();
+});
+document.getElementById('modal-user').addEventListener('click', function(e) {
+  if (e.target === this) closeUserModal();
 });
 
 // ==========================================
@@ -1611,6 +1730,16 @@ firebase.auth().onAuthStateChanged(async user => {
 // ==========================================
 // USERS MANAGEMENT
 // ==========================================
+function openUserModal() {
+  document.getElementById('new-user-email').value = '';
+  document.getElementById('new-user-role').value = 'staff';
+  document.getElementById('modal-user').classList.add('open');
+}
+
+function closeUserModal() {
+  document.getElementById('modal-user').classList.remove('open');
+}
+
 async function loadUsers() {
   if (currentRole !== 'manager') return;
   try {
@@ -1650,7 +1779,7 @@ async function addUser() {
       usersData.sort((a, b) => a.email.localeCompare(b.email));
     }
     renderUsers();
-    document.getElementById('new-user-email').value = '';
+    closeUserModal();
     showToast(`${email} (${role}) saved`, 'ok');
   } catch(e) {
     showToast('Error saving user.', 'error');
