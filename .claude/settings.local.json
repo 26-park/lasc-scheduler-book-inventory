@@ -43,7 +43,9 @@
       "Bash(firebase projects:list)",
       "Bash(firebase login:list)",
       "Skill(run)",
-      "Bash(awk { if \\(length\\($0\\) > 500\\) print NR\": \"length\\($0\\)\" chars\" } *)"
+      "Bash(awk { if \\(length\\($0\\) > 500\\) print NR\": \"length\\($0\\)\" chars\" } *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://lasc-scheduler.web.app/serviceAccountKey.json)",
+      "Bash(curl -s https://lasc-scheduler.web.app/serviceAccountKey.json)"
     ]
   }
 }

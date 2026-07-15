@@ -10,16 +10,18 @@ Web app for LASC language school (lascusa.com) — teacher scheduling and book i
 
 ## Pages
 
-- **`index.html`** — Scheduler: teacher list, per-teacher schedule (weekly grid), PT session tracker, contracts
-- **`inventory.html`** — Book Inventory: stock management, sell, stock-in/out, orders, transfer between branches (LA / RH / IRV)
+All deployed web files live in `public/` (Firebase Hosting root). Never put secrets or non-app files in `public/` — everything in it is publicly served.
+
+- **`public/index.html`** — Scheduler: teacher list, per-teacher schedule (weekly grid), PT session tracker, contracts
+- **`public/inventory.html`** — Book Inventory: stock management, sell, stock-in/out, orders, transfer between branches (LA / RH / IRV)
 
 Both pages share a top navigation bar (Scheduler | Inventory tabs) and the same LASC logo.
 
 ## Shared Files
 
-- **`shared.css`** — common styles (layout, components, role-based UI visibility)
-- **`utils.js`** — `escHtml` / `showToast` utilities, included by both pages
-- **`firebase-init.js`** — Firebase app init and `db` export, included by both pages
+- **`public/shared.css`** — common styles (layout, components, role-based UI visibility)
+- **`public/utils.js`** — `escHtml` / `showToast` utilities, included by both pages
+- **`public/firebase-init.js`** — Firebase app init and `db` export, included by both pages
 
 ## Language
 
@@ -42,7 +44,7 @@ Both pages share a top navigation bar (Scheduler | Inventory tabs) and the same 
 
 ## Development
 
-Open `index.html` or `inventory.html` directly in a browser, or serve via:
+Open `public/index.html` or `public/inventory.html` directly in a browser, or serve via:
 
 ```
 firebase emulators:start
