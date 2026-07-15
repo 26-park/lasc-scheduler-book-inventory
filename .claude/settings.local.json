@@ -45,7 +45,9 @@
       "Skill(run)",
       "Bash(awk { if \\(length\\($0\\) > 500\\) print NR\": \"length\\($0\\)\" chars\" } *)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" https://lasc-scheduler.web.app/serviceAccountKey.json)",
-      "Bash(curl -s https://lasc-scheduler.web.app/serviceAccountKey.json)"
+      "Bash(curl -s https://lasc-scheduler.web.app/serviceAccountKey.json)",
+      "Bash(firebase emulators:start *)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:5000/inventory)"
     ]
   }
 }
