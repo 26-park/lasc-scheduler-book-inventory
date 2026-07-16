@@ -1,4 +1,4 @@
-const BRANCHES = ['LA', 'RH', 'IRV'];
+const BRANCHES = ['IRV', 'LA', 'RH'];
 const BRANCH_FULL = { LA: 'LA', RH: 'Rowland Heights', IRV: 'Irvine' };
 const QUARTERS = ['Winter', 'Spring', 'Summer', 'Fall'];
 
@@ -663,7 +663,7 @@ function openTransferModal(isbn) {
   document.getElementById('mt-isbn').innerHTML = opts;
   if (currentBranch !== 'ALL') {
     document.getElementById('mt-from').value = currentBranch;
-    const toOptions = ['LA','RH','IRV'].filter(b => b !== currentBranch);
+    const toOptions = BRANCHES.filter(b => b !== currentBranch);
     document.getElementById('mt-to').value = toOptions[0];
   }
   document.getElementById('mt-qty').value = '1';
@@ -1440,7 +1440,7 @@ function editHistoryRecord(docId, tab) {
   const fg = (label, inner) => `<div class="form-group" style="margin-bottom:10px;"><label>${label}</label>${inner}</div>`;
   const ti = (id, val) => `<input type="text" id="${id}" value="${esc(val||'')}">`;
   const ni = (id, val) => `<input type="number" id="${id}" value="${val||0}" min="0" step="any" style="width:100%;">`;
-  const brSel = (id, val) => `<select id="${id}" style="width:100%;"><option value="LA"${val==='LA'?' selected':''}>LA</option><option value="RH"${val==='RH'?' selected':''}>RH</option><option value="IRV"${val==='IRV'?' selected':''}>IRV</option></select>`;
+  const brSel = (id, val) => `<select id="${id}" style="width:100%;"><option value="IRV"${val==='IRV'?' selected':''}>IRV</option><option value="LA"${val==='LA'?' selected':''}>LA</option><option value="RH"${val==='RH'?' selected':''}>RH</option></select>`;
   const di = (id, val) => `<input type="date" id="${id}" value="${(val||'').substring(0,10)}" style="width:100%;">`;
   const bookSel = (id, curIsbn, curTitle) => {
     const matchIsbn = curIsbn || (books.find(b => b.title === curTitle)?.isbn || '');
@@ -1744,10 +1744,10 @@ restoreOrder = singleFlight(restoreOrder);
 
 function exportInventoryCSV() {
   const stockOf = (isbn, branch) => asOfMode ? (asOfStockMap[isbn + '|' + branch] || 0) : getStock(isbn, branch);
-  let csv = 'ISBN,Title,Cost Price,Selling Price,LA,RH,IRV,Total\n';
+  let csv = 'ISBN,Title,Cost Price,Selling Price,IRV,LA,RH,Total\n';
   books.forEach(b => {
-    const la = stockOf(b.isbn,'LA'), rh = stockOf(b.isbn,'RH'), irv = stockOf(b.isbn,'IRV');
-    csv += [b.isbn, `"${b.title}"`, b.costPrice||0, b.sellingPrice||0, la, rh, irv, la+rh+irv].join(',') + '\n';
+    const irv = stockOf(b.isbn,'IRV'), la = stockOf(b.isbn,'LA'), rh = stockOf(b.isbn,'RH');
+    csv += [b.isbn, `"${b.title}"`, b.costPrice||0, b.sellingPrice||0, irv, la, rh, irv+la+rh].join(',') + '\n';
   });
   const fname = asOfMode ? `inventory_asof_${asOfLabel.substring(0,10)}.csv` : 'inventory.csv';
   downloadCSV(csv, fname);
