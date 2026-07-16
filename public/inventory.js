@@ -188,6 +188,7 @@ function renderInventory() {
           <button class="btn btn-primary btn-xs" onclick="startSell('${esc(book.isbn)}')" ${rowStock === 0 ? 'disabled' : ''}>Sell</button>
           <button class="btn btn-secondary btn-xs manager-only" onclick="openAdjustModal('${esc(book.isbn)}')">Adjust</button>
           <button class="btn btn-secondary btn-xs manager-only" onclick="openTransferModal('${esc(book.isbn)}')">Transfer</button>
+          <button class="btn btn-secondary btn-xs manager-only" onclick="openTeacherCopyModal('${esc(book.isbn)}')" ${rowStock === 0 ? 'disabled' : ''}>Teacher</button>
         </div></td>`
       : '';
 
@@ -342,8 +343,7 @@ function toggleSplitPayment() {
   document.getElementById('sell-payment-method').disabled = splitMode;
   if (splitMode && !paymentRows.length) {
     // Seed with the currently selected method for the full amount.
-    const method = document.getElementById('sell-payment-method').value;
-    if (method !== 'Teacher') addPaymentRow(method);
+    addPaymentRow(document.getElementById('sell-payment-method').value);
   }
   if (!splitMode) { paymentRows = []; renderPaymentRows(); }
   updatePaymentSummary();
@@ -353,7 +353,6 @@ function toggleSplitPayment() {
 function effectivePaymentRows() {
   if (splitMode) return paymentRows;
   const method = document.getElementById('sell-payment-method').value;
-  if (method === 'Teacher') return [{ method: 'Teacher', amount: 0 }];
   const disc = parseFloat(document.getElementById('sell-discount').value) || 0;
   return [{ method, amount: Math.max(0, cartSubtotal() - disc) }];
 }
@@ -487,8 +486,6 @@ function updatePaymentSummary() {
   if (!cartItems.length) { el.textContent = ''; return; }
   const rows = effectivePaymentRows();
   if (!rows.length) { el.textContent = ''; return; }
-  const isTeacher = rows.length === 1 && rows[0].method === 'Teacher';
-  if (isTeacher) { el.textContent = 'Teacher copy — $0.00'; return; }
   const disc = parseFloat(document.getElementById('sell-discount').value) || 0;
   const total = Math.max(0, cartSubtotal() - disc);
   const paid = rows.reduce((s, r) => s + Number(r.amount), 0);
@@ -544,8 +541,7 @@ async function processSell() {
   }
 
   const subtotal = cartSubtotal();
-  const isTeacher = payRows.length === 1 && payRows[0].method === 'Teacher';
-  const paymentSummary = isTeacher ? 'Teacher' : payRows.map(r => `${r.method}:$${r.amount}`).join(', ');
+  const paymentSummary = payRows.map(r => `${r.method}:$${r.amount}`).join(', ');
   const txnId = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   const sellDateVal = document.getElementById('sell-date').value;
   const sellTimeVal = document.getElementById('sell-time').value;
@@ -560,7 +556,7 @@ async function processSell() {
     for (const item of cartItems) {
       applyLocal.push(batchStockUpdate(batch, item.isbn, item.title, branch, -item.qty));
       const itemSubtotal = item.unitPrice * item.qty;
-      const itemPaid = isTeacher ? 0 : Math.max(0, itemSubtotal - discountRemaining);
+      const itemPaid = Math.max(0, itemSubtotal - discountRemaining);
       discountRemaining = 0;
       batch.set(db.collection('sales').doc(), {
         txnId, isbn: item.isbn, title: item.title, branch,
@@ -576,7 +572,7 @@ async function processSell() {
     const cartDesc = cartItems.length === 1
       ? `${cartItems[0].title} ×${cartItems[0].qty}`
       : `${cartItems.length} items`;
-    const totalPaid = isTeacher ? 0 : Math.max(0, subtotal - discount);
+    const totalPaid = Math.max(0, subtotal - discount);
     showToast(`Sold: ${cartDesc} — ${fmtMoney(totalPaid)}`, 'ok');
     resetSellForm();
     if (currentTab === 'inventory') renderInventory();
@@ -728,6 +724,66 @@ async function processTransfer() {
   } catch(e) {
     console.error(e);
     showToast('Error processing transfer.', 'error');
+  }
+}
+
+// ==========================================
+// TEACHER COPY (give a book to a teacher — recorded as stock out)
+// ==========================================
+let teacherCopyIsbn = null, teacherCopyBranch = null;
+
+function openTeacherCopyModal(isbn) {
+  const book = books.find(b => b.isbn === isbn);
+  if (!book) return;
+  teacherCopyIsbn = isbn;
+  teacherCopyBranch = currentBranch;
+  document.getElementById('mtc-book-info').textContent = `${book.title} — ${currentBranch}`;
+  document.getElementById('mtc-current').textContent = getStock(isbn, currentBranch);
+  document.getElementById('mtc-teacher').value = '';
+  document.getElementById('mtc-qty').value = '1';
+  document.getElementById('mtc-note').value = '';
+  document.getElementById('mtc-warn').style.display = 'none';
+  document.getElementById('modal-teacher').classList.add('open');
+}
+
+function closeTeacherCopyModal() {
+  document.getElementById('modal-teacher').classList.remove('open');
+  teacherCopyIsbn = null;
+  teacherCopyBranch = null;
+}
+
+async function processTeacherCopy() {
+  const isbn = teacherCopyIsbn;
+  const branch = teacherCopyBranch;
+  const teacher = document.getElementById('mtc-teacher').value.trim();
+  const qty = parseInt(document.getElementById('mtc-qty').value) || 0;
+  const note = document.getElementById('mtc-note').value.trim();
+  const warnEl = document.getElementById('mtc-warn');
+
+  const book = books.find(b => b.isbn === isbn);
+  if (!book) return;
+  if (!teacher) { warnEl.textContent = "Enter the teacher's name."; warnEl.style.display = ''; return; }
+  if (qty < 1) { warnEl.textContent = 'Invalid quantity.'; warnEl.style.display = ''; return; }
+  const current = getStock(isbn, branch);
+  if (current < qty) { warnEl.textContent = `Not enough stock at ${branch}. Current: ${current}`; warnEl.style.display = ''; return; }
+
+  try {
+    const batch = db.batch();
+    const applyLocal = batchStockUpdate(batch, isbn, book.title, branch, -qty);
+    batch.set(db.collection('stock_out').doc(), {
+      isbn, title: book.title, branch, quantity: qty,
+      teacher, note, createdAt: nowLA(),
+      createdBy: currentUser ? currentUser.email : ''
+    });
+    await batch.commit();
+    applyLocal();
+    invalidateHistCache();
+    showToast(`Teacher copy: ${book.title} ×${qty} → ${teacher}`, 'ok');
+    closeTeacherCopyModal();
+    renderInventory();
+  } catch(e) {
+    console.error(e);
+    showToast('Error saving teacher copy.', 'error');
   }
 }
 
@@ -1107,7 +1163,7 @@ function onHistSearchInput() {
 function filterHistRows(rows) {
   const q = (document.getElementById('hist-search').value || '').trim().toLowerCase();
   if (!q) return rows;
-  const matches = r => [r.title, r.isbn, r.student, r.note, r.branch, r.fromBranch, r.toBranch,
+  const matches = r => [r.title, r.isbn, r.student, r.teacher, r.note, r.branch, r.fromBranch, r.toBranch,
     r.orderSource, r.paymentSummary, fmtBy(r.createdBy || ''), r.soldAt, r.createdAt]
     .some(v => v && String(v).toLowerCase().includes(q));
   if (currentHistTab === 'sales') {
@@ -1167,7 +1223,8 @@ function renderHistoryTable(rows) {
       const branchTxt = t === 'transfers' ? `${r.fromBranch} → ${r.toBranch}` : (r.branch || '');
       const detail = t === 'sales'
         ? [r.student, r.paymentSummary, fmtMoney(r.totalPaid)].filter(Boolean).join(' · ')
-        : (t === 'stockin' ? (r.orderSource || '') : '');
+        : (t === 'stockin' ? (r.orderSource || '')
+        : (t === 'stockout' && r.teacher ? `Teacher: ${r.teacher}` : ''));
       return `<tr>
         <td class="td-dim">${rows.length - i}</td>
         <td><span class="type-badge ${typeMeta[t].cls}">${typeMeta[t].label}</span></td>
@@ -1288,18 +1345,19 @@ function renderHistoryTable(rows) {
     </tr>`).join('') : '<tr><td colspan="'+(mgr?10:9)+'" class="empty-state">No stock-in records.</td></tr>';
 
   } else if (currentHistTab === 'stockout') {
-    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
+    theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Teacher</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
     summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
       <td class="td-dim">${rows.length - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td class="ta-r">${r.quantity}</td>
       <td class="ta-r td-dim">${esc(stockAfterOf('stockout', r))}</td>
+      <td>${esc(r.teacher||'')}</td>
       <td>${esc(r.note||'')}</td>
       <td class="td-dim nowrap">${fmtDateTime(r.createdAt)}</td>
       <td class="td-dim">${esc(fmtBy(r.createdBy||''))}</td>
       ${mgr?`<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${r._docId}','stockout')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${r._docId}','stockout')">Del</button></td>`:''}
-    </tr>`).join('') : '<tr><td colspan="'+(mgr?9:8)+'" class="empty-state">No stock-out records.</td></tr>';
+    </tr>`).join('') : '<tr><td colspan="'+(mgr?10:9)+'" class="empty-state">No stock-out records.</td></tr>';
 
   } else if (currentHistTab === 'transfers') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th class="ta-r">Qty</th><th title="Stock at both branches right after this transfer">Stock</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
@@ -1416,6 +1474,7 @@ function editHistoryRecord(docId, tab) {
       fg('Title', bookSel('eh-title', r.isbn, r.title)) +
       fg('Branch', brSel('eh-branch', r.branch)) +
       fg('Qty', ni('eh-qty', r.quantity)) +
+      fg('Teacher', ti('eh-teacher', r.teacher)) +
       fg('Note', ti('eh-note', r.note)) +
       fg('Date', di('eh-date', r.createdAt));
   } else if (tab === 'transfers') {
@@ -1449,6 +1508,7 @@ async function saveHistoryEdit() {
   if (g('eh-note')    !== null) update.note          = g('eh-note').trim();
   if (g('eh-source')  !== null) update.orderSource   = g('eh-source').trim();
   if (g('eh-student') !== null) update.student       = g('eh-student').trim();
+  if (g('eh-teacher') !== null) update.teacher       = g('eh-teacher').trim();
   if (g('eh-branch')  !== null) update.branch        = g('eh-branch');
   if (g('eh-from')    !== null) update.fromBranch    = g('eh-from');
   if (g('eh-to')      !== null) update.toBranch      = g('eh-to');
@@ -1669,6 +1729,7 @@ function singleFlight(fn) {
 processSell = singleFlight(processSell);
 processAdjust = singleFlight(processAdjust);
 processTransfer = singleFlight(processTransfer);
+processTeacherCopy = singleFlight(processTeacherCopy);
 addOrder = singleFlight(addOrder);
 confirmReceive = singleFlight(confirmReceive);
 saveHistoryEdit = singleFlight(saveHistoryEdit);
@@ -1705,7 +1766,8 @@ function exportHistoryCSV() {
       const branchTxt = t === 'transfers' ? `${r.fromBranch} -> ${r.toBranch}` : (r.branch || '');
       const detail = t === 'sales'
         ? [r.student, r.paymentSummary, fmtMoney(r.totalPaid)].filter(Boolean).join(' / ')
-        : (t === 'stockin' ? (r.orderSource || '') : '');
+        : (t === 'stockin' ? (r.orderSource || '')
+        : (t === 'stockout' && r.teacher ? `Teacher: ${r.teacher}` : ''));
       csv += [rows.length-i, label[t], `"${r.title}"`, `"${branchTxt}"`, chg, `"${stockAfterAllOf(t, r)}"`, `"${detail}"`, `"${r.note||''}"`, r._date].join(',') + '\n';
     });
   } else if (currentHistTab === 'sales') {
@@ -1715,8 +1777,8 @@ function exportHistoryCSV() {
     csv = '#,Title,Branch,Qty,Stock After,Source,Note,Date\n';
     rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,stockAfterOf('stockin', r),`"${r.orderSource||''}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   } else if (currentHistTab === 'stockout') {
-    csv = '#,Title,Branch,Qty,Stock After,Note,Date\n';
-    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,stockAfterOf('stockout', r),`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
+    csv = '#,Title,Branch,Qty,Stock After,Teacher,Note,Date\n';
+    rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.branch,r.quantity,stockAfterOf('stockout', r),`"${r.teacher||''}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
   } else if (currentHistTab === 'transfers') {
     csv = '#,Title,From,To,Qty,Stock After,Note,Date\n';
     rows.forEach((r, i) => { csv += [rows.length-i,`"${r.title}"`,r.fromBranch,r.toBranch,r.quantity,`"${stockAfterOf('transfers', r)}"`,`"${r.note||''}"`,r.createdAt].join(',') + '\n'; });
@@ -1741,6 +1803,9 @@ document.getElementById('modal-adjust').addEventListener('click', function(e) {
 });
 document.getElementById('modal-transfer').addEventListener('click', function(e) {
   if (e.target === this) closeTransferModal();
+});
+document.getElementById('modal-teacher').addEventListener('click', function(e) {
+  if (e.target === this) closeTeacherCopyModal();
 });
 document.getElementById('modal-order').addEventListener('click', function(e) {
   if (e.target === this) closeOrderModal();
