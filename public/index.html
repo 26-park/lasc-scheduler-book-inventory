@@ -1055,6 +1055,48 @@ function sessionHours(s) {
   if (s && typeof s.creditHours === 'number' && !isNaN(s.creditHours)) return s.creditHours;
   return calcHours(s.startTime, s.endTime, s.type);
 }
+// Partial-leave / partial-substitute hours. All fall back to the pre-existing
+// full-session math when the new leave/sub range fields aren't set, so legacy
+// (whole-session) absences keep computing exactly as before.
+function sessionLeaveHours(s) {
+  if (!s.absenceType) return 0;
+  if (!s.leaveStart || !s.leaveEnd) return sessionHours(s);
+  return calcHours(s.leaveStart, s.leaveEnd);
+}
+function sessionSubHours(s) {
+  if (s.coverType !== 'substituted') return 0;
+  if (!s.subStart || !s.subEnd) return sessionLeaveHours(s);
+  return calcHours(s.subStart, s.subEnd);
+}
+function sessionRegularHours(s) {
+  if (!s.absenceType) return sessionHours(s);
+  return Math.max(0, sessionHours(s) - sessionLeaveHours(s));
+}
+// Human-readable "Paid 1 hr of 2 hrs (2:00pm–3:00pm) · Sub 0.5 hr of 1 hr (2:00pm–2:30pm): John"
+// Shows the "of X (range)" qualifier only when the leave/sub range is a strict
+// subset of its parent range (full-session/full-leave absences render exactly
+// as before this feature existed).
+function absenceSummaryText(s) {
+  if (!s.absenceType) return '';
+  const leaveLbl = s.absenceType==='paid' ? 'Paid' : 'Unpaid';
+  const total = sessionHours(s);
+  const leaveHrs = sessionLeaveHours(s);
+  const isPartialLeave = !!(s.leaveStart && s.leaveEnd && (s.leaveStart!==s.startTime || s.leaveEnd!==s.endTime));
+  const leavePart = isPartialLeave
+    ? `${leaveLbl} ${fmtHours(leaveHrs)} of ${fmtHours(total)} (${formatTime(s.leaveStart)}–${formatTime(s.leaveEnd)})`
+    : `${leaveLbl} ${fmtHours(total)}`;
+  let coverPart;
+  if (s.coverType==='substituted' && s.substituteName) {
+    const lrStart = s.leaveStart || s.startTime, lrEnd = s.leaveEnd || s.endTime;
+    const isPartialSub = !!(s.subStart && s.subEnd && (s.subStart!==lrStart || s.subEnd!==lrEnd));
+    coverPart = isPartialSub
+      ? `Sub ${fmtHours(sessionSubHours(s))} of ${fmtHours(leaveHrs)} (${formatTime(s.subStart)}–${formatTime(s.subEnd)}): ${escHtml(s.substituteName)}`
+      : `Sub: ${escHtml(s.substituteName)}`;
+  } else {
+    coverPart = 'Cancelled';
+  }
+  return `${leavePart} · ${coverPart}`;
+}
 // Auto-fill default for the credit-hours selector (new sessions only), in
 // 15-min steps: 15 min = 0.25 hr … 60 min = 1.0 hr. 50-min class = 1 hr.
 function defaultCreditHours(start, end) {
@@ -1470,9 +1512,7 @@ function renderSchedule() {
       }
       metaLines += `<div class="sb-meta">${formatTime(sess.startTime)}–${formatTime(sess.endTime)} · ${fmtHours(hrs)}${isPending?' · scheduled':''}</div>`;
       if (sess.absenceType) {
-        const leaveLbl = sess.absenceType==='paid'?'Paid':'Unpaid';
-        const coverLbl = sess.coverType==='substituted'&&sess.substituteName ? `Sub: ${escHtml(sess.substituteName)}` : 'Cancelled';
-        metaLines += `<div class="sb-meta">${leaveLbl} · ${coverLbl}</div>`;
+        metaLines += `<div class="sb-meta">${absenceSummaryText(sess)}</div>`;
       }
       html+=`<div class="session-block ${sess.type}${isPending?' pending':''}${absClass}${offHours?' off-hours':''}"
         style="top:${top}px;height:${Math.max(height-2,16)}px;"
@@ -1483,11 +1523,15 @@ function renderSchedule() {
     });
     // Render sub-covered sessions (this teacher is the substitute)
     subCovSessions.forEach(sess => {
-      const rawTop=(timeToMins(sess.startTime)-GRID_START)/30*SLOT_H;
-      const rawHeight=(timeToMins(sess.endTime)-timeToMins(sess.startTime))/30*SLOT_H;
+      // Position/size the block on only the portion actually substituted, not
+      // the full original class time (a sub may only cover part of the leave).
+      const subStart = sess.subStart || sess.leaveStart || sess.startTime;
+      const subEnd = sess.subEnd || sess.leaveEnd || sess.endTime;
+      const rawTop=(timeToMins(subStart)-GRID_START)/30*SLOT_H;
+      const rawHeight=(timeToMins(subEnd)-timeToMins(subStart))/30*SLOT_H;
       const {top, height, offHours} = clampToGrid(rawTop, rawHeight);
       const origTeacher = teachers.find(t=>t.id===sess.teacherId);
-      const hrs = sessionHours(sess);
+      const hrs = sessionSubHours(sess);
       const label = (sess.type==='Regular'||sess.type==='Meeting'||sess.type==='Training')
         ? (sess.studentName ? escHtml(sess.studentName) : sess.type)
         : escHtml(sess.studentName);
@@ -1495,7 +1539,7 @@ function renderSchedule() {
         style="top:${top}px;height:${Math.max(height-2,16)}px;"
         onclick="openDetailModal('${sess.id}')" title="${offHours?'Outside the 7am–11pm grid — click to view/edit/delete':''}">
         <div class="sb-student">${offHours?'&#9888; ':''}▶ ${label}</div>
-        <div class="sb-meta">${formatTime(sess.startTime)}–${formatTime(sess.endTime)} · ${fmtHours(hrs)}</div>
+        <div class="sb-meta">${formatTime(subStart)}–${formatTime(subEnd)} · ${fmtHours(hrs)}</div>
         <div class="sb-meta">Sub for: ${escHtml(origTeacher?origTeacher.name:'?')}</div>
       </div>`;
     });
@@ -1943,7 +1987,7 @@ function openDetailModal(id) {
   const d=strToDate(s.date);
   const dayName=DAYS[((d.getDay()+6)%7)];
 
-  const absLabel = s.absenceType ? `<span class="absence-badge">${s.absenceType==='paid'?'Paid':'Unpaid'} · ${s.coverType==='substituted'&&s.substituteName?'Sub: '+escHtml(s.substituteName):'Cancelled'}</span>` : '';
+  const absLabel = s.absenceType ? `<span class="absence-badge">${absenceSummaryText(s)}</span>` : '';
   document.getElementById('session-detail-content').innerHTML=`
     ${s.type==='Regular'?`<div class="modal-row"><strong>Class</strong>${escHtml(s.studentName||'Regular')}</div>`:''}
     ${s.type==='Regular'?`<div class="modal-row"><strong>Classroom</strong>${escHtml(s.classroom||'—')}</div>`:''}
@@ -1978,6 +2022,11 @@ function openDetailModal(id) {
     const preSubVal = s.substituteId && teachers.find(t=>t.id===s.substituteId) ? `t:${s.substituteId}` : '';
     const preLeave = s.absenceType || 'paid';
     const preCover = s.coverType || 'substituted';
+    const preLeaveStart = s.leaveStart || s.startTime;
+    const preLeaveEnd = s.leaveEnd || s.endTime;
+    const preSubStart = s.subStart || preLeaveStart;
+    const preSubEnd = s.subEnd || preLeaveEnd;
+    const timeInputStyle = 'font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;';
     const absenceSection = `
       <div class="session-action-group" style="margin-top:10px;">
         <div class="session-action-group-label">${s.absenceType?'Update Not-Held Status':'Mark Not Held'}</div>
@@ -1993,6 +2042,19 @@ function openDetailModal(id) {
           ${subDropdown}
           <button class="btn btn-sm" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;" onclick="saveAbsence('${id}')">Save</button>
           ${s.absenceType?`<button class="btn btn-secondary btn-sm" onclick="clearAbsence('${id}')">Clear</button>`:''}
+        </div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+          <span style="font-size:11px;color:#888;">Leave time</span>
+          <input type="time" id="abs-leave-start" value="${preLeaveStart}" style="${timeInputStyle}">
+          <span style="color:#999;">–</span>
+          <input type="time" id="abs-leave-end" value="${preLeaveEnd}" style="${timeInputStyle}">
+          <span style="font-size:11px;color:#999;">of ${formatTime(s.startTime)}–${formatTime(s.endTime)} full class</span>
+        </div>
+        <div id="abs-sub-time-row" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+          <span style="font-size:11px;color:#888;">Sub time</span>
+          <input type="time" id="abs-sub-start" value="${preSubStart}" style="${timeInputStyle}">
+          <span style="color:#999;">–</span>
+          <input type="time" id="abs-sub-end" value="${preSubEnd}" style="${timeInputStyle}">
         </div>
       </div>`;
     if (s.type === 'Regular' || s.type === 'Meeting' || s.type === 'Training') {
@@ -2672,8 +2734,11 @@ function initSchoolEventsListener() {
 function toggleAbsSubDrop() {
   const coverSel = document.getElementById('abs-cover-sel');
   const subSel = document.getElementById('abs-sub-sel');
-  if (!coverSel || !subSel) return;
-  subSel.style.display = coverSel.value === 'substituted' ? '' : 'none';
+  const subTimeRow = document.getElementById('abs-sub-time-row');
+  if (!coverSel) return;
+  const isSub = coverSel.value === 'substituted';
+  if (subSel) subSel.style.display = isSub ? '' : 'none';
+  if (subTimeRow) subTimeRow.style.display = isSub ? 'flex' : 'none';
 }
 
 async function saveAbsence(id) {
@@ -2683,6 +2748,8 @@ async function saveAbsence(id) {
   if (!leaveSel || !coverSel) return;
   const leaveType = leaveSel.value;
   const coverType = coverSel.value;
+  const leaveStart = (document.getElementById('abs-leave-start')||{}).value;
+  const leaveEnd = (document.getElementById('abs-leave-end')||{}).value;
   const rawSubVal = subSel ? subSel.value : '';
   let subId = null, subName = null;
   if (coverType === 'substituted' && rawSubVal) {
@@ -2694,13 +2761,38 @@ async function saveAbsence(id) {
   try {
     const snap = await db.collection('sessions').doc(id).get();
     const s = snap.data() || {};
-    await db.collection('sessions').doc(id).update({
+    if (!leaveStart || !leaveEnd || timeToMins(leaveEnd) <= timeToMins(leaveStart)) {
+      showToast('Please enter a valid leave time range.', 'error'); return;
+    }
+    if (timeToMins(leaveStart) < timeToMins(s.startTime) || timeToMins(leaveEnd) > timeToMins(s.endTime)) {
+      showToast(`Leave time must be within the class time (${formatTime(s.startTime)}–${formatTime(s.endTime)}).`, 'error'); return;
+    }
+    const update = {
       absenceType: leaveType,
       coverType,
+      leaveStart, leaveEnd,
       substituteId: subId || del,
       substituteName: subName || del
-    });
-    await logAudit('update','sessions',id,`Set absence for ${s.studentName||'?'} on ${s.date||'?'}: ${leaveType}${subName?' (sub: '+subName+')':''}`);
+    };
+    if (coverType === 'substituted') {
+      const subStart = (document.getElementById('abs-sub-start')||{}).value;
+      const subEnd = (document.getElementById('abs-sub-end')||{}).value;
+      if (!subStart || !subEnd || timeToMins(subEnd) <= timeToMins(subStart)) {
+        showToast('Please enter a valid sub time range.', 'error'); return;
+      }
+      if (timeToMins(subStart) < timeToMins(leaveStart) || timeToMins(subEnd) > timeToMins(leaveEnd)) {
+        showToast(`Sub time must be within the leave time (${formatTime(leaveStart)}–${formatTime(leaveEnd)}).`, 'error'); return;
+      }
+      update.subStart = subStart;
+      update.subEnd = subEnd;
+    } else {
+      update.subStart = del;
+      update.subEnd = del;
+    }
+    await db.collection('sessions').doc(id).update(update);
+    const isPartialLeave = leaveStart!==s.startTime || leaveEnd!==s.endTime;
+    const rangeLabel = isPartialLeave ? ` ${formatTime(leaveStart)}–${formatTime(leaveEnd)}` : '';
+    await logAudit('update','sessions',id,`Set absence for ${s.studentName||'?'} on ${s.date||'?'}: ${leaveType}${rangeLabel}${subName?' (sub: '+subName+')':''}`);
     closeDetailModal();
     showToast('Not-held status saved.', 'ok');
   } catch(e) { showToast('Error saving absence.', 'error'); }
@@ -2714,7 +2806,11 @@ async function clearAbsence(id) {
       absenceType: firebase.firestore.FieldValue.delete(),
       coverType: firebase.firestore.FieldValue.delete(),
       substituteId: firebase.firestore.FieldValue.delete(),
-      substituteName: firebase.firestore.FieldValue.delete()
+      substituteName: firebase.firestore.FieldValue.delete(),
+      leaveStart: firebase.firestore.FieldValue.delete(),
+      leaveEnd: firebase.firestore.FieldValue.delete(),
+      subStart: firebase.firestore.FieldValue.delete(),
+      subEnd: firebase.firestore.FieldValue.delete()
     });
     await logAudit('update','sessions',id,`Cleared absence for ${s.studentName||'?'} on ${s.date||'?'}`);
     closeDetailModal();
@@ -3787,18 +3883,18 @@ async function renderAllTeachersHours() {
     const regSess=tSess.filter(s=>s.type==='Regular');
     const ptSess=tSess.filter(s=>s.type==='PT');
     const mtSess=tSess.filter(s=>s.type==='Meeting'||s.type==='Training');
-    const regHeld=regSess.filter(s=>!s.absenceType);
+    const regHeld=regSess.filter(s=>sessionRegularHours(s)>0);
     const regPaid=regSess.filter(s=>s.absenceType==='paid');
     const ptCond=ptSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
-    const regHrs=regHeld.reduce((n,s)=>n+sessionHours(s),0);
-    const paidHrs=regPaid.reduce((n,s)=>n+sessionHours(s),0);
+    const regHrs=regHeld.reduce((n,s)=>n+sessionRegularHours(s),0);
+    const paidHrs=regPaid.reduce((n,s)=>n+sessionLeaveHours(s),0);
     const ptCondHrs=ptCond.reduce((n,s)=>n+sessionHours(s),0);
     const mtHeld=mtSess.filter(s=>!s.absenceType);
     const mtHrs=mtHeld.reduce((n,s)=>n+sessionHours(s),0);
     const adjSess=tSess.filter(s=>s.type==='Adjustment');
     const adjHrs=adjSess.reduce((n,s)=>n+sessionHours(s),0);
     const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
-    const subHrs=subSess.reduce((n,s)=>n+sessionHours(s),0);
+    const subHrs=subSess.reduce((n,s)=>n+sessionSubHours(s),0);
     // Adjustment hours always count toward payroll total, regardless of the Include M/T toggle.
     const total=regHrs+paidHrs+ptCondHrs+(includeMT?mtHrs:0)+subHrs+adjHrs;
     return {regHrs,regHeld,paidHrs,regPaid,ptCondHrs,ptCond,mtHrs,mtHeld,adjHrs,adjSess,subHrs,subSess,total};
@@ -4433,17 +4529,17 @@ async function exportHoursOverviewCSV() {
       const ptSess=tSess.filter(s=>s.type==='PT');
       const mtSess=tSess.filter(s=>s.type==='Meeting'||s.type==='Training');
       const adjSess=tSess.filter(s=>s.type==='Adjustment');
-      const regHeld=regSess.filter(s=>!s.absenceType);
+      const regHeld=regSess.filter(s=>sessionRegularHours(s)>0);
       const regPaid=regSess.filter(s=>s.absenceType==='paid');
       const ptCond=ptSess.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
       const mtHeld=mtSess.filter(s=>!s.absenceType);
       const subSess=inRangeSessions.filter(s=>s.coverType==='substituted'&&s.substituteId===t.id);
-      const regHrs=regHeld.reduce((n,s)=>n+sessionHours(s),0);
-      const paidHrs=regPaid.reduce((n,s)=>n+sessionHours(s),0);
+      const regHrs=regHeld.reduce((n,s)=>n+sessionRegularHours(s),0);
+      const paidHrs=regPaid.reduce((n,s)=>n+sessionLeaveHours(s),0);
       const ptHrs=ptCond.reduce((n,s)=>n+sessionHours(s),0);
       const mtHrs=mtHeld.reduce((n,s)=>n+sessionHours(s),0);
       const adjHrs=adjSess.reduce((n,s)=>n+sessionHours(s),0);
-      const subHrs=subSess.reduce((n,s)=>n+sessionHours(s),0);
+      const subHrs=subSess.reduce((n,s)=>n+sessionSubHours(s),0);
       // Adjustment hours always count toward payroll total, regardless of the Include M/T toggle.
       const total=regHrs+paidHrs+ptHrs+(includeMT?mtHrs:0)+subHrs+adjHrs;
       rows.push([
