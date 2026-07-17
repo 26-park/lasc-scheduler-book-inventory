@@ -2143,8 +2143,10 @@ function openDetailModal(id) {
   }
   document.getElementById('session-action-section').innerHTML = actionsHtml;
   document.getElementById('session-detail-modal').classList.add('open');
-  // Initialize sub dropdown visibility and pre-select
-  toggleAbsSubDrop();
+  // Initialize sub dropdown/time-range visibility to match existing data only —
+  // for a session with no absence set yet, leave everything hidden until the
+  // manager actually picks an option (onchange="toggleAbsSubDrop()" on the selects).
+  if (s.absenceType) toggleAbsSubDrop();
   if (s.substituteId) {
     const sel = document.getElementById('abs-sub-sel');
     if (sel) {
