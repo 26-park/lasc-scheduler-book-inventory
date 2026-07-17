@@ -2030,31 +2030,37 @@ function openDetailModal(id) {
     const absenceSection = `
       <div class="session-action-group" style="margin-top:10px;">
         <div class="session-action-group-label">${s.absenceType?'Update Not-Held Status':'Mark Not Held'}</div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+        <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px;margin-bottom:6px;">
           <select id="abs-leave-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;" onchange="toggleAbsSubDrop()">
             <option value="paid" ${preLeave==='paid'?'selected':''}>Paid Leave</option>
             <option value="unpaid" ${preLeave==='unpaid'?'selected':''}>Unpaid Leave</option>
           </select>
-          <select id="abs-cover-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;" onchange="toggleAbsSubDrop()">
-            <option value="cancelled" ${preCover==='cancelled'?'selected':''}>Cancelled</option>
-            <option value="substituted" ${preCover==='substituted'?'selected':''}>Substituted</option>
-          </select>
-          ${subDropdown}
+          <div id="abs-leave-time-row" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;padding-left:10px;border-left:2px solid #fde68a;">
+            <span style="font-size:11px;color:#92400e;">Leave time</span>
+            <input type="time" id="abs-leave-start" value="${preLeaveStart}" style="${timeInputStyle}">
+            <span style="color:#999;">–</span>
+            <input type="time" id="abs-leave-end" value="${preLeaveEnd}" style="${timeInputStyle}">
+            <span style="font-size:11px;color:#999;">of ${formatTime(s.startTime)}–${formatTime(s.endTime)} full class</span>
+          </div>
+        </div>
+        <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:6px;padding:6px 8px;margin-bottom:6px;">
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <select id="abs-cover-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;" onchange="toggleAbsSubDrop()">
+              <option value="cancelled" ${preCover==='cancelled'?'selected':''}>Cancelled</option>
+              <option value="substituted" ${preCover==='substituted'?'selected':''}>Substituted</option>
+            </select>
+            ${subDropdown}
+          </div>
+          <div id="abs-sub-time-row" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;padding-left:10px;border-left:2px solid #ddd6fe;">
+            <span style="font-size:11px;color:#6d28d9;">Sub time</span>
+            <input type="time" id="abs-sub-start" value="${preSubStart}" style="${timeInputStyle}">
+            <span style="color:#999;">–</span>
+            <input type="time" id="abs-sub-end" value="${preSubEnd}" style="${timeInputStyle}">
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
           <button class="btn btn-sm" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;" onclick="saveAbsence('${id}')">Save</button>
           ${s.absenceType?`<button class="btn btn-secondary btn-sm" onclick="clearAbsence('${id}')">Clear</button>`:''}
-        </div>
-        <div id="abs-leave-time-row" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
-          <span style="font-size:11px;color:#888;">Leave time</span>
-          <input type="time" id="abs-leave-start" value="${preLeaveStart}" style="${timeInputStyle}">
-          <span style="color:#999;">–</span>
-          <input type="time" id="abs-leave-end" value="${preLeaveEnd}" style="${timeInputStyle}">
-          <span style="font-size:11px;color:#999;">of ${formatTime(s.startTime)}–${formatTime(s.endTime)} full class</span>
-        </div>
-        <div id="abs-sub-time-row" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
-          <span style="font-size:11px;color:#888;">Sub time</span>
-          <input type="time" id="abs-sub-start" value="${preSubStart}" style="${timeInputStyle}">
-          <span style="color:#999;">–</span>
-          <input type="time" id="abs-sub-end" value="${preSubEnd}" style="${timeInputStyle}">
         </div>
       </div>`;
     if (s.type === 'Regular' || s.type === 'Meeting' || s.type === 'Training') {
@@ -2143,10 +2149,10 @@ function openDetailModal(id) {
   }
   document.getElementById('session-action-section').innerHTML = actionsHtml;
   document.getElementById('session-detail-modal').classList.add('open');
-  // Initialize sub dropdown/time-range visibility to match existing data only —
-  // for a session with no absence set yet, leave everything hidden until the
-  // manager actually picks an option (onchange="toggleAbsSubDrop()" on the selects).
-  if (s.absenceType) toggleAbsSubDrop();
+  // Sync sub dropdown/time-range visibility to whatever the selects currently
+  // show (defaults included), so e.g. Paid Leave always displays its time
+  // range nested right below it, not just after the manager touches a select.
+  toggleAbsSubDrop();
   if (s.substituteId) {
     const sel = document.getElementById('abs-sub-sel');
     if (sel) {
