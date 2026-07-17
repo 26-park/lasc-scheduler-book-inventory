@@ -2031,7 +2031,7 @@ function openDetailModal(id) {
       <div class="session-action-group" style="margin-top:10px;">
         <div class="session-action-group-label">${s.absenceType?'Update Not-Held Status':'Mark Not Held'}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-          <select id="abs-leave-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;">
+          <select id="abs-leave-sel" style="font-size:12px;padding:4px 8px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;" onchange="toggleAbsSubDrop()">
             <option value="paid" ${preLeave==='paid'?'selected':''}>Paid Leave</option>
             <option value="unpaid" ${preLeave==='unpaid'?'selected':''}>Unpaid Leave</option>
           </select>
@@ -2043,7 +2043,7 @@ function openDetailModal(id) {
           <button class="btn btn-sm" style="background:#fef9c3;color:#92400e;border:1px solid #fde68a;" onclick="saveAbsence('${id}')">Save</button>
           ${s.absenceType?`<button class="btn btn-secondary btn-sm" onclick="clearAbsence('${id}')">Clear</button>`:''}
         </div>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+        <div id="abs-leave-time-row" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin-top:6px;">
           <span style="font-size:11px;color:#888;">Leave time</span>
           <input type="time" id="abs-leave-start" value="${preLeaveStart}" style="${timeInputStyle}">
           <span style="color:#999;">–</span>
@@ -2732,12 +2732,16 @@ function initSchoolEventsListener() {
 
 // Absence marking
 function toggleAbsSubDrop() {
+  const leaveSel = document.getElementById('abs-leave-sel');
   const coverSel = document.getElementById('abs-cover-sel');
   const subSel = document.getElementById('abs-sub-sel');
+  const leaveTimeRow = document.getElementById('abs-leave-time-row');
   const subTimeRow = document.getElementById('abs-sub-time-row');
   if (!coverSel) return;
   const isSub = coverSel.value === 'substituted';
+  const isPaid = leaveSel && leaveSel.value === 'paid';
   if (subSel) subSel.style.display = isSub ? '' : 'none';
+  if (leaveTimeRow) leaveTimeRow.style.display = isPaid ? 'flex' : 'none';
   if (subTimeRow) subTimeRow.style.display = isSub ? 'flex' : 'none';
 }
 
@@ -2748,8 +2752,6 @@ async function saveAbsence(id) {
   if (!leaveSel || !coverSel) return;
   const leaveType = leaveSel.value;
   const coverType = coverSel.value;
-  const leaveStart = (document.getElementById('abs-leave-start')||{}).value;
-  const leaveEnd = (document.getElementById('abs-leave-end')||{}).value;
   const rawSubVal = subSel ? subSel.value : '';
   let subId = null, subName = null;
   if (coverType === 'substituted' && rawSubVal) {
@@ -2761,11 +2763,18 @@ async function saveAbsence(id) {
   try {
     const snap = await db.collection('sessions').doc(id).get();
     const s = snap.data() || {};
-    if (!leaveStart || !leaveEnd || timeToMins(leaveEnd) <= timeToMins(leaveStart)) {
-      showToast('Please enter a valid leave time range.', 'error'); return;
-    }
-    if (timeToMins(leaveStart) < timeToMins(s.startTime) || timeToMins(leaveEnd) > timeToMins(s.endTime)) {
-      showToast(`Leave time must be within the class time (${formatTime(s.startTime)}–${formatTime(s.endTime)}).`, 'error'); return;
+    // Partial leave range only applies to Paid Leave (the editor is hidden
+    // otherwise); Unpaid Leave always covers the full class.
+    let leaveStart = s.startTime, leaveEnd = s.endTime;
+    if (leaveType === 'paid') {
+      leaveStart = (document.getElementById('abs-leave-start')||{}).value;
+      leaveEnd = (document.getElementById('abs-leave-end')||{}).value;
+      if (!leaveStart || !leaveEnd || timeToMins(leaveEnd) <= timeToMins(leaveStart)) {
+        showToast('Please enter a valid leave time range.', 'error'); return;
+      }
+      if (timeToMins(leaveStart) < timeToMins(s.startTime) || timeToMins(leaveEnd) > timeToMins(s.endTime)) {
+        showToast(`Leave time must be within the class time (${formatTime(s.startTime)}–${formatTime(s.endTime)}).`, 'error'); return;
+      }
     }
     const update = {
       absenceType: leaveType,
