@@ -1299,7 +1299,9 @@ function switchDetailTab(name) {
   document.querySelectorAll('#view-detail .detail-tab')[idx[name]].classList.add('active');
   document.getElementById('dtab-'+name).classList.add('active');
   if (name==='schedule') { renderQuarterSelector(); renderSchedule(); }
-  if (name==='pt')       renderPTTracker();
+  // PT contract add/edit + student dropdowns read the global contract/session/
+  // student arrays, so make sure those listeners are attached when the PT tab opens.
+  if (name==='pt')       { ensureGlobalDataListeners(); renderPTTracker(); }
 }
 
 function openTeacherPT(teacherId) {
@@ -3766,8 +3768,8 @@ function switchHomeTab(name) {
   document.getElementById('home-tab-hours').classList.toggle('active', name==='hours');
   document.getElementById('home-tab-students').classList.toggle('active', name==='students');
   document.getElementById('home-tab-history').classList.toggle('active', name==='history');
-  if (name==='hours') { invalidateHoursCache(); setHomeHoursPeriod(homeHoursPeriod||'week'); }
-  if (name==='students') renderStudentsOverview();
+  if (name==='hours') { ensureGlobalDataListeners(); invalidateHoursCache(); setHomeHoursPeriod(homeHoursPeriod||'week'); }
+  if (name==='students') { ensureGlobalDataListeners(); renderStudentsOverview(); }
   if (name==='history') renderAuditLog();
   localStorage.setItem('scheduler_home_tab', name);
 }
@@ -4029,6 +4031,19 @@ function initStudentsListener() {
     allStudentsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
     if (document.getElementById('home-tab-students')?.classList.contains('active')) renderStudentsOverview();
   }, err=>console.error('students error:',err));
+}
+
+// The three heavy cross-teacher listeners (all PT sessions, all contracts, all
+// students) are only needed by the Hours/Students overview tabs and the PT
+// tracker/contract flows — not by the default Teachers list or the schedule
+// grid. Attaching them lazily on first entry to those views (instead of eagerly
+// at login) avoids reading those whole collections on every page load for users
+// who never open them. Each init is idempotent (guards on its unsub handle), so
+// calling this repeatedly is cheap and safe.
+function ensureGlobalDataListeners() {
+  initAllSessionsListener();
+  initAllContractsListener();
+  initStudentsListener();
 }
 
 // Register / Edit Student modal
@@ -4831,10 +4846,10 @@ firebase.auth().onAuthStateChanged(async user => {
     } catch(e) {}
     currentRole = role;
     // staff can view scheduler but has limited write access (manager-only elements are hidden)
+    // school_events + quarters feed the schedule grid, so keep them eager.
+    // The heavy cross-teacher listeners attach lazily via ensureGlobalDataListeners()
+    // when the Hours/Students/PT views are first opened.
     initSchoolEventsListener();
-    initAllSessionsListener();
-    initAllContractsListener();
-    initStudentsListener();
     initQuartersListener();
     document.body.classList.add('role-' + role);
     document.getElementById('user-email-display').textContent = user.email;
