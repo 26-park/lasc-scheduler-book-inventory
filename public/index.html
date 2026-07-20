@@ -1249,6 +1249,20 @@ function getRecurringSessions(sess) {
   );
 }
 
+// PT sessions that belong to the same weekly series — same student, same
+// time slot, same weekday. Used to offer "delete the whole series" alongside
+// "delete just this one" for recurring PT sessions.
+function getRecurringPTSessions(sess) {
+  const targetDow = strToDate(sess.date).getDay();
+  return sessions.filter(s =>
+    s.type === 'PT' &&
+    s.studentName === sess.studentName &&
+    s.startTime === sess.startTime &&
+    s.endTime === sess.endTime &&
+    strToDate(s.date).getDay() === targetDow
+  );
+}
+
 // Session dates for Regular batch
 function getSessionDates(fromStr, toStr, dayNames) {
   const dates = []; const to = strToDate(toStr); let cur = strToDate(fromStr);
@@ -2293,6 +2307,8 @@ function openDetailModal(id) {
             </div>
           </div>`;
       }
+      const ptSeriesCount = getRecurringPTSessions(s).length;
+      const ptSeriesLabel = `All "${escHtml(s.studentName)}" on ${dayName}s (${ptSeriesCount})`;
       actionsHtml = `
         <div style="margin-top:12px;border-top:1px solid #f0f0f0;padding-top:12px;">
           ${ptStatusSection}
@@ -2300,7 +2316,8 @@ function openDetailModal(id) {
             <div class="session-action-group-label">Session</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
               <button class="btn btn-mark btn-sm" onclick="openEditModal('${id}','single')">Edit</button>
-              <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteThisSession()">Delete this session</button>
+              ${ptSeriesCount > 1 ? `<button class="btn btn-danger btn-sm" onclick="deleteAllRecurringPT('${id}')">${ptSeriesLabel}</button>` : ''}
             </div>
           </div>` : ''}
         </div>`;
@@ -2365,6 +2382,22 @@ async function deleteAllRecurring(id) {
     await logAudit('delete','sessions','(batch)',`Deleted ${recurring.length} ${s.type||'?'} session(s): ${s.studentName} on ${dayName}s`,recurring.map(sess=>snapDoc('sessions',sess.id,sess)));
     closeDetailModal();
     showToast(`${recurring.length} sessions deleted.`,'ok');
+  } catch(e) { showToast('Error deleting sessions.','error'); }
+}
+
+async function deleteAllRecurringPT(id) {
+  if (currentRole !== 'manager') return;
+  const s=sessions.find(x=>x.id===id); if (!s) return;
+  const dayName=DAYS[((strToDate(s.date).getDay()+6)%7)];
+  const recurring=getRecurringPTSessions(s);
+  if (!confirm(`Delete all ${recurring.length} "${s.studentName}" PT sessions on ${dayName}s?`)) return;
+  try {
+    const batch=db.batch();
+    recurring.forEach(sess=>batch.delete(db.collection('sessions').doc(sess.id)));
+    await batch.commit();
+    await logAudit('delete','sessions','(batch)',`Deleted ${recurring.length} PT session(s): ${s.studentName} on ${dayName}s`,recurring.map(sess=>snapDoc('sessions',sess.id,sess)));
+    closeDetailModal();
+    showToast(`${recurring.length} PT sessions deleted.`,'ok');
   } catch(e) { showToast('Error deleting sessions.','error'); }
 }
 
