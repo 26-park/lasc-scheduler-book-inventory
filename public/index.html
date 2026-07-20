@@ -479,6 +479,35 @@
         <div class="form-group"><label>End Time</label><input type="time" id="sess-end" value="10:00" oninput="syncHoursSelect('sess-hours','sess-start','sess-end');validateForm()"></div>
         <div class="form-group"><label>Credit Hours</label><select id="sess-hours" onchange="this.dataset.touched='1'"></select></div>
       </div>
+      <!-- Optional recurring series — hidden by default to keep the common
+           single-session flow clean; revealed by the toggle below. -->
+      <div style="margin-top:10px;">
+        <label style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-weight:normal;font-size:13px;color:#374151;">
+          <input type="checkbox" id="pt-repeat-toggle" onchange="onPTRepeatToggle()" style="width:15px;height:15px;">
+          <span>&#128257; Repeat weekly (create a series)</span>
+        </label>
+        <div id="pt-repeat-panel" style="display:none;margin-top:10px;padding:10px 12px;background:#f8f9ff;border:1px solid #e0e2ff;border-radius:6px;">
+          <div class="form-group" style="margin-bottom:10px;">
+            <label>Days of Week</label>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;" id="pt-day-toggles">
+              <button class="day-toggle" data-day="Mon" onclick="togglePTDay(this)">Mon</button>
+              <button class="day-toggle" data-day="Tue" onclick="togglePTDay(this)">Tue</button>
+              <button class="day-toggle" data-day="Wed" onclick="togglePTDay(this)">Wed</button>
+              <button class="day-toggle" data-day="Thu" onclick="togglePTDay(this)">Thu</button>
+              <button class="day-toggle" data-day="Fri" onclick="togglePTDay(this)">Fri</button>
+              <button class="day-toggle" data-day="Sat" onclick="togglePTDay(this)">Sat</button>
+              <button class="day-toggle" data-day="Sun" onclick="togglePTDay(this)">Sun</button>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Repeat Until</label>
+            <input type="date" id="pt-repeat-to" oninput="validateForm()">
+          </div>
+          <div style="font-size:11px;color:#6b7280;margin-top:6px;line-height:1.4;">
+            The <strong>Date</strong> above is the series start. Sessions repeat on the selected weekdays through this end date, using the same student, time, and credit hours.
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- Extra Hours (Payroll) form — no class time, just date/hours/reason -->
@@ -1563,7 +1592,7 @@ function openAddModal() {
   document.getElementById('reg-class-name').value='';
   document.getElementById('reg-from-date').value=todayStr;
   document.getElementById('reg-to-date').value=todayStr;
-  document.querySelectorAll('.day-toggle').forEach(btn => {
+  document.querySelectorAll('#day-toggles .day-toggle').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.day===todayDay);
   });
   document.getElementById('time-slots-container').innerHTML='';
@@ -1576,6 +1605,7 @@ function openAddModal() {
   const sh=document.getElementById('sess-hours');
   delete sh.dataset.touched;
   sh.innerHTML=hoursSelectOptions(defaultCreditHours('09:00','10:00'));
+  resetPTRepeat();
   document.getElementById('adjustment-form').style.display='none';
   document.getElementById('sess-notes-group').style.display='';
   document.getElementById('adj-date').value=todayStr;
@@ -1616,15 +1646,58 @@ function onSessionTypeChange() {
   validateForm();
 }
 
-// Day toggles
+// Day toggles (Regular/Meeting/Training form). Scoped to #day-toggles so the
+// PT recurring form's own toggles (#pt-day-toggles) stay independent.
 function toggleDay(btn) {
-  const active=document.querySelectorAll('.day-toggle.active');
+  const active=document.querySelectorAll('#day-toggles .day-toggle.active');
   if (btn.classList.contains('active') && active.length===1) return;
   btn.classList.toggle('active');
   validateForm();
 }
 function getSelectedDays() {
-  return Array.from(document.querySelectorAll('.day-toggle.active')).map(b=>b.dataset.day);
+  return Array.from(document.querySelectorAll('#day-toggles .day-toggle.active')).map(b=>b.dataset.day);
+}
+
+// PT recurring day toggles — independent set inside #pt-day-toggles.
+function togglePTDay(btn) {
+  btn.classList.toggle('active');
+  validateForm();
+}
+function getSelectedPTDays() {
+  return Array.from(document.querySelectorAll('#pt-day-toggles .day-toggle.active')).map(b=>b.dataset.day);
+}
+function isPTRepeatOn() {
+  const t=document.getElementById('pt-repeat-toggle');
+  return !!(t && t.checked);
+}
+function resetPTRepeat() {
+  const t=document.getElementById('pt-repeat-toggle');
+  if (t) t.checked=false;
+  const panel=document.getElementById('pt-repeat-panel');
+  if (panel) panel.style.display='none';
+  const toEl=document.getElementById('pt-repeat-to');
+  if (toEl) toEl.value='';
+  document.querySelectorAll('#pt-day-toggles .day-toggle.active').forEach(b=>b.classList.remove('active'));
+}
+// Reveal/hide the recurring panel. On first reveal, seed the weekday from the
+// chosen Date and default the end date to that same day, so a plain "repeat"
+// with no further input still produces exactly one session (identical to the
+// non-recurring flow) rather than silently creating nothing.
+function onPTRepeatToggle() {
+  const on=isPTRepeatOn();
+  document.getElementById('pt-repeat-panel').style.display=on?'':'none';
+  if (on) {
+    const dateVal=document.getElementById('sess-date').value;
+    const already=getSelectedPTDays();
+    if (dateVal && already.length===0) {
+      const wd=DAYS[((strToDate(dateVal).getDay()+6)%7)];
+      const btn=document.querySelector(`#pt-day-toggles .day-toggle[data-day="${wd}"]`);
+      if (btn) btn.classList.add('active');
+    }
+    const toEl=document.getElementById('pt-repeat-to');
+    if (toEl && !toEl.value && dateVal) toEl.value=dateVal;
+  }
+  validateForm();
 }
 
 // Time slot rows
@@ -1699,6 +1772,38 @@ function validateForm() {
           }
           if (conflictDates.length>0)
             errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
+        }
+      }
+    }
+  } else if (type==='PT' && isPTRepeatOn()) {
+    const from=document.getElementById('sess-date').value;
+    const to=document.getElementById('pt-repeat-to').value;
+    const stud=document.getElementById('sess-student-select').value;
+    const start=document.getElementById('sess-start').value;
+    const end=document.getElementById('sess-end').value;
+    const days=getSelectedPTDays();
+    if (!from||!to||!stud||!start||!end||!currentTeacher) { warnEl.innerHTML=''; return; }
+    if (to<from) errors.push('Repeat-until date must be on or after the start date.');
+    if (timeToMins(end)<=timeToMins(start)) errors.push('End time must be after start time.');
+    if (days.length===0) errors.push('Select at least one weekday to repeat on.');
+    if (errors.length===0) {
+      const dates=getSessionDates(from,to,days);
+      if (dates.length===0) errors.push('No dates match the selected weekdays in this range.');
+      else {
+        const blockedDates=dates.filter(d=>isDateBlocked(d));
+        const addDates=blockedDates.length>0?dates.filter(d=>!isDateBlocked(d)):dates;
+        if (blockedDates.length>0 && addDates.length===0) {
+          errors.push('All matching dates are school holidays. No sessions can be added.');
+        } else {
+          if (blockedDates.length>0)
+            warnings.push(`&#128467; ${blockedDates.length} holiday date(s) will be skipped (${blockedDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${blockedDates.length>3?'…':''}). You will be asked to confirm when clicking Add.`);
+          infos.push(`Will create ${addDates.length} PT session(s) across ${addDates.length} day(s).`);
+          const conflictDates=addDates.filter(d=>getOverlaps(d,start,end).length>0);
+          if (conflictDates.length>0)
+            errors.push(`Overlap on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?` +${conflictDates.length-3} more`:''}`);
+          const ruleSet=new Set();
+          for (const d of addDates) getRuleWarnings({date:d,startTime:start,endTime:end,type:'PT',teacherId:currentTeacher.id,studentName:stud}).forEach(w=>ruleSet.add(w));
+          ruleSet.forEach(w=>warnings.push(w));
         }
       }
     }
@@ -1826,6 +1931,7 @@ function openAddPTFromTracker() {
   document.getElementById('sess-end').value='10:00';
   document.getElementById('sess-notes').value='';
   document.getElementById('session-warnings').innerHTML='';
+  resetPTRepeat();
   document.getElementById('regular-form').style.display='none';
   document.getElementById('pt-form').style.display='';
   document.getElementById('sess-type-group').style.display='none';
@@ -1958,6 +2064,53 @@ async function addSession() {
     if (!date) return showToast('Please select a date.','error');
     if (!start||!end) return showToast('Please set start and end times.','error');
     if (timeToMins(end)<=timeToMins(start)) return showToast('End time must be after start time.','error');
+
+    // Recurring PT series — mirrors the Regular batch path but with PT's single
+    // time slot, conducted:false, and student. The Date field is the series start.
+    if (type==='PT' && isPTRepeatOn()) {
+      const to=document.getElementById('pt-repeat-to').value;
+      const days=getSelectedPTDays();
+      if (!to) return showToast('Please select a repeat-until date.','error');
+      if (to<date) return showToast('Repeat-until date must be on or after the start date.','error');
+      if (days.length===0) return showToast('Please select at least one weekday to repeat on.','error');
+      const dates=getSessionDates(date,to,days);
+      if (dates.length===0) return showToast('No dates match the selected weekdays.','error');
+      const blockedDates=dates.filter(d=>isDateBlocked(d));
+      const effectiveDates=blockedDates.length>0?dates.filter(d=>!isDateBlocked(d)):dates;
+      if (blockedDates.length>0) {
+        if (effectiveDates.length===0) return showToast('All matching dates are school holidays. No sessions can be added.','error');
+        const confirmed=confirm(`${blockedDates.length} holiday date(s) are included:\n${blockedDates.slice(0,5).map(d=>fmtDate(d)).join(', ')}${blockedDates.length>5?'…':''}\n\nSkip holidays and add ${effectiveDates.length} PT session(s)?`);
+        if (!confirmed) return;
+      }
+      if (effectiveDates.length>300) return showToast('Too many sessions (max 300). Reduce the range.','error');
+      const conflictDates=effectiveDates.filter(d=>getOverlaps(d,start,end).length>0);
+      if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?'…':''}`,'error');
+      const ruleViolations=new Set();
+      for (const d of effectiveDates) getRuleWarnings({date:d,startTime:start,endTime:end,type:'PT',teacherId:currentTeacher.id,studentName:stud}).forEach(w=>ruleViolations.add(w));
+      if (ruleViolations.size>0) {
+        const ok=confirm(`⚠ Schedule Warning\n\n${[...ruleViolations].map(w=>'• '+w).join('\n')}\n\nDo you want to proceed anyway?`);
+        if (!ok) return;
+      }
+      try {
+        const ptHoursR=parseFloat(document.getElementById('sess-hours').value);
+        const credit=(!isNaN(ptHoursR))?ptHoursR:defaultCreditHours(start,end);
+        const batch=db.batch();
+        for (const d of effectiveDates) {
+          batch.set(db.collection('sessions').doc(), {
+            teacherId:currentTeacher.id, studentName:stud, type:'PT',
+            date:d, startTime:start, endTime:end, notes, conducted:false,
+            creditHours:credit,
+            createdAt:firebase.firestore.FieldValue.serverTimestamp()
+          });
+        }
+        await batch.commit();
+        await logAudit('create','sessions','(batch)',`Added ${effectiveDates.length} PT session(s): ${stud} on ${days.join('/')} (${currentTeacher.name})`);
+        showToast(`${effectiveDates.length} PT sessions added!`,'ok');
+        closeAddModal();
+      } catch(e) { console.error(e); showToast('Error saving sessions.','error'); }
+      return;
+    }
+
     const overlaps=getOverlaps(date,start,end);
     if (overlaps.length>0) return showToast(`Cannot add: overlaps with ${overlaps[0].type} session (${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}).`,'error');
     if (isDateBlocked(date)) return showToast('Cannot add: this date is a school holiday. Mark it as School Open in School Calendar first.','error');
