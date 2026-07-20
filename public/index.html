@@ -2027,7 +2027,11 @@ function openDetailModal(id) {
     const preSubStart = s.subStart || preLeaveStart;
     const preSubEnd = s.subEnd || preLeaveEnd;
     const timeInputStyle = 'font-size:12px;padding:3px 6px;border:1px solid #d0d0d0;border-radius:4px;font-family:inherit;width:90px;';
-    const absenceSection = `
+    // Only Regular sessions have a real clock time and use this section (see
+    // usage below) — Adjustment (Extra Hours) sessions have no startTime/endTime,
+    // so building this unconditionally used to throw inside formatTime() and
+    // silently abort the whole modal before it could open.
+    const absenceSection = s.type !== 'Regular' ? '' : `
       <div class="session-action-group" style="margin-top:10px;">
         <div class="session-action-group-label">${s.absenceType?'Update Not-Held Status':'Mark Not Held'}</div>
         <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 8px;margin-bottom:6px;">
