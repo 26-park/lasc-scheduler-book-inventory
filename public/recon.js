@@ -235,20 +235,20 @@ function previewReconApply() {
       ${close}Close</button></div>`;
     return;
   }
-  const net = plan.reduce((a, p) => a + p.delta, 0);
+  // Calculated against Rolled and the gap between them — the same question the
+  // table asks, narrowed to the rows about to be written. The value that goes
+  // in is Calculated, or Rolled on the rows that have no Calculated at all.
+  const dash = '<span style="color:#cbd5e1;">—</span>';
   el.innerHTML = `
     <div class="card" style="padding:12px 16px;margin-bottom:12px;border:1px solid #fca5a5;">
-      <div style="font-weight:600;color:#b91c1c;margin-bottom:8px;">
-        Set stock — ${plan.length} row(s), net ${net > 0 ? '+' : ''}${net}
-      </div>
+      <div style="font-weight:600;color:#b91c1c;margin-bottom:8px;">Set stock — ${plan.length} row(s)</div>
       <div class="tbl-wrap" style="max-height:320px;overflow:auto;margin-bottom:10px;">
-        <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Now</th><th class="ta-r">New</th><th class="ta-r">Change</th><th>From</th><th class="ta-r">Rolled</th></tr></thead>
+        <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Calculated</th><th class="ta-r">Rolled</th><th class="ta-r">Diff</th></tr></thead>
         <tbody>${plan.map(p => `<tr>
           <td>${escHtml(p.title)}</td><td>${escHtml(p.branch)}</td>
-          <td class="ta-r">${p.current}</td><td class="ta-r"><strong>${p.target}</strong></td>
-          <td class="ta-r" style="color:${p.delta > 0 ? '#16a34a' : '#dc2626'};font-weight:600;">${p.delta > 0 ? '+' : ''}${p.delta}</td>
-          <td style="font-size:11.5px;color:#64748b;">${p.source}</td>
-          <td class="ta-r" style="${p.target === p.rolled ? 'color:#16a34a;' : 'color:#b45309;'}">${p.rolled}${p.target === p.rolled ? '' : ' ≠'}</td>
+          <td class="ta-r">${p.calc === null ? dash : '<strong>' + p.calc + '</strong>'}</td>
+          <td class="ta-r">${p.calc === null ? '<strong>' + p.rolled + '</strong>' : p.rolled}</td>
+          <td class="ta-r" style="${p.diff === 0 ? 'color:#16a34a;' : 'color:#dc2626;font-weight:600;'}">${p.diff === null ? dash : (p.diff > 0 ? '+' + p.diff : p.diff)}</td>
         </tr>`).join('')}</tbody></table>
       </div>
       <button class="btn btn-primary btn-sm" onclick="confirmReconApply()">Apply ${plan.length} change(s)</button>
