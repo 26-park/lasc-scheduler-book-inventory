@@ -104,13 +104,19 @@ async function loadReconTx() {
     const t = dateOf(d, r, 'soldAt', 'sale');
     if (t) push(t, r.branch, r.isbn, r.title, -(Number(r.quantity) || 0));
   });
+  // Corrections written by "apply Rolled to stock" are excluded from both
+  // sides: they adjust the record to match a count, they are not a movement
+  // of books, and counting a correction inside the comparison that produced
+  // it would just chase its own tail.
   inSnap.docs.forEach(d => {
     const r = d.data();
+    if (r.reconAdjustment) return;
     const t = dateOf(d, r, 'createdAt', 'stock-in');
     if (t) push(t, r.branch, r.isbn, r.title, Number(r.quantity) || 0);
   });
   outSnap.docs.forEach(d => {
     const r = d.data();
+    if (r.reconAdjustment) return;
     const t = dateOf(d, r, 'createdAt', 'stock-out');
     if (t) push(t, r.branch, r.isbn, r.title, -(Number(r.quantity) || 0));
   });
@@ -175,6 +181,91 @@ function buildReconRows() {
   return rows;
 }
 
+// ==========================================
+// APPLY ROLLED TO STOCK
+//
+// Sets each branch's stock to its Rolled figure — the 7/16 hand count carried
+// forward by everything recorded since. Each change is written as a normal
+// stock adjustment rather than a silent overwrite of the number, because a
+// stock level that moves with no record of why is what broke the history in
+// the first place. The adjustments carry reconAdjustment:true so the
+// comparison above keeps measuring the same thing afterwards.
+// ==========================================
+function reconApplyPlan() {
+  const plan = [];
+  (reconRows || []).forEach(r => {
+    const current = r.live === null ? 0 : r.live;
+    const delta = r.rolled - current;
+    if (delta === 0) return;
+    const row = inventory.find(x => x.isbn === r.isbn && x.branch === r.branch);
+    plan.push({ ...r, current, delta, docId: row ? row.id : null });
+  });
+  return plan.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.title.localeCompare(b.title));
+}
+
+function previewReconApply() {
+  const plan = reconApplyPlan();
+  const el = document.getElementById('recon-apply-panel');
+  if (!plan.length) {
+    el.innerHTML = '<div class="card" style="padding:12px 16px;margin-bottom:12px;">Stock already matches Rolled everywhere — nothing to apply.</div>';
+    return;
+  }
+  const up = plan.filter(p => p.delta > 0), down = plan.filter(p => p.delta < 0);
+  el.innerHTML = `
+    <div class="card" style="padding:12px 16px;margin-bottom:12px;border:1px solid #fca5a5;">
+      <div style="font-weight:600;color:#b91c1c;margin-bottom:6px;">Set stock to Rolled — ${plan.length} row(s) will change</div>
+      <div style="font-size:12.5px;color:#475569;line-height:1.7;">
+        ${up.length} increase(s) totalling +${up.reduce((a, p) => a + p.delta, 0)},
+        ${down.length} decrease(s) totalling ${down.reduce((a, p) => a + p.delta, 0)}.
+        Each one is written as a stock adjustment so the change is on the record, not a silent overwrite.
+      </div>
+      <div class="tbl-wrap" style="max-height:260px;overflow:auto;margin:10px 0;">
+        <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Now</th><th class="ta-r">Rolled</th><th class="ta-r">Change</th></tr></thead>
+        <tbody>${plan.map(p => `<tr>
+          <td>${escHtml(p.title)}</td><td>${escHtml(p.branch)}</td>
+          <td class="ta-r">${p.current}</td><td class="ta-r">${p.rolled}</td>
+          <td class="ta-r" style="color:${p.delta > 0 ? '#16a34a' : '#dc2626'};font-weight:600;">${p.delta > 0 ? '+' : ''}${p.delta}</td>
+        </tr>`).join('')}</tbody></table>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="confirmReconApply()">Apply ${plan.length} change(s)</button>
+      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('recon-apply-panel').innerHTML='';">Cancel</button>
+    </div>`;
+}
+
+async function confirmReconApply() {
+  const plan = reconApplyPlan();
+  if (!plan.length) return;
+  if (!confirm(`Set stock to the Rolled figure for ${plan.length} book/branch row(s)?\n\nThis changes what the Inventory tab shows. Each change is recorded as a stock adjustment.`)) return;
+  const stamp = nowLA();
+  const by = currentUser ? currentUser.email : '';
+  try {
+    for (let i = 0; i < plan.length; i += 200) {
+      const batch = db.batch();
+      plan.slice(i, i + 200).forEach(p => {
+        const doc = { isbn: p.isbn, title: p.title, branch: p.branch, quantity: Math.abs(p.delta),
+          note: `Reconciled to the ${RECON_SNAPSHOT_DATE} count`, createdAt: stamp,
+          createdBy: by, reconAdjustment: true };
+        if (p.delta > 0) doc.orderSource = '';
+        batch.set(db.collection(p.delta > 0 ? 'stock_history' : 'stock_out').doc(), doc);
+        if (p.docId) batch.update(db.collection('inventory').doc(p.docId),
+          { stock: firebase.firestore.FieldValue.increment(p.delta) });
+        else batch.set(db.collection('inventory').doc(),
+          { isbn: p.isbn, title: p.title, branch: p.branch, stock: p.rolled });
+      });
+      await batch.commit();
+    }
+    await loadInventory();
+    invalidateHistCache();
+    document.getElementById('recon-apply-panel').innerHTML = '';
+    showToast(`Stock set to Rolled for ${plan.length} row(s).`, 'ok');
+    await renderRecon();
+    if (currentTab === 'inventory') renderInventory();
+  } catch (e) {
+    console.error(e);
+    showToast('Error applying stock changes.', 'error');
+  }
+}
+
 function setReconFilter(f) {
   reconFilter = f;
   document.querySelectorAll('.recon-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.rf === f));
@@ -222,7 +313,7 @@ function drawRecon() {
 
   const cell = (v, style) => `<td class="ta-r" style="${style || ''}">${v === null ? '<span style="color:#cbd5e1;">—</span>' : v}</td>`;
   const body = shown.length === 0
-    ? '<tr><td colspan="9" class="empty-state">No rows match.</td></tr>'
+    ? '<tr><td colspan="8" class="empty-state">No rows match.</td></tr>'
     : shown.map(g => g.rows.map((r, i) => {
         const d = r.diff;
         const top = i === 0 ? 'border-top:2px solid #e2e8f0;' : '';
@@ -236,7 +327,6 @@ function drawRecon() {
           ${cell(r.base, top + dim)}${cell(r.tx, top + dim)}${cell(r.calc, top + dim)}
           <td class="ta-r" style="${top}${dim}"${r.postTx ? ` title="${RECON_SNAPSHOT_DATE} PDF ${r.snap === null ? 0 : r.snap} ${r.postTx > 0 ? '+' : '−'} ${Math.abs(r.postTx)} recorded after"` : ''}>${r.rolled}${r.postTx ? '<span style="color:#94a3b8;font-size:11px;"> *</span>' : ''}</td>
           <td class="ta-r" style="${top}${dim}${dCol}">${d === null ? '<span style="color:#cbd5e1;">—</span>' : (d > 0 ? '+' + d : d)}</td>
-          ${cell(r.live, top + dim)}
         </tr>`;
       }).join('')).join('');
 
@@ -265,8 +355,7 @@ function drawRecon() {
     ['All tx', 'Net of every recorded stock movement counted against the baseline: sales and stock-outs subtract, stock-ins and incoming transfers add.'],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
     ['Rolled', `The ${RECON_SNAPSHOT_DATE} PDF backup — an independent hand-taken snapshot — plus any movements recorded after it, so it lands on today. The same "stock today" figure, arrived at from the other direction. A <span style="color:#94a3b8;">*</span> marks the rows where something was recorded after the PDF; hover for the breakdown.`],
-    ['Diff', 'Calculated − Rolled. Zero is green. A negative number means the calculation is short — the size of the inbound stock still missing from the transaction log.'],
-    ['Live', 'What the app currently shows on the Inventory tab. Blank means no inventory row exists for this book at this branch.']
+    ['Diff', 'Calculated − Rolled. Zero is green. A negative number means the calculation is short — the size of the inbound stock still missing from the transaction log.']
   ];
   const dl = pairs => pairs.map(([t, d]) =>
     `<div style="display:flex;gap:10px;padding:5px 0;border-top:1px solid #f1f5f9;">
@@ -300,7 +389,7 @@ function drawRecon() {
               <th>Title</th><th>Branch</th>
               <th class="ta-r">Base ${RECON_BASELINE_DATE.slice(5)}</th><th class="ta-r">All tx</th><th class="ta-r">Calculated</th>
               <th class="ta-r">Rolled</th>
-              <th class="ta-r">Diff</th><th class="ta-r">Live</th>
+              <th class="ta-r">Diff</th>
             </tr>
           </thead>
           <tbody>${body}</tbody>
