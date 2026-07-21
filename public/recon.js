@@ -248,7 +248,7 @@ function drawRecon() {
     ...(reconTx.realigned ? [`<strong>${reconTx.realigned}</strong> movements were filed under a superseded ISBN and have been re-attached to the catalog book by title. Editing a book's ISBN does not rewrite its existing sales and restocks, so without this they would drop out of the count entirely.`] : []),
     `Baseline covers <strong>${withBase.length}</strong> of ${rows.length} branch/book rows — the spreadsheet only tracks the course books, so the rest have no 3/30 starting count.`,
     `<strong>${mismatched.length}</strong> of ${withBase.length} rows with a baseline disagree; <strong>${negative.length}</strong> compute to a negative stock, which is impossible.`,
-    `Negative results mean the Firestore log is missing inbound stock: the April restocks recorded in the spreadsheet's Amazon / Cambridge / Pearson columns were never entered as stock-in records, and <code>init_inventory.js</code> overwrote stock levels directly without writing history.`,
+    `Negative results mean the Firestore log is missing inbound stock: the April restocks recorded in the spreadsheet's Amazon / Cambridge / Pearson columns were never entered as stock-in records, and a one-off seeding script (<code>init_inventory.js</code>, since removed) overwrote stock levels directly without writing history.`,
     `<strong>${rows._orphans.length}</strong> inventory rows (${orphanTotal} units) are still filed under the old campus names "Irvine" / "Rowland Heights". The app never shows them; treating them as extra stock makes the match worse, so they look like pre-rename leftovers.`,
     ...(rows._skipped.length ? [`${rows._skipped.length} transaction(s) skipped as unusable: ${rows._skipped.join(', ')}.`] : []),
     ...RECON_SOURCE_NOTES
