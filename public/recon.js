@@ -401,15 +401,21 @@ function drawRecon() {
         // Dim the cells rather than the row: the title spans the whole group,
         // so a faded first row would fade the title for every branch under it.
         const dim = qualifies(r) ? '' : 'opacity:.5;';
+        // A row that balances is done; lock its baseline so a stray keystroke
+        // cannot undo it. Recording a movement reopens it on its own.
+        const settled = r.diff === 0;
         const dCol = dim ? '' : d === null ? '' : d === 0 ? 'color:#16a34a;' : 'color:#dc2626;font-weight:600;';
         return `<tr>
           ${i === 0 ? `<td rowspan="${g.rows.length}" style="${top}vertical-align:middle;">${escHtml(g.title)}</td>` : ''}
           <td style="${top}${dim}">${escHtml(r.branch)}</td>
           <td class="ta-r" style="${top}${dim}padding:2px 4px;">
             <input type="number" value="${r.base === null ? '' : r.base}" placeholder="—"
-              onchange="setReconBase('${escHtml(r.branch)}','${escHtml(r.isbn)}',this.value)"
-              title="${r.baseEdited ? 'Entered by hand — clear the box to go back to the spreadsheet' : 'Starting count on ' + RECON_BASELINE_DATE}"
-              style="width:62px;text-align:right;font:inherit;font-size:12px;padding:2px 4px;border:1px solid ${r.baseEdited ? '#f59e0b' : '#e2e8f0'};border-radius:4px;background:${r.baseEdited ? '#fffbeb' : '#fff'};">
+              ${settled ? 'disabled' : `onchange="setReconBase('${escHtml(r.branch)}','${escHtml(r.isbn)}',this.value)"`}
+              title="${settled
+                ? 'Settled at Diff 0 — locked. It unlocks again if a movement puts the row back out of balance.'
+                : r.baseEdited ? 'Entered by hand — clear the box to go back to the spreadsheet'
+                : 'Starting count on ' + RECON_BASELINE_DATE}"
+              style="width:62px;text-align:right;font:inherit;font-size:12px;padding:2px 4px;border:1px solid ${settled ? '#e2e8f0' : r.baseEdited ? '#f59e0b' : '#e2e8f0'};border-radius:4px;background:${settled ? '#f8fafc' : r.baseEdited ? '#fffbeb' : '#fff'};${settled ? 'color:#94a3b8;cursor:not-allowed;' : ''}">
           </td>
           ${cell(r.tx, top + dim)}${cell(r.calc, top + dim)}
           <td class="ta-r" style="${top}${dim}"${r.postTx ? ` title="${RECON_SNAPSHOT_DATE} PDF ${r.snap === null ? 0 : r.snap} ${r.postTx > 0 ? '+' : '−'} ${Math.abs(r.postTx)} recorded after"` : ''}>${r.rolled}${r.postTx ? '<span style="color:#94a3b8;font-size:11px;"> *</span>' : ''}</td>
@@ -433,7 +439,7 @@ function drawRecon() {
 
   const columns = [
     ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; a branch already settled at Diff 0 is dimmed.'],
-    [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Type into the box to correct it, or to supply one where the spreadsheet has no row — that is what gives a row a Calculated at all. Hand-entered values are shown amber; clearing the box drops back to the spreadsheet.`],
+    [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Type into the box to correct it, or to supply one where the spreadsheet has no row — that is what gives a row a Calculated at all. Hand-entered values are shown amber; clearing the box drops back to the spreadsheet. Rows already balancing at Diff 0 are locked, and unlock again if a movement puts them back out of balance.`],
     ['All tx', `Net of every recorded stock movement, including any dated ${RECON_BASELINE_DATE} itself: sales and stock-outs subtract, stock-ins and incoming transfers add.`],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
     ['Rolled', `The ${RECON_SNAPSHOT_DATE} PDF backup — an independent hand-taken snapshot — plus any movements recorded after it, so it lands on today. The same "stock today" figure, arrived at from the other direction. A <span style="color:#94a3b8;">*</span> marks the rows where something was recorded after the PDF; hover for the breakdown.`],
