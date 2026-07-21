@@ -977,7 +977,13 @@ function setHistBranch(b) {
 // values. Rebuilt on entering the History tab and after any write that
 // touches inventory or history records; filter changes reuse the cache.
 let _histCache = null;
-function invalidateHistCache() { _histCache = null; }
+// Every stock write funnels through here, so it is also where the Recon tab's
+// transaction cache is dropped — otherwise a sale or restock made in this same
+// page session would not show up on it until a reload.
+function invalidateHistCache() {
+  _histCache = null;
+  if (window.invalidateReconCache) window.invalidateReconCache();
+}
 
 async function buildHistCache() {
   const [salesSnap, inSnap, outSnap, trSnap] = await Promise.all([

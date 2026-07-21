@@ -36,7 +36,11 @@ function reconIndexCatalog() {
 }
 
 let reconRows = null;
-let reconTx = null;          // flat transaction list, fetched once
+let reconTx = null;          // flat transaction list, fetched once per change
+
+// Called by invalidateHistCache() after any stock write, so a sale or restock
+// entered in this page session is picked up the next time the tab is drawn.
+window.invalidateReconCache = function () { reconTx = null; };
 let reconFilter = 'diff';
 
 // The spreadsheet's 3/30 column already reflects that day's restocking: the
