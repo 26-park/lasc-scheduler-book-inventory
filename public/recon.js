@@ -196,8 +196,12 @@ function buildReconRows() {
 // reconAdjustment:true so the comparison above keeps measuring the same thing
 // afterwards.
 // ==========================================
+// What stock currently holds does not enter into this. Those numbers were
+// forced to match by hand at various points, so agreeing with one proves
+// nothing; every row with a usable figure is written, and the ones that
+// already hold it simply do not move.
 function reconApplyPlan() {
-  const plan = [], skipped = { noBaseline: [], negative: [], alreadyEqual: [] };
+  const plan = [], skipped = { noBaseline: [], negative: [] };
   (reconRows || []).forEach(r => {
     let target = null, source = null;
     if (r.calc !== null) {
@@ -215,12 +219,10 @@ function reconApplyPlan() {
       skipped.noBaseline.push(r); return;
     }
     const current = r.live === null ? 0 : r.live;
-    const delta = target - current;
-    if (delta === 0) { skipped.alreadyEqual.push(r); return; }
     const row = inventory.find(x => x.isbn === r.isbn && x.branch === r.branch);
-    plan.push({ ...r, current, target, source, delta, docId: row ? row.id : null });
+    plan.push({ ...r, current, target, source, delta: target - current, docId: row ? row.id : null });
   });
-  plan.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.title.localeCompare(b.title));
+  plan.sort((a, b) => a.title.localeCompare(b.title) || a.branch.localeCompare(b.branch));
   plan.skipped = skipped;
   return plan;
 }
@@ -230,27 +232,36 @@ function reconApplyPlan() {
 // that answer different questions.
 async function applyReconStock() {
   const plan = reconApplyPlan();
-  if (!plan.length) { showToast('Nothing to apply — stock already holds every figure that can be set.'); return; }
+  const sk = plan.skipped;
+  if (!plan.length) { showToast('Nothing can be set yet — no row has a usable figure.'); return; }
   const fromCalc = plan.filter(p => p.source === 'Calculated').length;
+  const held = sk.negative.length + sk.noBaseline.length;
   if (!confirm(
       `Set stock for ${plan.length} book/branch row(s)?
 
 `
       + `${fromCalc} take their Calculated figure`
       + (plan.length - fromCalc ? `, and ${plan.length - fromCalc} with no baseline take the ${RECON_SNAPSHOT_DATE} count` : '')
-      + `.
+      + `.`
+      + (held ? `
 
-This changes what the Inventory tab shows. Each change is recorded as a stock adjustment.`)) return;
+${held} row(s) are left alone: ${sk.negative.length} with a Calculated below zero, ${sk.noBaseline.length} with movements but no ${RECON_BASELINE_DATE} count.` : '')
+      + `
+
+Each change is recorded as a stock adjustment.`)) return;
   await writeReconStock(plan);
 }
 
 async function writeReconStock(plan) {
   const stamp = nowLA();
   const by = currentUser ? currentUser.email : '';
+  // Rows that already hold their figure need no adjustment record; writing a
+  // zero-quantity one would only add noise to the history.
+  const moves = plan.filter(p => p.delta !== 0);
   try {
-    for (let i = 0; i < plan.length; i += 200) {
+    for (let i = 0; i < moves.length; i += 200) {
       const batch = db.batch();
-      plan.slice(i, i + 200).forEach(p => {
+      moves.slice(i, i + 200).forEach(p => {
         const doc = { isbn: p.isbn, title: p.title, branch: p.branch, quantity: Math.abs(p.delta),
           note: p.source === 'Calculated'
             ? `Reconciled to the calculated figure (${RECON_BASELINE_DATE} count plus recorded movements)`
@@ -267,7 +278,7 @@ async function writeReconStock(plan) {
     }
     await loadInventory();
     invalidateHistCache();
-    showToast(`Stock set for ${plan.length} row(s).`, 'ok');
+    showToast(`Stock set for ${plan.length} row(s)${moves.length === plan.length ? '' : ` (${moves.length} changed)`}.`, 'ok');
     await renderRecon();
     if (currentTab === 'inventory') renderInventory();
   } catch (e) {
