@@ -43,12 +43,6 @@ let reconTx = null;          // flat transaction list, fetched once per change
 window.invalidateReconCache = function () { reconTx = null; };
 let reconFilter = 'diff';
 
-// The spreadsheet's 3/30 column already reflects that day's restocking: the
-// only baseline row touched by a 3/30 stock-in (LA "Evolve 3") holds exactly
-// the restocked quantity, and excluding it lands the calculation on the live
-// stock figure. So same-day transactions are treated as already counted.
-let reconCountBaselineDay = false;
-
 async function renderRecon() {
   const el = document.getElementById('recon-body');
   if (currentRole !== 'manager') {
@@ -133,14 +127,14 @@ async function loadReconTx() {
 function buildReconRows() {
   // Two delta maps over the same transaction set: everything counted against
   // the baseline, and only what happened after the PDF snapshot.
+  // The baseline is the count as the 3/30 column stood; anything recorded that
+  // day counts as movement on top of it, same as any later date.
   const all = {}, post = {};
   let countedTx = 0;
   reconTx.forEach(t => {
     const k = t.branch + '|' + t.isbn;
-    if (reconCountBaselineDay || t.ts.slice(0, 10) > RECON_BASELINE_DATE) {
-      all[k] = (all[k] || 0) + t.qty;
-      countedTx++;
-    }
+    all[k] = (all[k] || 0) + t.qty;
+    countedTx++;
     if (t.ts > RECON_SNAPSHOT_CUTOFF) post[k] = (post[k] || 0) + t.qty;
   });
 
@@ -272,12 +266,6 @@ function setReconFilter(f) {
   drawRecon();
 }
 
-function toggleReconBaselineDay() {
-  reconCountBaselineDay = document.getElementById('recon-baseline-day').checked;
-  reconRows = buildReconRows();
-  drawRecon();
-}
-
 function drawRecon() {
   const rows = reconRows;
   const search = (document.getElementById('recon-search').value || '').trim().toLowerCase();
@@ -334,7 +322,7 @@ function drawRecon() {
   const stamps = reconTx.map(t => t.ts).sort();
   const postCount = reconTx.filter(t => t.ts > RECON_SNAPSHOT_CUTOFF).length;
   const notes = [
-    `Transaction coverage: <strong>${rows._countedTx}</strong> of ${rows._totalTx} stock movements applied to the baseline, and <strong>${postCount}</strong> applied on top of the PDF. Both sides are open-ended at the top, so everything up to the latest record (${stamps[stamps.length - 1]}) is included — this page re-reads Firestore on every page load.`,
+    `Transaction coverage: all <strong>${rows._countedTx}</strong> recorded stock movements are applied to the baseline, <strong>${postCount}</strong> of them on top of the PDF as well. Neither side is capped, so everything up to the latest record (${stamps[stamps.length - 1]}) counts — and the tab re-reads Firestore whenever stock changes.`,
     ...(reconTx.realigned ? [`<strong>${reconTx.realigned}</strong> movements were filed under a superseded ISBN and have been re-attached to the catalog book by title. Editing a book's ISBN does not rewrite its existing sales and restocks, so without this they would drop out of the count entirely.`] : []),
     `Baseline covers <strong>${withBase.length}</strong> of ${rows.length} branch/book rows — the spreadsheet only tracks the course books, so the rest have no 3/30 starting count.`,
     `<strong>${mismatched.length}</strong> of ${withBase.length} rows with a baseline disagree; <strong>${negative.length}</strong> compute to a negative stock, which is impossible.`,
@@ -352,7 +340,7 @@ function drawRecon() {
   const columns = [
     ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; branches that do not match the current filter are dimmed.'],
     [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Blank means the spreadsheet has no row for this book at this branch.`],
-    ['All tx', 'Net of every recorded stock movement counted against the baseline: sales and stock-outs subtract, stock-ins and incoming transfers add.'],
+    ['All tx', `Net of every recorded stock movement, including any dated ${RECON_BASELINE_DATE} itself: sales and stock-outs subtract, stock-ins and incoming transfers add.`],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
     ['Rolled', `The ${RECON_SNAPSHOT_DATE} PDF backup — an independent hand-taken snapshot — plus any movements recorded after it, so it lands on today. The same "stock today" figure, arrived at from the other direction. A <span style="color:#94a3b8;">*</span> marks the rows where something was recorded after the PDF; hover for the breakdown.`],
     ['Diff', 'Calculated − Rolled. Zero is green. A negative number means the calculation is short — the size of the inbound stock still missing from the transaction log.']
