@@ -103,6 +103,7 @@ function renderCurrentTab() {
   else if (currentTab === 'orders') renderOrders();
   else if (currentTab === 'history') loadHistory();
   else if (currentTab === 'books') renderBooks();
+  else if (currentTab === 'recon') renderRecon();
   else if (currentTab === 'users') loadUsers();
 }
 
