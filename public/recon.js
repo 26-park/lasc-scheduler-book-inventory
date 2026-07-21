@@ -308,29 +308,6 @@ async function writeReconStock(plan) {
   }
 }
 
-// Drop every hand-entered baseline and go back to the spreadsheet throughout.
-// A single row is reverted by clearing its box; this is for starting over.
-async function resetReconBaseEdits() {
-  const keys = Object.keys(reconBaseEdits || {});
-  if (!keys.length) { showToast('No hand-entered baselines to reset.'); return; }
-  if (!confirm(`Discard ${keys.length} hand-entered baseline(s) and go back to the spreadsheet figures?`)) return;
-  try {
-    const snap = await db.collection('recon_baseline').get();
-    for (let i = 0; i < snap.docs.length; i += 300) {
-      const batch = db.batch();
-      snap.docs.slice(i, i + 300).forEach(d => batch.delete(d.ref));
-      await batch.commit();
-    }
-    reconBaseEdits = {};
-    reconRows = buildReconRows();
-    drawRecon();
-    showToast(`${keys.length} baseline(s) reset.`, 'ok');
-  } catch (e) {
-    console.error(e);
-    showToast('Could not reset the baselines.', 'error');
-  }
-}
-
 // Writing the baseline back so it survives a reload and reaches everyone else.
 // Clearing the box removes the override rather than storing a blank, so the
 // spreadsheet value comes back if there was one. Typing the figure the
