@@ -225,42 +225,26 @@ function reconApplyPlan() {
   return plan;
 }
 
-function previewReconApply() {
+// One click, one prompt, one write. The table above is the review step -- a
+// second on-screen list of the same rows only invited comparing two counts
+// that answer different questions.
+async function applyReconStock() {
   const plan = reconApplyPlan();
-  const el = document.getElementById('recon-apply-panel');
-  const close = `<button class="btn btn-secondary btn-sm" onclick="document.getElementById('recon-apply-panel').innerHTML='';">`;
-  if (!plan.length) {
-    el.innerHTML = `<div class="card" style="padding:12px 16px;margin-bottom:12px;">
-      Nothing to apply — stock already holds every figure that can be set.
-      ${close}Close</button></div>`;
-    return;
-  }
-  // Calculated against Rolled and the gap between them — the same question the
-  // table asks, narrowed to the rows about to be written. The value that goes
-  // in is Calculated, or Rolled on the rows that have no Calculated at all.
-  const dash = '<span style="color:#cbd5e1;">—</span>';
-  el.innerHTML = `
-    <div class="card" style="padding:12px 16px;margin-bottom:12px;border:1px solid #fca5a5;">
-      <div style="font-weight:600;color:#b91c1c;margin-bottom:8px;">Set stock — ${plan.length} row(s)</div>
-      <div class="tbl-wrap" style="max-height:320px;overflow:auto;margin-bottom:10px;">
-        <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Calculated</th><th class="ta-r">Rolled</th><th class="ta-r">Diff</th></tr></thead>
-        <tbody>${plan.map(p => `<tr>
-          <td>${escHtml(p.title)}</td><td>${escHtml(p.branch)}</td>
-          <td class="ta-r">${p.calc === null ? dash : '<strong>' + p.calc + '</strong>'}</td>
-          <td class="ta-r">${p.calc === null ? '<strong>' + p.rolled + '</strong>' : p.rolled}</td>
-          <td class="ta-r" style="${p.diff === 0 ? 'color:#16a34a;' : 'color:#dc2626;font-weight:600;'}">${p.diff === null ? dash : (p.diff > 0 ? '+' + p.diff : p.diff)}</td>
-        </tr>`).join('')}</tbody></table>
-      </div>
-      <button class="btn btn-primary btn-sm" onclick="confirmReconApply()">Apply ${plan.length} change(s)</button>
-      ${close}Cancel</button>
-    </div>`;
+  if (!plan.length) { showToast('Nothing to apply — stock already holds every figure that can be set.'); return; }
+  const fromCalc = plan.filter(p => p.source === 'Calculated').length;
+  if (!confirm(
+      `Set stock for ${plan.length} book/branch row(s)?
+
+`
+      + `${fromCalc} take their Calculated figure`
+      + (plan.length - fromCalc ? `, and ${plan.length - fromCalc} with no baseline take the ${RECON_SNAPSHOT_DATE} count` : '')
+      + `.
+
+This changes what the Inventory tab shows. Each change is recorded as a stock adjustment.`)) return;
+  await writeReconStock(plan);
 }
 
-async function confirmReconApply() {
-  const plan = reconApplyPlan();
-  if (!plan.length) return;
-  // The preview is the review step; this is just the last guard before a write.
-  if (!confirm(`Set stock for ${plan.length} row(s)?`)) return;
+async function writeReconStock(plan) {
   const stamp = nowLA();
   const by = currentUser ? currentUser.email : '';
   try {
@@ -283,7 +267,6 @@ async function confirmReconApply() {
     }
     await loadInventory();
     invalidateHistCache();
-    document.getElementById('recon-apply-panel').innerHTML = '';
     showToast(`Stock set for ${plan.length} row(s).`, 'ok');
     await renderRecon();
     if (currentTab === 'inventory') renderInventory();
