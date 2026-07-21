@@ -20,6 +20,21 @@ const RECON_BRANCHES = ['IRV', 'LA', 'RH'];
 const RECON_LEGACY_BRANCH = { 'Irvine': 'IRV', 'Rowland Heights': 'RH' };
 const reconBranch = b => RECON_LEGACY_BRANCH[b] || b;
 
+// Editing a book's ISBN rewrites only the books doc — every sale, restock and
+// inventory row already written keeps the superseded ISBN, so those records
+// would otherwise be dropped from the reconciliation. Re-attach them to the
+// catalog by exact title, which is how they were matched when imported.
+function reconResolveIsbn(isbn, title) {
+  if (reconCatalog.has(isbn)) return isbn;
+  return reconTitleIsbn[(title || '').trim().toLowerCase()] || null;
+}
+let reconCatalog = new Set(), reconTitleIsbn = {};
+function reconIndexCatalog() {
+  reconCatalog = new Set(books.map(b => b.isbn));
+  reconTitleIsbn = {};
+  books.forEach(b => { reconTitleIsbn[b.title.trim().toLowerCase()] = b.isbn; });
+}
+
 let reconRows = null;
 let reconTx = null;          // flat transaction list, fetched once
 let reconFilter = 'diff';
@@ -60,12 +75,17 @@ async function loadReconTx() {
     db.collection('transfers').get()
   ]);
 
+  reconIndexCatalog();
   const tx = [];
   tx.skipped = [];
-  const push = (ts, branch, isbn, qty) => {
+  tx.realigned = 0;
+  const push = (ts, branch, isbn, title, qty) => {
     const b = reconBranch(branch);
-    if (!RECON_BRANCHES.includes(b) || !isbn) return;
-    tx.push({ ts, branch: b, isbn, qty });
+    if (!RECON_BRANCHES.includes(b)) return;
+    const resolved = reconResolveIsbn(isbn, title);
+    if (!resolved) { tx.skipped.push(`${title || isbn} (not in book catalog)`); return; }
+    if (resolved !== isbn) tx.realigned++;
+    tx.push({ ts, branch: b, isbn: resolved, qty });
   };
   const dateOf = (d, r, field, label) => {
     const t = (r[field] || '').trim();
@@ -78,24 +98,24 @@ async function loadReconTx() {
     // One malformed legacy sale has isbn "undefined" and a blank soldAt.
     if (!r.isbn || r.isbn === 'undefined') { tx.skipped.push('sale ' + d.id + ' (no ISBN)'); return; }
     const t = dateOf(d, r, 'soldAt', 'sale');
-    if (t) push(t, r.branch, r.isbn, -(Number(r.quantity) || 0));
+    if (t) push(t, r.branch, r.isbn, r.title, -(Number(r.quantity) || 0));
   });
   inSnap.docs.forEach(d => {
     const r = d.data();
     const t = dateOf(d, r, 'createdAt', 'stock-in');
-    if (t) push(t, r.branch, r.isbn, Number(r.quantity) || 0);
+    if (t) push(t, r.branch, r.isbn, r.title, Number(r.quantity) || 0);
   });
   outSnap.docs.forEach(d => {
     const r = d.data();
     const t = dateOf(d, r, 'createdAt', 'stock-out');
-    if (t) push(t, r.branch, r.isbn, -(Number(r.quantity) || 0));
+    if (t) push(t, r.branch, r.isbn, r.title, -(Number(r.quantity) || 0));
   });
   trSnap.docs.forEach(d => {
     const r = d.data();
     const t = dateOf(d, r, 'createdAt', 'transfer');
     if (!t) return;
-    push(t, r.fromBranch, r.isbn, -(Number(r.quantity) || 0));
-    push(t, r.toBranch, r.isbn, Number(r.quantity) || 0);
+    push(t, r.fromBranch, r.isbn, r.title, -(Number(r.quantity) || 0));
+    push(t, r.toBranch, r.isbn, r.title, Number(r.quantity) || 0);
   });
   return tx;
 }
@@ -118,8 +138,10 @@ function buildReconRows() {
   // campus name are orphans, not additional stock — see the notes panel.
   const live = {}, orphans = [];
   inventory.forEach(r => {
-    if (RECON_BRANCHES.includes(r.branch)) live[r.branch + '|' + r.isbn] = (live[r.branch + '|' + r.isbn] || 0) + (Number(r.stock) || 0);
-    else orphans.push({ branch: r.branch, title: r.title, stock: Number(r.stock) || 0 });
+    if (!RECON_BRANCHES.includes(r.branch)) { orphans.push({ branch: r.branch, title: r.title, stock: Number(r.stock) || 0 }); return; }
+    const isbn = reconResolveIsbn(r.isbn, r.title);
+    if (!isbn) return;
+    live[r.branch + '|' + isbn] = (live[r.branch + '|' + isbn] || 0) + (Number(r.stock) || 0);
   });
 
   const rows = [];
@@ -131,7 +153,6 @@ function buildReconRows() {
       const snap = RECON_SNAPSHOT[k];
       const tx = all[k] || 0, postTx = post[k] || 0;
       const liveQty = live[k];
-      if (!hasBase && !snap && !tx && liveQty === undefined) return;
       const calc = hasBase ? base + tx : null;
       const rolled = (snap || 0) + postTx;
       rows.push({
@@ -197,7 +218,7 @@ function drawRecon() {
 
   const cell = (v, style) => `<td class="ta-r" style="${style || ''}">${v === null ? '<span style="color:#cbd5e1;">—</span>' : v}</td>`;
   const body = shown.length === 0
-    ? '<tr><td colspan="10" class="empty-state">No rows match.</td></tr>'
+    ? '<tr><td colspan="9" class="empty-state">No rows match.</td></tr>'
     : shown.map(g => g.rows.map((r, i) => {
         const d = r.diff;
         const top = i === 0 ? 'border-top:2px solid #e2e8f0;' : '';
@@ -209,7 +230,7 @@ function drawRecon() {
           ${i === 0 ? `<td rowspan="${g.rows.length}" style="${top}vertical-align:middle;">${escHtml(g.title)}</td>` : ''}
           <td style="${top}${dim}">${escHtml(r.branch)}</td>
           ${cell(r.base, top + dim)}${cell(r.tx, top + dim)}${cell(r.calc, top + dim)}
-          ${cell(r.snap, top + dim)}${cell(r.postTx, top + dim)}${cell(r.rolled, top + dim)}
+          <td class="ta-r" style="${top}${dim}"${r.postTx ? ` title="${RECON_SNAPSHOT_DATE} PDF ${r.snap === null ? 0 : r.snap} ${r.postTx > 0 ? '+' : '−'} ${Math.abs(r.postTx)} recorded after"` : ''}>${r.rolled}${r.postTx ? '<span style="color:#94a3b8;font-size:11px;"> *</span>' : ''}</td>
           <td class="ta-r" style="${top}${dim}${dCol}">${d === null ? '<span style="color:#cbd5e1;">—</span>' : (d > 0 ? '+' + d : d)}</td>
           ${cell(r.live, top + dim)}
         </tr>`;
@@ -220,6 +241,7 @@ function drawRecon() {
   const postCount = reconTx.filter(t => t.ts > RECON_SNAPSHOT_CUTOFF).length;
   const notes = [
     `Transaction coverage: <strong>${rows._countedTx}</strong> of ${rows._totalTx} stock movements applied to the baseline, and <strong>${postCount}</strong> applied on top of the PDF. Both sides are open-ended at the top, so everything up to the latest record (${stamps[stamps.length - 1]}) is included — this page re-reads Firestore on every page load.`,
+    ...(reconTx.realigned ? [`<strong>${reconTx.realigned}</strong> movements were filed under a superseded ISBN and have been re-attached to the catalog book by title. Editing a book's ISBN does not rewrite its existing sales and restocks, so without this they would drop out of the count entirely.`] : []),
     `Baseline covers <strong>${withBase.length}</strong> of ${rows.length} branch/book rows — the spreadsheet only tracks the course books, so the rest have no 3/30 starting count.`,
     `<strong>${mismatched.length}</strong> of ${withBase.length} rows with a baseline disagree; <strong>${negative.length}</strong> compute to a negative stock, which is impossible.`,
     `Negative results mean the Firestore log is missing inbound stock: the April restocks recorded in the spreadsheet's Amazon / Cambridge / Pearson columns were never entered as stock-in records, and <code>init_inventory.js</code> overwrote stock levels directly without writing history.`,
@@ -238,9 +260,7 @@ function drawRecon() {
     [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Blank means the spreadsheet has no row for this book at this branch.`],
     ['All tx', 'Net of every recorded stock movement counted against the baseline: sales and stock-outs subtract, stock-ins and incoming transfers add.'],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
-    [`PDF ${RECON_SNAPSHOT_DATE.slice(5)}`, 'Count from the 7/16/26 PDF backup — an independent hand-taken snapshot.'],
-    ['Tx after', 'Net movements recorded after the PDF was taken, used to bring it up to today.'],
-    ['Rolled', 'PDF + Tx after. The same "stock today" figure, arrived at from the other direction.'],
+    ['Rolled', `The ${RECON_SNAPSHOT_DATE} PDF backup — an independent hand-taken snapshot — plus any movements recorded after it, so it lands on today. The same "stock today" figure, arrived at from the other direction. A <span style="color:#94a3b8;">*</span> marks the rows where something was recorded after the PDF; hover for the breakdown.`],
     ['Diff', 'Calculated − Rolled. Zero is green. A negative number means the calculation is short — the size of the inbound stock still missing from the transaction log.'],
     ['Live', 'What the app currently shows on the Inventory tab. Blank means no inventory row exists for this book at this branch.']
   ];
@@ -275,7 +295,7 @@ function drawRecon() {
             <tr>
               <th>Title</th><th>Branch</th>
               <th class="ta-r">Base ${RECON_BASELINE_DATE.slice(5)}</th><th class="ta-r">All tx</th><th class="ta-r">Calculated</th>
-              <th class="ta-r">PDF ${RECON_SNAPSHOT_DATE.slice(5)}</th><th class="ta-r">Tx after</th><th class="ta-r">Rolled</th>
+              <th class="ta-r">Rolled</th>
               <th class="ta-r">Diff</th><th class="ta-r">Live</th>
             </tr>
           </thead>
