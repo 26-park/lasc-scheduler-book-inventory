@@ -5,11 +5,12 @@
 //
 //   Calculated = the 3/30/26 spreadsheet baseline + every Firestore
 //                transaction (sales, stock_history, stock_out, transfers).
-//   Snapshot   = the 7/16/26 PDF backup + only the transactions recorded
-//                after that snapshot, rolled forward to today.
+//   Rolled     = the 7/16/26 PDF backup + only the transactions recorded
+//                after that snapshot, carried forward to today.
 //
-// Live stock (the inventory collection the app actually serves) is shown
-// alongside as a third reference point. Read-only: this view never writes.
+// Calculated is the figure being worked towards: as the movements missing from
+// the log are entered it converges on Rolled. The table is read-only; the one
+// thing that writes is "Set stock to Calculated", further down.
 // ==========================================
 
 const RECON_BRANCHES = ['IRV', 'LA', 'RH'];
@@ -64,7 +65,7 @@ async function renderRecon() {
 }
 
 // Every stock-moving record, flattened to signed per-branch quantities.
-// Fetched once per page load; the boundary toggle re-aggregates in memory.
+// Fetched once and reused until a stock write invalidates the cache.
 async function loadReconTx() {
   const [salesSnap, inSnap, outSnap, trSnap] = await Promise.all([
     db.collection('sales').get(),
@@ -98,7 +99,7 @@ async function loadReconTx() {
     const t = dateOf(d, r, 'soldAt', 'sale');
     if (t) push(t, r.branch, r.isbn, r.title, -(Number(r.quantity) || 0));
   });
-  // Corrections written by "apply Rolled to stock" are excluded from both
+  // Corrections written by "set stock to Calculated" are excluded from both
   // sides: they adjust the record to match a count, they are not a movement
   // of books, and counting a correction inside the comparison that produced
   // it would just chase its own tail.
@@ -126,9 +127,9 @@ async function loadReconTx() {
 
 function buildReconRows() {
   // Two delta maps over the same transaction set: everything counted against
-  // the baseline, and only what happened after the PDF snapshot.
-  // The baseline is the count as the 3/30 column stood; anything recorded that
-  // day counts as movement on top of it, same as any later date.
+  // the baseline, and only what happened after the PDF snapshot. The baseline
+  // is the count as the 3/30 column stood, so anything recorded that day
+  // counts as movement on top of it, same as any later date.
   const all = {}, post = {};
   let countedTx = 0;
   reconTx.forEach(t => {
@@ -176,49 +177,71 @@ function buildReconRows() {
 }
 
 // ==========================================
-// APPLY ROLLED TO STOCK
+// APPLY CALCULATED TO STOCK
 //
-// Sets each branch's stock to its Rolled figure — the 7/16 hand count carried
-// forward by everything recorded since. Each change is written as a normal
-// stock adjustment rather than a silent overwrite of the number, because a
-// stock level that moves with no record of why is what broke the history in
-// the first place. The adjustments carry reconAdjustment:true so the
-// comparison above keeps measuring the same thing afterwards.
+// Calculated is the figure being worked towards: the 3/30 count plus every
+// movement on record. As the missing movements go in it converges on Rolled,
+// and once a row's two figures agree that value is the one to put into stock.
+// Rows that never quite agree still get Calculated, to be corrected by hand
+// afterwards — so the button applies Calculated, with Rolled shown alongside
+// so it is clear which rows had settled and which did not.
+//
+// Each change is written as a normal stock adjustment rather than a silent
+// overwrite of the number, because a stock level that moves with no record of
+// why is what broke the history in the first place. The adjustments carry
+// reconAdjustment:true so the comparison above keeps measuring the same thing
+// afterwards.
 // ==========================================
 function reconApplyPlan() {
-  const plan = [];
+  const plan = [], skipped = { noBaseline: [], negative: [] };
   (reconRows || []).forEach(r => {
+    // No 3/30 starting count means there is no Calculated to apply.
+    if (r.calc === null) { if (r.rolled !== (r.live === null ? 0 : r.live)) skipped.noBaseline.push(r); return; }
+    // A negative Calculated means movements are still missing; stock can never
+    // be negative, so those rows wait rather than being written.
+    if (r.calc < 0) { skipped.negative.push(r); return; }
     const current = r.live === null ? 0 : r.live;
-    const delta = r.rolled - current;
+    const delta = r.calc - current;
     if (delta === 0) return;
     const row = inventory.find(x => x.isbn === r.isbn && x.branch === r.branch);
     plan.push({ ...r, current, delta, docId: row ? row.id : null });
   });
-  return plan.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.title.localeCompare(b.title));
+  plan.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta) || a.title.localeCompare(b.title));
+  plan.skipped = skipped;
+  return plan;
 }
 
 function previewReconApply() {
   const plan = reconApplyPlan();
+  const sk = plan.skipped;
   const el = document.getElementById('recon-apply-panel');
+  const notes = [];
+  if (sk.negative.length) notes.push(`<strong>${sk.negative.length}</strong> row(s) skipped: Calculated is still negative, so movements are missing. Backfill those before applying.`);
+  if (sk.noBaseline.length) notes.push(`<strong>${sk.noBaseline.length}</strong> row(s) skipped: no 3/30 starting count, so there is no Calculated to apply.`);
   if (!plan.length) {
-    el.innerHTML = '<div class="card" style="padding:12px 16px;margin-bottom:12px;">Stock already matches Rolled everywhere — nothing to apply.</div>';
+    el.innerHTML = `<div class="card" style="padding:12px 16px;margin-bottom:12px;">Stock already matches Calculated everywhere it can be applied.
+      ${notes.length ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#475569;">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}</div>`;
     return;
   }
   const up = plan.filter(p => p.delta > 0), down = plan.filter(p => p.delta < 0);
+  const settled = plan.filter(p => p.calc === p.rolled).length;
   el.innerHTML = `
     <div class="card" style="padding:12px 16px;margin-bottom:12px;border:1px solid #fca5a5;">
-      <div style="font-weight:600;color:#b91c1c;margin-bottom:6px;">Set stock to Rolled — ${plan.length} row(s) will change</div>
+      <div style="font-weight:600;color:#b91c1c;margin-bottom:6px;">Set stock to Calculated — ${plan.length} row(s) will change</div>
       <div style="font-size:12.5px;color:#475569;line-height:1.7;">
         ${up.length} increase(s) totalling +${up.reduce((a, p) => a + p.delta, 0)},
         ${down.length} decrease(s) totalling ${down.reduce((a, p) => a + p.delta, 0)}.
-        Each one is written as a stock adjustment so the change is on the record, not a silent overwrite.
+        <strong>${settled}</strong> of them have Calculated and Rolled in agreement; the other ${plan.length - settled} do not and will need checking by hand.
+        Each change is written as a stock adjustment so it is on the record, not a silent overwrite.
       </div>
+      ${notes.length ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#b45309;">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}
       <div class="tbl-wrap" style="max-height:260px;overflow:auto;margin:10px 0;">
-        <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Now</th><th class="ta-r">Rolled</th><th class="ta-r">Change</th></tr></thead>
+        <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Now</th><th class="ta-r">Calculated</th><th class="ta-r">Change</th><th class="ta-r">Rolled</th></tr></thead>
         <tbody>${plan.map(p => `<tr>
           <td>${escHtml(p.title)}</td><td>${escHtml(p.branch)}</td>
-          <td class="ta-r">${p.current}</td><td class="ta-r">${p.rolled}</td>
+          <td class="ta-r">${p.current}</td><td class="ta-r"><strong>${p.calc}</strong></td>
           <td class="ta-r" style="color:${p.delta > 0 ? '#16a34a' : '#dc2626'};font-weight:600;">${p.delta > 0 ? '+' : ''}${p.delta}</td>
+          <td class="ta-r" style="${p.calc === p.rolled ? 'color:#16a34a;' : 'color:#b45309;'}">${p.rolled}${p.calc === p.rolled ? '' : ' ≠'}</td>
         </tr>`).join('')}</tbody></table>
       </div>
       <button class="btn btn-primary btn-sm" onclick="confirmReconApply()">Apply ${plan.length} change(s)</button>
@@ -229,7 +252,10 @@ function previewReconApply() {
 async function confirmReconApply() {
   const plan = reconApplyPlan();
   if (!plan.length) return;
-  if (!confirm(`Set stock to the Rolled figure for ${plan.length} book/branch row(s)?\n\nThis changes what the Inventory tab shows. Each change is recorded as a stock adjustment.`)) return;
+  const unsettled = plan.filter(p => p.calc !== p.rolled).length;
+  if (!confirm(`Set stock to the Calculated figure for ${plan.length} book/branch row(s)?`
+    + (unsettled ? `\n\n${unsettled} of them still disagree with Rolled and will need correcting by hand afterwards.` : '')
+    + `\n\nThis changes what the Inventory tab shows. Each change is recorded as a stock adjustment.`)) return;
   const stamp = nowLA();
   const by = currentUser ? currentUser.email : '';
   try {
@@ -237,21 +263,21 @@ async function confirmReconApply() {
       const batch = db.batch();
       plan.slice(i, i + 200).forEach(p => {
         const doc = { isbn: p.isbn, title: p.title, branch: p.branch, quantity: Math.abs(p.delta),
-          note: `Reconciled to the ${RECON_SNAPSHOT_DATE} count`, createdAt: stamp,
-          createdBy: by, reconAdjustment: true };
+          note: `Reconciled to the calculated figure (${RECON_BASELINE_DATE} count plus recorded movements)`,
+          createdAt: stamp, createdBy: by, reconAdjustment: true };
         if (p.delta > 0) doc.orderSource = '';
         batch.set(db.collection(p.delta > 0 ? 'stock_history' : 'stock_out').doc(), doc);
         if (p.docId) batch.update(db.collection('inventory').doc(p.docId),
           { stock: firebase.firestore.FieldValue.increment(p.delta) });
         else batch.set(db.collection('inventory').doc(),
-          { isbn: p.isbn, title: p.title, branch: p.branch, stock: p.rolled });
+          { isbn: p.isbn, title: p.title, branch: p.branch, stock: p.calc });
       });
       await batch.commit();
     }
     await loadInventory();
     invalidateHistCache();
     document.getElementById('recon-apply-panel').innerHTML = '';
-    showToast(`Stock set to Rolled for ${plan.length} row(s).`, 'ok');
+    showToast(`Stock set to Calculated for ${plan.length} row(s).`, 'ok');
     await renderRecon();
     if (currentTab === 'inventory') renderInventory();
   } catch (e) {
