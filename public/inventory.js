@@ -1646,6 +1646,68 @@ function cancelBookEdit() {
   document.getElementById('modal-book').classList.remove('open');
 }
 
+// Stock and history are keyed by ISBN, not by the book's document id, so
+// changing a book's ISBN without rewriting the records that point at it
+// orphans them: getStock stops finding the stock row, and the history stops
+// joining to the book. Rewrite every referencing document alongside the book.
+//
+// Historical records (sales, restocks, stock-outs, transfers) keep the title
+// they were written with — that is the record of what was sold — while rows
+// describing current state (inventory, pending orders) follow the book.
+const ISBN_HISTORY_COLLECTIONS = ['sales', 'stock_history', 'stock_out', 'transfers'];
+
+async function countIsbnReferences(isbn) {
+  const snaps = await Promise.all(
+    [...ISBN_HISTORY_COLLECTIONS, 'inventory', 'pending_orders']
+      .map(c => db.collection(c).where('isbn', '==', isbn).get()));
+  return snaps.reduce((n, s) => n + s.size, 0);
+}
+
+async function cascadeIsbnChange(oldIsbn, newIsbn, title) {
+  const commitAll = async docs => {
+    for (let i = 0; i < docs.length; i += 400) {
+      const batch = db.batch();
+      docs.slice(i, i + 400).forEach(fn => fn(batch));
+      await batch.commit();
+    }
+  };
+
+  let moved = 0, merged = 0;
+  for (const coll of ISBN_HISTORY_COLLECTIONS) {
+    const snap = await db.collection(coll).where('isbn', '==', oldIsbn).get();
+    await commitAll(snap.docs.map(d => b => b.update(d.ref, { isbn: newIsbn })));
+    moved += snap.size;
+  }
+
+  const ordSnap = await db.collection('pending_orders').where('isbn', '==', oldIsbn).get();
+  await commitAll(ordSnap.docs.map(d => b => b.update(d.ref, { isbn: newIsbn, title })));
+  moved += ordSnap.size;
+
+  // Inventory is keyed by isbn + branch, so the destination row may already
+  // exist at that branch. Fold the stock together instead of leaving a
+  // duplicate pair the app would only half-see.
+  const [oldSnap, newSnap] = await Promise.all([
+    db.collection('inventory').where('isbn', '==', oldIsbn).get(),
+    db.collection('inventory').where('isbn', '==', newIsbn).get()
+  ]);
+  const destByBranch = {};
+  newSnap.docs.forEach(d => { destByBranch[d.data().branch] = d.ref; });
+  await commitAll(oldSnap.docs.map(d => b => {
+    const r = d.data();
+    const dest = destByBranch[r.branch];
+    if (dest) {
+      b.update(dest, { stock: firebase.firestore.FieldValue.increment(Number(r.stock) || 0) });
+      b.delete(d.ref);
+      merged++;
+    } else {
+      b.update(d.ref, { isbn: newIsbn, title });
+      moved++;
+    }
+  }));
+
+  return { moved, merged };
+}
+
 async function saveBook() {
   const isbnInput = document.getElementById('bk-isbn').value.trim();
   const title = document.getElementById('bk-title').value.trim();
@@ -1662,9 +1724,23 @@ async function saveBook() {
       if (isbnInput && isbnInput !== editingBookIsbn && books.some(x => x.isbn === isbnInput)) {
         showToast('ISBN already exists.', 'error'); return;
       }
+      const isbnChanged = newIsbn !== editingBookIsbn;
+      if (isbnChanged) {
+        const refs = await countIsbnReferences(editingBookIsbn);
+        if (refs && !confirm(
+            `Changing the ISBN of "${b.title}" from ${editingBookIsbn} to ${newIsbn}.\n\n` +
+            `${refs} stock and history record(s) point at the old ISBN and will be moved across, ` +
+            `so nothing is left stranded. Continue?`)) return;
+      }
       await db.collection('books').doc(b.id).update({ isbn: newIsbn, title, costPrice, sellingPrice });
       Object.assign(b, { isbn: newIsbn, title, costPrice, sellingPrice });
-      showToast('Book updated.', 'ok');
+      if (isbnChanged) {
+        const { moved, merged } = await cascadeIsbnChange(editingBookIsbn, newIsbn, title);
+        await loadInventory();
+        showToast(`Book updated. ${moved} record(s) moved to the new ISBN${merged ? `, ${merged} stock row(s) merged` : ''}.`, 'ok');
+      } else {
+        showToast('Book updated.', 'ok');
+      }
     } else {
       if (isbnInput && books.some(b => b.isbn === isbnInput)) {
         showToast('ISBN already exists.', 'error'); return;
