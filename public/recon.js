@@ -193,16 +193,16 @@ function buildReconRows() {
 // afterwards.
 // ==========================================
 function reconApplyPlan() {
-  const plan = [], skipped = { noBaseline: [], negative: [] };
+  const plan = [], skipped = { noBaseline: [], negative: [], alreadyEqual: [] };
   (reconRows || []).forEach(r => {
     // No 3/30 starting count means there is no Calculated to apply.
-    if (r.calc === null) { if (r.rolled !== (r.live === null ? 0 : r.live)) skipped.noBaseline.push(r); return; }
+    if (r.calc === null) { skipped.noBaseline.push(r); return; }
     // A negative Calculated means movements are still missing; stock can never
     // be negative, so those rows wait rather than being written.
     if (r.calc < 0) { skipped.negative.push(r); return; }
     const current = r.live === null ? 0 : r.live;
     const delta = r.calc - current;
-    if (delta === 0) return;
+    if (delta === 0) { skipped.alreadyEqual.push(r); return; }
     const row = inventory.find(x => x.isbn === r.isbn && x.branch === r.branch);
     plan.push({ ...r, current, delta, docId: row ? row.id : null });
   });
@@ -215,9 +215,16 @@ function previewReconApply() {
   const plan = reconApplyPlan();
   const sk = plan.skipped;
   const el = document.getElementById('recon-apply-panel');
-  const notes = [];
-  if (sk.negative.length) notes.push(`<strong>${sk.negative.length}</strong> row(s) skipped: Calculated is still negative, so movements are missing. Backfill those before applying.`);
-  if (sk.noBaseline.length) notes.push(`<strong>${sk.noBaseline.length}</strong> row(s) skipped: no 3/30 starting count, so there is no Calculated to apply.`);
+  // The plan compares Calculated against stock, while the table above compares
+  // Calculated against Rolled — so far fewer rows move than the table shows as
+  // mismatched. Spell out where every row went.
+  const total = (reconRows || []).length;
+  const nbDiffer = sk.noBaseline.filter(r => (r.live === null ? 0 : r.live) !== r.rolled).length;
+  const notes = [
+    `Of ${total} book/branch rows: <strong>${sk.noBaseline.length}</strong> have no 3/30 starting count so there is no Calculated to apply (${nbDiffer} of them do not match Rolled today), <strong>${sk.negative.length}</strong> have a Calculated still below zero, and <strong>${sk.alreadyEqual.length}</strong> already hold their Calculated figure.`,
+    `The table above counts rows where Calculated disagrees with <em>Rolled</em>; this list is rows where Calculated disagrees with <em>stock</em>. They are different questions, so the counts differ.`
+  ];
+  if (sk.negative.length) notes.push(`Backfill the missing movements to bring those ${sk.negative.length} negative rows up — they cannot be written while stock would go below zero.`);
   if (!plan.length) {
     el.innerHTML = `<div class="card" style="padding:12px 16px;margin-bottom:12px;">Stock already matches Calculated everywhere it can be applied.
       ${notes.length ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#475569;">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}</div>`;
