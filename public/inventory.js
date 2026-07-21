@@ -598,8 +598,20 @@ function openAdjustModal(isbn) {
   document.getElementById('ma-current').textContent = stock;
   document.getElementById('ma-delta').value = '';
   document.getElementById('ma-note').value = '';
+  document.getElementById('ma-date').value = '';
+  document.getElementById('ma-record-only').checked = false;
+  onAdjustRecordOnlyChange();
   document.getElementById('ma-warn').style.display = 'none';
   document.getElementById('modal-adjust').classList.add('open');
+}
+
+// Backfilling a past movement must not move today's stock: the count on the
+// shelf already includes it, and adding it again would double it. Show what
+// the stock will be so the distinction is visible before saving.
+function onAdjustRecordOnlyChange() {
+  const recordOnly = document.getElementById('ma-record-only').checked;
+  const label = document.getElementById('ma-current-label');
+  if (label) label.textContent = recordOnly ? 'Stock (unchanged): ' : 'Current stock: ';
 }
 
 function closeAdjustModal() {
@@ -613,40 +625,52 @@ async function processAdjust() {
   const branch = adjustModalBranch;
   const delta = parseInt(document.getElementById('ma-delta').value);
   const note = document.getElementById('ma-note').value.trim();
+  const dateInput = document.getElementById('ma-date').value;
+  const recordOnly = document.getElementById('ma-record-only').checked;
   const warnEl = document.getElementById('ma-warn');
+  const warn = msg => { warnEl.textContent = msg; warnEl.style.display = ''; };
 
-  if (!delta || delta === 0) { warnEl.textContent = 'Enter a non-zero adjustment amount.'; warnEl.style.display = ''; return; }
+  if (!delta || delta === 0) return warn('Enter a non-zero adjustment amount.');
 
   const book = books.find(b => b.isbn === isbn);
   if (!book) return;
 
-  if (delta < 0) {
+  // datetime-local gives "YYYY-MM-DDTHH:MM"; stored timestamps use a space.
+  const createdAt = dateInput ? dateInput.replace('T', ' ') : nowLA();
+  if (createdAt > nowLA()) return warn('That date is in the future.');
+
+  // A record-only entry never lowers stock, so the shortfall check does not
+  // apply to it.
+  if (delta < 0 && !recordOnly) {
     const current = getStock(isbn, branch);
-    if (current + delta < 0) { warnEl.textContent = `Not enough stock at ${branch}. Current: ${current}`; warnEl.style.display = ''; return; }
+    if (current + delta < 0) return warn(`Not enough stock at ${branch}. Current: ${current}`);
   }
 
   try {
     const batch = db.batch();
-    const applyLocal = batchStockUpdate(batch, isbn, book.title, branch, delta);
+    const applyLocal = recordOnly ? null : batchStockUpdate(batch, isbn, book.title, branch, delta);
     if (delta > 0) {
       batch.set(db.collection('stock_history').doc(), {
         isbn, title: book.title, branch, quantity: delta,
-        note, orderSource: '', createdAt: nowLA(),
+        note, orderSource: '', createdAt,
         createdBy: currentUser ? currentUser.email : ''
       });
     } else {
       batch.set(db.collection('stock_out').doc(), {
         isbn, title: book.title, branch, quantity: Math.abs(delta),
-        note, createdAt: nowLA(),
+        note, createdAt,
         createdBy: currentUser ? currentUser.email : ''
       });
     }
     await batch.commit();
-    applyLocal();
+    if (applyLocal) applyLocal();
     invalidateHistCache();
-    showToast(delta > 0
-      ? `Restocked: ${book.title} +${delta} at ${branch}`
-      : `Removed: ${book.title} ${delta} at ${branch}`, 'ok');
+    const when = dateInput ? ` (${createdAt})` : '';
+    showToast(recordOnly
+      ? `Recorded ${delta > 0 ? '+' : ''}${delta} for ${book.title} at ${branch}${when} — stock unchanged.`
+      : delta > 0
+        ? `Restocked: ${book.title} +${delta} at ${branch}${when}`
+        : `Removed: ${book.title} ${delta} at ${branch}${when}`, 'ok');
     closeAdjustModal();
     renderInventory();
   } catch(e) {
