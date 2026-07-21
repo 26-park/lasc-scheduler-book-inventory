@@ -333,18 +333,20 @@ async function resetReconBaseEdits() {
 
 // Writing the baseline back so it survives a reload and reaches everyone else.
 // Clearing the box removes the override rather than storing a blank, so the
-// spreadsheet value comes back if there was one.
+// spreadsheet value comes back if there was one. Typing the figure the
+// spreadsheet already holds does the same: it is agreement, not a correction,
+// and storing it would mark the row amber as though it had been overruled.
 async function setReconBase(branch, isbn, raw) {
   const k = reconBaseKey(branch, isbn);
   const txt = String(raw).trim();
   const docId = branch + '__' + isbn;
+  const n = txt === '' ? null : Math.round(Number(txt));
+  if (n !== null && !Number.isFinite(n)) { showToast('Enter a whole number.', 'error'); drawRecon(); return; }
   try {
-    if (txt === '') {
+    if (n === null || n === RECON_BASELINE[k]) {
       await db.collection('recon_baseline').doc(docId).delete();
       delete reconBaseEdits[k];
     } else {
-      const n = Math.round(Number(txt));
-      if (!Number.isFinite(n)) { showToast('Enter a whole number.', 'error'); drawRecon(); return; }
       await db.collection('recon_baseline').doc(docId).set({
         branch, isbn, base: n,
         updatedAt: nowLA(), updatedBy: currentUser ? currentUser.email : ''
