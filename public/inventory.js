@@ -599,19 +599,8 @@ function openAdjustModal(isbn) {
   document.getElementById('ma-delta').value = '';
   document.getElementById('ma-note').value = '';
   document.getElementById('ma-date').value = '';
-  document.getElementById('ma-record-only').checked = false;
-  onAdjustRecordOnlyChange();
   document.getElementById('ma-warn').style.display = 'none';
   document.getElementById('modal-adjust').classList.add('open');
-}
-
-// Backfilling a past movement must not move today's stock: the count on the
-// shelf already includes it, and adding it again would double it. Show what
-// the stock will be so the distinction is visible before saving.
-function onAdjustRecordOnlyChange() {
-  const recordOnly = document.getElementById('ma-record-only').checked;
-  const label = document.getElementById('ma-current-label');
-  if (label) label.textContent = recordOnly ? 'Stock (unchanged): ' : 'Current stock: ';
 }
 
 function closeAdjustModal() {
@@ -626,7 +615,6 @@ async function processAdjust() {
   const delta = parseInt(document.getElementById('ma-delta').value);
   const note = document.getElementById('ma-note').value.trim();
   const dateInput = document.getElementById('ma-date').value;
-  const recordOnly = document.getElementById('ma-record-only').checked;
   const warnEl = document.getElementById('ma-warn');
   const warn = msg => { warnEl.textContent = msg; warnEl.style.display = ''; };
 
@@ -639,16 +627,14 @@ async function processAdjust() {
   const createdAt = dateInput ? dateInput.replace('T', ' ') : nowLA();
   if (createdAt > nowLA()) return warn('That date is in the future.');
 
-  // A record-only entry never lowers stock, so the shortfall check does not
-  // apply to it.
-  if (delta < 0 && !recordOnly) {
+  if (delta < 0) {
     const current = getStock(isbn, branch);
     if (current + delta < 0) return warn(`Not enough stock at ${branch}. Current: ${current}`);
   }
 
   try {
     const batch = db.batch();
-    const applyLocal = recordOnly ? null : batchStockUpdate(batch, isbn, book.title, branch, delta);
+    const applyLocal = batchStockUpdate(batch, isbn, book.title, branch, delta);
     if (delta > 0) {
       batch.set(db.collection('stock_history').doc(), {
         isbn, title: book.title, branch, quantity: delta,
@@ -663,14 +649,12 @@ async function processAdjust() {
       });
     }
     await batch.commit();
-    if (applyLocal) applyLocal();
+    applyLocal();
     invalidateHistCache();
     const when = dateInput ? ` (${createdAt})` : '';
-    showToast(recordOnly
-      ? `Recorded ${delta > 0 ? '+' : ''}${delta} for ${book.title} at ${branch}${when} — stock unchanged.`
-      : delta > 0
-        ? `Restocked: ${book.title} +${delta} at ${branch}${when}`
-        : `Removed: ${book.title} ${delta} at ${branch}${when}`, 'ok');
+    showToast(delta > 0
+      ? `Restocked: ${book.title} +${delta} at ${branch}${when}`
+      : `Removed: ${book.title} ${delta} at ${branch}${when}`, 'ok');
     closeAdjustModal();
     renderInventory();
   } catch(e) {
