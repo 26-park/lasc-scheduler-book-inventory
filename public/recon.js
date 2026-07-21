@@ -431,13 +431,8 @@ function drawRecon() {
     ...RECON_SOURCE_NOTES
   ];
 
-  const filters = [
-    ['Mismatches', 'Books where at least one branch has a baseline and Calculated does not equal Rolled. These are the books whose two histories disagree — the working list.'],
-    ['All rows', 'Every book/branch the reconciliation knows about, matching or not. Use it to confirm a book that looks fine really is fine.'],
-    ['No baseline', 'Books with no 3/30 starting count, because the spreadsheet only tracks the course books. Calculated is blank for these, so they can never be checked against the PDF — they need a starting count entered before they mean anything.']
-  ];
   const columns = [
-    ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; branches that do not match the current filter are dimmed.'],
+    ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; a branch already settled at Diff 0 is dimmed.'],
     [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Type into the box to correct it, or to supply one where the spreadsheet has no row — that is what gives a row a Calculated at all. Hand-entered values are shown amber; clearing the box drops back to the spreadsheet.`],
     ['All tx', `Net of every recorded stock movement, including any dated ${RECON_BASELINE_DATE} itself: sales and stock-outs subtract, stock-ins and incoming transfers add.`],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
@@ -455,14 +450,11 @@ function drawRecon() {
       <div style="font-size:13px;color:#475569;line-height:1.7;">
         <strong>Calculated</strong> = ${RECON_BASELINE_DATE} spreadsheet baseline + all recorded transactions.<br>
         <strong>Rolled</strong> = ${RECON_SNAPSHOT_DATE} PDF snapshot + transactions after that date.<br>
-        <strong>Diff</strong> = Calculated − Rolled. Nothing on this page writes to the database.
+        <strong>Diff</strong> = Calculated − Rolled. Rows already settled at Diff 0 are dimmed; everything else is outstanding.
       </div>
       <details style="margin-top:10px;font-size:12.5px;color:#475569;line-height:1.6;">
-        <summary style="cursor:pointer;font-weight:600;color:#334155;">What the filters and columns mean</summary>
-        <div style="margin-top:8px;font-weight:600;color:#334155;">Filters</div>
-        ${dl(filters)}
-        <div style="margin-top:12px;font-weight:600;color:#334155;">Columns</div>
-        ${dl(columns)}
+        <summary style="cursor:pointer;font-weight:600;color:#334155;">What the columns mean</summary>
+        <div style="margin-top:8px;">${dl(columns)}</div>
       </details>
       <ul style="margin:10px 0 0;padding-left:18px;font-size:12.5px;color:#475569;line-height:1.8;">
         ${notes.map(n => '<li>' + n + '</li>').join('')}
