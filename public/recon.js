@@ -239,8 +239,23 @@ function previewReconApply() {
   ];
   if (sk.negative.length) notes.push(`Backfill the missing movements to bring those ${sk.negative.length} negative rows up — they cannot be written while stock would go below zero.`);
   if (!plan.length) {
-    el.innerHTML = `<div class="card" style="padding:12px 16px;margin-bottom:12px;">Stock already matches Calculated everywhere it can be applied.
-      ${notes.length ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#475569;">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}</div>`;
+    const blocked = [];
+    if (sk.negative.length) blocked.push(`<strong>${sk.negative.length}</strong> have a Calculated below zero — movements are still missing, and stock cannot go negative. Backfill those first.`);
+    if (sk.noBaseline.length) blocked.push(`<strong>${sk.noBaseline.length}</strong> have movements on record but no ${RECON_BASELINE_DATE} starting count, so no figure can be worked out for them at all.`);
+    el.innerHTML = `
+      <div class="card" style="padding:12px 16px;margin-bottom:12px;">
+        <div style="font-weight:600;color:#334155;margin-bottom:6px;">Nothing to apply</div>
+        <div style="font-size:12.5px;color:#475569;line-height:1.7;">
+          <strong>${sk.alreadyEqual.length}</strong> of ${total} rows already hold the figure they would be set to.
+          ${blocked.length ? `The remaining ${sk.negative.length + sk.noBaseline.length} cannot be set yet:` : ''}
+        </div>
+        ${blocked.length ? '<ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px;color:#475569;line-height:1.7;">' + blocked.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}
+        <div style="font-size:12.5px;color:#64748b;line-height:1.7;margin-top:8px;">
+          The table above can still show mismatches after this — a Diff means the transaction log is incomplete,
+          which is a separate matter from whether stock holds the right number.
+        </div>
+        <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="document.getElementById('recon-apply-panel').innerHTML='';">Close</button>
+      </div>`;
     return;
   }
   const up = plan.filter(p => p.delta > 0), down = plan.filter(p => p.delta < 0);
