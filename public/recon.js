@@ -227,52 +227,21 @@ function reconApplyPlan() {
 
 function previewReconApply() {
   const plan = reconApplyPlan();
-  const sk = plan.skipped;
   const el = document.getElementById('recon-apply-panel');
-  // The plan compares Calculated against stock, while the table above compares
-  // Calculated against Rolled — so far fewer rows move than the table shows as
-  // mismatched. Spell out where every row went.
-  const total = (reconRows || []).length;
-  const notes = [
-    `Of ${total} book/branch rows: <strong>${sk.noBaseline.length}</strong> have movements on record but no 3/30 starting count, so today's figure cannot be derived either way, <strong>${sk.negative.length}</strong> have a Calculated still below zero, and <strong>${sk.alreadyEqual.length}</strong> already hold the figure they would be set to.`,
-    `The table above counts rows where Calculated disagrees with <em>Rolled</em>; this list is rows where the target disagrees with <em>stock</em>. They are different questions, so the counts differ.`
-  ];
-  if (sk.negative.length) notes.push(`Backfill the missing movements to bring those ${sk.negative.length} negative rows up — they cannot be written while stock would go below zero.`);
+  const close = `<button class="btn btn-secondary btn-sm" onclick="document.getElementById('recon-apply-panel').innerHTML='';">`;
   if (!plan.length) {
-    const blocked = [];
-    if (sk.negative.length) blocked.push(`<strong>${sk.negative.length}</strong> have a Calculated below zero — movements are still missing, and stock cannot go negative. Backfill those first.`);
-    if (sk.noBaseline.length) blocked.push(`<strong>${sk.noBaseline.length}</strong> have movements on record but no ${RECON_BASELINE_DATE} starting count, so no figure can be worked out for them at all.`);
-    el.innerHTML = `
-      <div class="card" style="padding:12px 16px;margin-bottom:12px;">
-        <div style="font-weight:600;color:#334155;margin-bottom:6px;">Nothing to apply</div>
-        <div style="font-size:12.5px;color:#475569;line-height:1.7;">
-          <strong>${sk.alreadyEqual.length}</strong> of ${total} rows already hold the figure they would be set to.
-          ${blocked.length ? `The remaining ${sk.negative.length + sk.noBaseline.length} cannot be set yet:` : ''}
-        </div>
-        ${blocked.length ? '<ul style="margin:6px 0 0;padding-left:18px;font-size:12.5px;color:#475569;line-height:1.7;">' + blocked.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}
-        <div style="font-size:12.5px;color:#64748b;line-height:1.7;margin-top:8px;">
-          The table above can still show mismatches after this — a Diff means the transaction log is incomplete,
-          which is a separate matter from whether stock holds the right number.
-        </div>
-        <button class="btn btn-secondary btn-sm" style="margin-top:10px;" onclick="document.getElementById('recon-apply-panel').innerHTML='';">Close</button>
-      </div>`;
+    el.innerHTML = `<div class="card" style="padding:12px 16px;margin-bottom:12px;">
+      Nothing to apply — stock already holds every figure that can be set.
+      ${close}Close</button></div>`;
     return;
   }
-  const up = plan.filter(p => p.delta > 0), down = plan.filter(p => p.delta < 0);
-  const fromCalc = plan.filter(p => p.source === 'Calculated');
-  const settled = fromCalc.filter(p => p.target === p.rolled).length;
+  const net = plan.reduce((a, p) => a + p.delta, 0);
   el.innerHTML = `
     <div class="card" style="padding:12px 16px;margin-bottom:12px;border:1px solid #fca5a5;">
-      <div style="font-weight:600;color:#b91c1c;margin-bottom:6px;">Set stock — ${plan.length} row(s) will change</div>
-      <div style="font-size:12.5px;color:#475569;line-height:1.7;">
-        ${up.length} increase(s) totalling +${up.reduce((a, p) => a + p.delta, 0)},
-        ${down.length} decrease(s) totalling ${down.reduce((a, p) => a + p.delta, 0)}.
-        <strong>${fromCalc.length}</strong> take their Calculated figure — ${settled} of those already agree with Rolled, the other ${fromCalc.length - settled} do not and will need checking by hand.
-        The remaining <strong>${plan.length - fromCalc.length}</strong> have no baseline and nothing on record, so they take the ${RECON_SNAPSHOT_DATE} count as the only figure there is.
-        Each change is written as a stock adjustment so it is on the record, not a silent overwrite.
+      <div style="font-weight:600;color:#b91c1c;margin-bottom:8px;">
+        Set stock — ${plan.length} row(s), net ${net > 0 ? '+' : ''}${net}
       </div>
-      ${notes.length ? '<ul style="margin:8px 0 0;padding-left:18px;font-size:12.5px;color:#b45309;">' + notes.map(n => '<li>' + n + '</li>').join('') + '</ul>' : ''}
-      <div class="tbl-wrap" style="max-height:260px;overflow:auto;margin:10px 0;">
+      <div class="tbl-wrap" style="max-height:320px;overflow:auto;margin-bottom:10px;">
         <table><thead><tr><th>Title</th><th>Branch</th><th class="ta-r">Now</th><th class="ta-r">New</th><th class="ta-r">Change</th><th>From</th><th class="ta-r">Rolled</th></tr></thead>
         <tbody>${plan.map(p => `<tr>
           <td>${escHtml(p.title)}</td><td>${escHtml(p.branch)}</td>
@@ -283,17 +252,15 @@ function previewReconApply() {
         </tr>`).join('')}</tbody></table>
       </div>
       <button class="btn btn-primary btn-sm" onclick="confirmReconApply()">Apply ${plan.length} change(s)</button>
-      <button class="btn btn-secondary btn-sm" onclick="document.getElementById('recon-apply-panel').innerHTML='';">Cancel</button>
+      ${close}Cancel</button>
     </div>`;
 }
 
 async function confirmReconApply() {
   const plan = reconApplyPlan();
   if (!plan.length) return;
-  const unsettled = plan.filter(p => p.target !== p.rolled).length;
-  if (!confirm(`Set stock for ${plan.length} book/branch row(s)?`
-    + (unsettled ? `\n\n${unsettled} of them still disagree with Rolled and will need correcting by hand afterwards.` : '')
-    + `\n\nThis changes what the Inventory tab shows. Each change is recorded as a stock adjustment.`)) return;
+  // The preview is the review step; this is just the last guard before a write.
+  if (!confirm(`Set stock for ${plan.length} row(s)?`)) return;
   const stamp = nowLA();
   const by = currentUser ? currentUser.email : '';
   try {
