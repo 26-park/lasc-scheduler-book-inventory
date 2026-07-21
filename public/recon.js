@@ -165,33 +165,55 @@ function toggleReconBaselineDay() {
 function drawRecon() {
   const rows = reconRows;
   const search = (document.getElementById('recon-search').value || '').trim().toLowerCase();
-  let shown = rows.filter(r => {
+  const qualifies = r => {
     if (reconFilter === 'diff' && !(r.diff !== null && r.diff !== 0)) return false;
     if (reconFilter === 'nobase' && r.base !== null) return false;
-    if (search && !(r.title.toLowerCase().includes(search) || r.isbn.toLowerCase().includes(search))) return false;
     return true;
+  };
+
+  // Group by book so a title's branches stay together: a book is listed when
+  // any one of its branches qualifies, and then every branch is shown, which
+  // is what makes a row readable — a gap at one campus usually only means
+  // something next to what the other two are doing.
+  const groups = new Map();
+  rows.forEach(r => {
+    if (search && !(r.title.toLowerCase().includes(search) || r.isbn.toLowerCase().includes(search))) return;
+    if (!groups.has(r.isbn)) groups.set(r.isbn, { title: r.title, rows: [], hit: false });
+    const g = groups.get(r.isbn);
+    g.rows.push(r);
+    if (qualifies(r)) g.hit = true;
   });
-  shown.sort((a, b) => Math.abs(b.diff || 0) - Math.abs(a.diff || 0) || a.title.localeCompare(b.title) || a.branch.localeCompare(b.branch));
+  const order = { IRV: 0, LA: 1, RH: 2 };
+  const shown = [...groups.values()].filter(g => g.hit);
+  shown.forEach(g => g.rows.sort((a, b) => order[a.branch] - order[b.branch]));
+  // Worst offenders first, so the biggest gaps stay at the top of the page.
+  shown.sort((a, b) =>
+    Math.max(...b.rows.map(r => Math.abs(r.diff || 0))) - Math.max(...a.rows.map(r => Math.abs(r.diff || 0))) ||
+    a.title.localeCompare(b.title));
 
   const withBase = rows.filter(r => r.base !== null);
   const mismatched = withBase.filter(r => r.diff !== 0);
   const negative = withBase.filter(r => r.calc < 0);
 
-  const cell = (v, cls) => `<td class="ta-r ${cls || ''}">${v === null ? '<span style="color:#cbd5e1;">—</span>' : v}</td>`;
+  const cell = (v, style) => `<td class="ta-r" style="${style || ''}">${v === null ? '<span style="color:#cbd5e1;">—</span>' : v}</td>`;
   const body = shown.length === 0
     ? '<tr><td colspan="10" class="empty-state">No rows match.</td></tr>'
-    : shown.map(r => {
+    : shown.map(g => g.rows.map((r, i) => {
         const d = r.diff;
-        const dCol = d === null ? '' : d === 0 ? 'color:#16a34a;' : 'color:#dc2626;font-weight:600;';
+        const top = i === 0 ? 'border-top:2px solid #e2e8f0;' : '';
+        // Dim the cells rather than the row: the title spans the whole group,
+        // so a faded first row would fade the title for every branch under it.
+        const dim = qualifies(r) ? '' : 'opacity:.5;';
+        const dCol = dim ? '' : d === null ? '' : d === 0 ? 'color:#16a34a;' : 'color:#dc2626;font-weight:600;';
         return `<tr>
-          <td>${escHtml(r.branch)}</td>
-          <td>${escHtml(r.title)}</td>
-          ${cell(r.base)}${cell(r.tx)}${cell(r.calc)}
-          ${cell(r.snap)}${cell(r.postTx)}${cell(r.rolled)}
-          <td class="ta-r" style="${dCol}">${d === null ? '<span style="color:#cbd5e1;">—</span>' : (d > 0 ? '+' + d : d)}</td>
-          ${cell(r.live)}
+          ${i === 0 ? `<td rowspan="${g.rows.length}" style="${top}vertical-align:middle;">${escHtml(g.title)}</td>` : ''}
+          <td style="${top}${dim}">${escHtml(r.branch)}</td>
+          ${cell(r.base, top + dim)}${cell(r.tx, top + dim)}${cell(r.calc, top + dim)}
+          ${cell(r.snap, top + dim)}${cell(r.postTx, top + dim)}${cell(r.rolled, top + dim)}
+          <td class="ta-r" style="${top}${dim}${dCol}">${d === null ? '<span style="color:#cbd5e1;">—</span>' : (d > 0 ? '+' + d : d)}</td>
+          ${cell(r.live, top + dim)}
         </tr>`;
-      }).join('');
+      }).join('')).join('');
 
   const orphanTotal = rows._orphans.reduce((a, o) => a + o.stock, 0);
   const stamps = reconTx.map(t => t.ts).sort();
@@ -206,6 +228,28 @@ function drawRecon() {
     ...RECON_SOURCE_NOTES
   ];
 
+  const filters = [
+    ['Mismatches', 'Books where at least one branch has a baseline and Calculated does not equal Rolled. These are the books whose two histories disagree — the working list.'],
+    ['All rows', 'Every book/branch the reconciliation knows about, matching or not. Use it to confirm a book that looks fine really is fine.'],
+    ['No baseline', 'Books with no 3/30 starting count, because the spreadsheet only tracks the course books. Calculated is blank for these, so they can never be checked against the PDF — they need a starting count entered before they mean anything.']
+  ];
+  const columns = [
+    ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; branches that do not match the current filter are dimmed.'],
+    [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Blank means the spreadsheet has no row for this book at this branch.`],
+    ['All tx', 'Net of every recorded stock movement counted against the baseline: sales and stock-outs subtract, stock-ins and incoming transfers add.'],
+    ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
+    [`PDF ${RECON_SNAPSHOT_DATE.slice(5)}`, 'Count from the 7/16/26 PDF backup — an independent hand-taken snapshot.'],
+    ['Tx after', 'Net movements recorded after the PDF was taken, used to bring it up to today.'],
+    ['Rolled', 'PDF + Tx after. The same "stock today" figure, arrived at from the other direction.'],
+    ['Diff', 'Calculated − Rolled. Zero is green. A negative number means the calculation is short — the size of the inbound stock still missing from the transaction log.'],
+    ['Live', 'What the app currently shows on the Inventory tab. Blank means no inventory row exists for this book at this branch.']
+  ];
+  const dl = pairs => pairs.map(([t, d]) =>
+    `<div style="display:flex;gap:10px;padding:5px 0;border-top:1px solid #f1f5f9;">
+       <div style="flex:0 0 128px;font-weight:600;color:#334155;">${t}</div>
+       <div style="flex:1;">${d}</div>
+     </div>`).join('');
+
   document.getElementById('recon-body').innerHTML = `
     <div class="card" style="padding:12px 16px;margin-bottom:12px;">
       <div style="font-size:13px;color:#475569;line-height:1.7;">
@@ -213,6 +257,13 @@ function drawRecon() {
         <strong>Rolled</strong> = ${RECON_SNAPSHOT_DATE} PDF snapshot + transactions after that date.<br>
         <strong>Diff</strong> = Calculated − Rolled. Nothing on this page writes to the database.
       </div>
+      <details style="margin-top:10px;font-size:12.5px;color:#475569;line-height:1.6;">
+        <summary style="cursor:pointer;font-weight:600;color:#334155;">What the filters and columns mean</summary>
+        <div style="margin-top:8px;font-weight:600;color:#334155;">Filters</div>
+        ${dl(filters)}
+        <div style="margin-top:12px;font-weight:600;color:#334155;">Columns</div>
+        ${dl(columns)}
+      </details>
       <ul style="margin:10px 0 0;padding-left:18px;font-size:12.5px;color:#475569;line-height:1.8;">
         ${notes.map(n => '<li>' + n + '</li>').join('')}
       </ul>
@@ -222,7 +273,7 @@ function drawRecon() {
         <table>
           <thead>
             <tr>
-              <th>Branch</th><th>Title</th>
+              <th>Title</th><th>Branch</th>
               <th class="ta-r">Base ${RECON_BASELINE_DATE.slice(5)}</th><th class="ta-r">All tx</th><th class="ta-r">Calculated</th>
               <th class="ta-r">PDF ${RECON_SNAPSHOT_DATE.slice(5)}</th><th class="ta-r">Tx after</th><th class="ta-r">Rolled</th>
               <th class="ta-r">Diff</th><th class="ta-r">Live</th>
