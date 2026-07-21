@@ -39,6 +39,27 @@ function reconIndexCatalog() {
 let reconRows = null;
 let reconTx = null;          // flat transaction list, fetched once per change
 
+// Hand-entered 3/30 counts, keyed "BRANCH|ISBN". They override the value read
+// out of the spreadsheet, and supply one for the rows the spreadsheet never
+// listed — which is the only way those rows ever get a Calculated.
+let reconBaseEdits = null;
+const reconBaseKey = (branch, isbn) => branch + '|' + isbn;
+function reconBaseOf(branch, isbn) {
+  const k = reconBaseKey(branch, isbn);
+  const edit = reconBaseEdits ? reconBaseEdits[k] : undefined;
+  return edit !== undefined ? edit : RECON_BASELINE[k];
+}
+
+async function loadReconBaseEdits() {
+  const snap = await db.collection('recon_baseline').get();
+  const out = {};
+  snap.docs.forEach(d => {
+    const r = d.data();
+    if (typeof r.base === 'number') out[reconBaseKey(r.branch, r.isbn)] = r.base;
+  });
+  return out;
+}
+
 // Called by invalidateHistCache() after any stock write, so a sale or restock
 // entered in this page session is picked up the next time the tab is drawn.
 window.invalidateReconCache = function () { reconTx = null; };
@@ -50,10 +71,11 @@ async function renderRecon() {
     el.innerHTML = '<div class="empty-state">Managers only.</div>';
     return;
   }
-  if (!reconTx) {
+  if (!reconTx || !reconBaseEdits) {
     el.innerHTML = '<div class="empty-state">Loading transactions…</div>';
     try {
-      reconTx = await loadReconTx();
+      if (!reconBaseEdits) reconBaseEdits = await loadReconBaseEdits();
+      if (!reconTx) reconTx = await loadReconTx();
     } catch (e) {
       console.error(e);
       el.innerHTML = '<div class="empty-state">Could not load transaction history.</div>';
@@ -153,7 +175,7 @@ function buildReconRows() {
   books.forEach(b => {
     RECON_BRANCHES.forEach(br => {
       const k = br + '|' + b.isbn;
-      const base = RECON_BASELINE[k];
+      const base = reconBaseOf(br, b.isbn);
       const hasBase = base !== undefined;
       const snap = RECON_SNAPSHOT[k];
       const tx = all[k] || 0, postTx = post[k] || 0;
@@ -162,7 +184,7 @@ function buildReconRows() {
       const rolled = (snap || 0) + postTx;
       rows.push({
         isbn: b.isbn, title: b.title, branch: br,
-        base: hasBase ? base : null, tx, calc,
+        base: hasBase ? base : null, baseEdited: reconBaseEdits[k] !== undefined, tx, calc,
         snap: snap === undefined ? null : snap, postTx, rolled,
         live: liveQty === undefined ? null : liveQty,
         diff: calc === null ? null : calc - rolled
@@ -287,6 +309,35 @@ async function writeReconStock(plan) {
   }
 }
 
+// Writing the baseline back so it survives a reload and reaches everyone else.
+// Clearing the box removes the override rather than storing a blank, so the
+// spreadsheet value comes back if there was one.
+async function setReconBase(branch, isbn, raw) {
+  const k = reconBaseKey(branch, isbn);
+  const txt = String(raw).trim();
+  const docId = branch + '__' + isbn;
+  try {
+    if (txt === '') {
+      await db.collection('recon_baseline').doc(docId).delete();
+      delete reconBaseEdits[k];
+    } else {
+      const n = Math.round(Number(txt));
+      if (!Number.isFinite(n)) { showToast('Enter a whole number.', 'error'); drawRecon(); return; }
+      await db.collection('recon_baseline').doc(docId).set({
+        branch, isbn, base: n,
+        updatedAt: nowLA(), updatedBy: currentUser ? currentUser.email : ''
+      });
+      reconBaseEdits[k] = n;
+    }
+    reconRows = buildReconRows();
+    drawRecon();
+  } catch (e) {
+    console.error(e);
+    showToast('Could not save that baseline.', 'error');
+    drawRecon();
+  }
+}
+
 function setReconFilter(f) {
   reconFilter = f;
   document.querySelectorAll('.recon-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.rf === f));
@@ -339,7 +390,13 @@ function drawRecon() {
         return `<tr>
           ${i === 0 ? `<td rowspan="${g.rows.length}" style="${top}vertical-align:middle;">${escHtml(g.title)}</td>` : ''}
           <td style="${top}${dim}">${escHtml(r.branch)}</td>
-          ${cell(r.base, top + dim)}${cell(r.tx, top + dim)}${cell(r.calc, top + dim)}
+          <td class="ta-r" style="${top}${dim}padding:2px 4px;">
+            <input type="number" value="${r.base === null ? '' : r.base}" placeholder="—"
+              onchange="setReconBase('${escHtml(r.branch)}','${escHtml(r.isbn)}',this.value)"
+              title="${r.baseEdited ? 'Entered by hand — clear the box to go back to the spreadsheet' : 'Starting count on ' + RECON_BASELINE_DATE}"
+              style="width:62px;text-align:right;font:inherit;font-size:12px;padding:2px 4px;border:1px solid ${r.baseEdited ? '#f59e0b' : '#e2e8f0'};border-radius:4px;background:${r.baseEdited ? '#fffbeb' : '#fff'};">
+          </td>
+          ${cell(r.tx, top + dim)}${cell(r.calc, top + dim)}
           <td class="ta-r" style="${top}${dim}"${r.postTx ? ` title="${RECON_SNAPSHOT_DATE} PDF ${r.snap === null ? 0 : r.snap} ${r.postTx > 0 ? '+' : '−'} ${Math.abs(r.postTx)} recorded after"` : ''}>${r.rolled}${r.postTx ? '<span style="color:#94a3b8;font-size:11px;"> *</span>' : ''}</td>
           <td class="ta-r" style="${top}${dim}${dCol}">${d === null ? '<span style="color:#cbd5e1;">—</span>' : (d > 0 ? '+' + d : d)}</td>
         </tr>`;
@@ -366,7 +423,7 @@ function drawRecon() {
   ];
   const columns = [
     ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; branches that do not match the current filter are dimmed.'],
-    [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Blank means the spreadsheet has no row for this book at this branch.`],
+    [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Type into the box to correct it, or to supply one where the spreadsheet has no row — that is what gives a row a Calculated at all. Hand-entered values are shown amber; clearing the box drops back to the spreadsheet.`],
     ['All tx', `Net of every recorded stock movement, including any dated ${RECON_BASELINE_DATE} itself: sales and stock-outs subtract, stock-ins and incoming transfers add.`],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
     ['Rolled', `The ${RECON_SNAPSHOT_DATE} PDF backup — an independent hand-taken snapshot — plus any movements recorded after it, so it lands on today. The same "stock today" figure, arrived at from the other direction. A <span style="color:#94a3b8;">*</span> marks the rows where something was recorded after the PDF; hover for the breakdown.`],
@@ -402,7 +459,7 @@ function drawRecon() {
           <thead>
             <tr>
               <th>Title</th><th>Branch</th>
-              <th class="ta-r">Base ${RECON_BASELINE_DATE.slice(5)}</th><th class="ta-r">All tx</th><th class="ta-r">Calculated</th>
+              <th class="ta-r" title="Editable — type a starting count, clear the box to drop back to the spreadsheet">Base ${RECON_BASELINE_DATE.slice(5)}</th><th class="ta-r">All tx</th><th class="ta-r">Calculated</th>
               <th class="ta-r">Rolled</th>
               <th class="ta-r">Diff</th>
             </tr>
