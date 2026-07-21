@@ -63,7 +63,6 @@ async function loadReconBaseEdits() {
 // Called by invalidateHistCache() after any stock write, so a sale or restock
 // entered in this page session is picked up the next time the tab is drawn.
 window.invalidateReconCache = function () { reconTx = null; };
-let reconFilter = 'diff';
 
 async function renderRecon() {
   const el = document.getElementById('recon-body');
@@ -309,6 +308,29 @@ async function writeReconStock(plan) {
   }
 }
 
+// Drop every hand-entered baseline and go back to the spreadsheet throughout.
+// A single row is reverted by clearing its box; this is for starting over.
+async function resetReconBaseEdits() {
+  const keys = Object.keys(reconBaseEdits || {});
+  if (!keys.length) { showToast('No hand-entered baselines to reset.'); return; }
+  if (!confirm(`Discard ${keys.length} hand-entered baseline(s) and go back to the spreadsheet figures?`)) return;
+  try {
+    const snap = await db.collection('recon_baseline').get();
+    for (let i = 0; i < snap.docs.length; i += 300) {
+      const batch = db.batch();
+      snap.docs.slice(i, i + 300).forEach(d => batch.delete(d.ref));
+      await batch.commit();
+    }
+    reconBaseEdits = {};
+    reconRows = buildReconRows();
+    drawRecon();
+    showToast(`${keys.length} baseline(s) reset.`, 'ok');
+  } catch (e) {
+    console.error(e);
+    showToast('Could not reset the baselines.', 'error');
+  }
+}
+
 // Writing the baseline back so it survives a reload and reaches everyone else.
 // Clearing the box removes the override rather than storing a blank, so the
 // spreadsheet value comes back if there was one.
@@ -338,20 +360,13 @@ async function setReconBase(branch, isbn, raw) {
   }
 }
 
-function setReconFilter(f) {
-  reconFilter = f;
-  document.querySelectorAll('.recon-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.rf === f));
-  drawRecon();
-}
-
 function drawRecon() {
   const rows = reconRows;
   const search = (document.getElementById('recon-search').value || '').trim().toLowerCase();
-  const qualifies = r => {
-    if (reconFilter === 'diff' && !(r.diff !== null && r.diff !== 0)) return false;
-    if (reconFilter === 'nobase' && r.base !== null) return false;
-    return true;
-  };
+  // Anything not settled: Calculated disagreeing with Rolled, or no baseline at
+  // all so there is nothing to compare. A null diff is not zero, so both fall
+  // out of the same test. Rows already at zero are done and drop off the list.
+  const qualifies = r => r.diff !== 0;
 
   // Group by book so a title's branches stay together: a book is listed when
   // any one of its branches qualifies, and then every branch is shown, which
