@@ -161,7 +161,7 @@ function buildReconRows() {
   });
 
   // Live stock, current branch codes only. Rows still filed under a legacy
-  // campus name are orphans, not additional stock — see the notes panel.
+  // campus name are orphans, not additional stock, and none are left.
   const live = {}, orphans = [];
   inventory.forEach(r => {
     if (!RECON_BRANCHES.includes(r.branch)) { orphans.push({ branch: r.branch, title: r.title, stock: Number(r.stock) || 0 }); return; }
@@ -367,10 +367,6 @@ function drawRecon() {
     Math.max(...b.rows.map(r => Math.abs(r.diff || 0))) - Math.max(...a.rows.map(r => Math.abs(r.diff || 0))) ||
     a.title.localeCompare(b.title));
 
-  const withBase = rows.filter(r => r.base !== null);
-  const mismatched = withBase.filter(r => r.diff !== 0);
-  const negative = withBase.filter(r => r.calc < 0);
-
   const cell = (v, style) => `<td class="ta-r" style="${style || ''}">${v === null ? '<span style="color:#cbd5e1;">—</span>' : v}</td>`;
   const body = shown.length === 0
     ? '<tr><td colspan="8" class="empty-state">No rows match.</td></tr>'
@@ -402,20 +398,6 @@ function drawRecon() {
         </tr>`;
       }).join('')).join('');
 
-  const orphanTotal = rows._orphans.reduce((a, o) => a + o.stock, 0);
-  const stamps = reconTx.map(t => t.ts).sort();
-  const postCount = reconTx.filter(t => t.ts > RECON_SNAPSHOT_CUTOFF).length;
-  const notes = [
-    `Transaction coverage: all <strong>${rows._countedTx}</strong> recorded stock movements are applied to the baseline, <strong>${postCount}</strong> of them on top of the PDF as well. Neither side is capped, so everything up to the latest record (${stamps[stamps.length - 1]}) counts — and the tab re-reads Firestore whenever stock changes.`,
-    ...(reconTx.realigned ? [`<strong>${reconTx.realigned}</strong> movements were filed under a superseded ISBN and have been re-attached to the catalog book by title. Editing a book's ISBN does not rewrite its existing sales and restocks, so without this they would drop out of the count entirely.`] : []),
-    `Baseline covers <strong>${withBase.length}</strong> of ${rows.length} branch/book rows — the spreadsheet only tracks the course books, so the rest have no 3/30 starting count.`,
-    `<strong>${mismatched.length}</strong> of ${withBase.length} rows with a baseline disagree; <strong>${negative.length}</strong> compute to a negative stock, which is impossible.`,
-    `Negative results mean the Firestore log is missing inbound stock: the April restocks recorded in the spreadsheet's Amazon / Cambridge / Pearson columns were never entered as stock-in records, and a one-off seeding script (<code>init_inventory.js</code>, since removed) overwrote stock levels directly without writing history.`,
-    `<strong>${rows._orphans.length}</strong> inventory rows (${orphanTotal} units) are still filed under the old campus names "Irvine" / "Rowland Heights". The app never shows them; treating them as extra stock makes the match worse, so they look like pre-rename leftovers.`,
-    ...(rows._skipped.length ? [`${rows._skipped.length} transaction(s) skipped as unusable: ${rows._skipped.join(', ')}.`] : []),
-    ...RECON_SOURCE_NOTES
-  ];
-
   const columns = [
     ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; a branch already settled at Diff 0 is dimmed.'],
     [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Type into the box to correct it, or to supply one where the spreadsheet has no row — that is what gives a row a Calculated at all. Hand-entered values are shown amber; clearing the box drops back to the spreadsheet. Rows already balancing at Diff 0 are locked, and unlock again if a movement puts them back out of balance.`],
@@ -441,9 +423,6 @@ function drawRecon() {
         <summary style="cursor:pointer;font-weight:600;color:#334155;">What the columns mean</summary>
         <div style="margin-top:8px;">${dl(columns)}</div>
       </details>
-      <ul style="margin:10px 0 0;padding-left:18px;font-size:12.5px;color:#475569;line-height:1.8;">
-        ${notes.map(n => '<li>' + n + '</li>').join('')}
-      </ul>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="tbl-wrap">
