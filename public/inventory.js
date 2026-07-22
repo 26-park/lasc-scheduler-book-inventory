@@ -1428,7 +1428,7 @@ async function applyStockEffects(effects, sign) {
 
 // Validate that applying these (already-signed) effects keeps every stock >= 0.
 // Returns an error message string if it would go negative, otherwise null.
-function validateStockEffects(effects) {
+function aggregateStockEffects(effects) {
   const agg = {};
   for (const e of effects) {
     if (!e.isbn || !e.branch || !e.delta) continue;
@@ -1436,16 +1436,22 @@ function validateStockEffects(effects) {
     if (!agg[key]) agg[key] = { isbn:e.isbn, title:e.title, branch:e.branch, delta:0 };
     agg[key].delta += e.delta;
   }
-  for (const key in agg) {
-    const a = agg[key];
+  return Object.values(agg);
+}
+
+// Rows an edit or deletion would push below zero, described for the operator.
+function negativeStockEffects(effects) {
+  return aggregateStockEffects(effects).map(a => {
     const current = getStock(a.isbn, a.branch);
-    if (current + a.delta < 0) {
-      const book = books.find(b => b.isbn === a.isbn);
-      const name = (book ? book.title : a.title) || a.isbn;
-      return `Cannot apply: "${name}" stock at ${a.branch} would become ${current + a.delta} (current: ${current}).`;
-    }
-  }
-  return null;
+    if (current + a.delta >= 0) return null;
+    const book = books.find(b => b.isbn === a.isbn);
+    return `"${(book ? book.title : a.title) || a.isbn}" at ${a.branch}: ${current} → ${current + a.delta}`;
+  }).filter(Boolean);
+}
+
+function validateStockEffects(effects) {
+  const bad = negativeStockEffects(effects);
+  return bad.length ? `Cannot apply: ${bad[0]}.` : null;
 }
 
 function editHistoryRecord(docId, tab) {
@@ -1560,11 +1566,14 @@ async function saveHistoryEdit() {
 async function deleteHistoryRecord(docId, tab) {
   const coll = _histCollMap[tab];
   const record = historyData.find(x => x._docId === docId);
-  // Reverse the deleted record's effect; block if it would drive stock negative.
+  // Reverse the deleted record's effect on stock.
   const applyList = record ? histStockEffects(tab, record).map(e => ({ ...e, delta: -e.delta })) : [];
-  const err = validateStockEffects(applyList);
-  if (err) { showToast(err, 'error'); return; }
-  if (!confirm('Delete this record? Inventory will be adjusted accordingly.')) return;
+  // Removing a record that stock has since been counted around can legitimately
+  // leave the number negative. Say so and let the operator decide, rather than
+  // refusing to correct the history.
+  const negatives = negativeStockEffects(applyList);
+  if (!confirm('Delete this record? Inventory will be adjusted accordingly.'
+      + (negatives.length ? `\n\nThis takes stock below zero:\n${negatives.join('\n')}` : ''))) return;
   try {
     await db.collection(coll).doc(docId).delete();
     await applyStockEffects(applyList, +1);
