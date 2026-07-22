@@ -82,6 +82,7 @@ async function renderRecon() {
     }
   }
   reconRows = buildReconRows();
+  reconSticky = null;
   drawRecon();
 }
 
@@ -339,6 +340,12 @@ async function setReconBase(branch, isbn, raw) {
   }
 }
 
+// The books on the list, fixed when the tab is drawn. Settling a row would
+// otherwise drop its book out from under the cursor and pull everything below
+// it up a line. Books stay until the tab is rebuilt; a book that falls out of
+// balance still joins, since it needs to be seen.
+let reconSticky = null;
+
 function drawRecon() {
   const rows = reconRows;
   const search = (document.getElementById('recon-search').value || '').trim().toLowerCase();
@@ -351,13 +358,18 @@ function drawRecon() {
   // any one of its branches qualifies, and then every branch is shown, which
   // is what makes a row readable — a gap at one campus usually only means
   // something next to what the other two are doing.
+  if (!reconSticky) {
+    reconSticky = new Set();
+    rows.forEach(r => { if (qualifies(r)) reconSticky.add(r.isbn); });
+  }
   const groups = new Map();
   rows.forEach(r => {
     if (search && !(r.title.toLowerCase().includes(search) || r.isbn.toLowerCase().includes(search))) return;
     if (!groups.has(r.isbn)) groups.set(r.isbn, { title: r.title, rows: [], hit: false });
     const g = groups.get(r.isbn);
     g.rows.push(r);
-    if (qualifies(r)) g.hit = true;
+    if (qualifies(r)) { g.hit = true; reconSticky.add(r.isbn); }
+    if (reconSticky.has(r.isbn)) g.hit = true;
   });
   const order = { IRV: 0, LA: 1, RH: 2 };
   // A book whose branches have all settled drops off the outstanding list, but a
@@ -365,10 +377,10 @@ function drawRecon() {
   // reached and corrected after the row balanced.
   const shown = [...groups.values()].filter(g => g.hit || search);
   shown.forEach(g => g.rows.sort((a, b) => order[a.branch] - order[b.branch]));
-  // Worst offenders first, so the biggest gaps stay at the top of the page.
-  shown.sort((a, b) =>
-    Math.max(...b.rows.map(r => Math.abs(r.diff || 0))) - Math.max(...a.rows.map(r => Math.abs(r.diff || 0))) ||
-    a.title.localeCompare(b.title));
+  // By title, always. Ordering by the size of the gap put the row being typed
+  // into somewhere else the moment its Diff changed, and the next figure went
+  // into whichever book had slid into its place.
+  shown.sort((a, b) => a.title.localeCompare(b.title));
 
   const cell = (v, style) => `<td class="ta-r" style="${style || ''}">${v === null ? '<span style="color:#cbd5e1;">—</span>' : v}</td>`;
   const body = shown.length === 0
