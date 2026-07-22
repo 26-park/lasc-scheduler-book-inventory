@@ -340,9 +340,9 @@ async function setReconBase(branch, isbn, raw) {
   }
 }
 
-// The books on the list, fixed when the tab is drawn. Settling a row would
-// otherwise drop its book out from under the cursor and pull everything below
-// it up a line. Books stay until the tab is rebuilt; a book that falls out of
+// The branch rows on the list, fixed when the tab is drawn. Settling a row
+// would otherwise take it out from under the cursor and pull everything below
+// it up a line. Rows stay until the tab is rebuilt; a row that falls out of
 // balance still joins, since it needs to be seen.
 let reconSticky = null;
 
@@ -354,28 +354,25 @@ function drawRecon() {
   // out of the same test. Rows already at zero are done and drop off the list.
   const qualifies = r => r.diff !== 0;
 
-  // Group by book so a title's branches stay together: a book is listed when
-  // any one of its branches qualifies, and then every branch is shown, which
-  // is what makes a row readable — a gap at one campus usually only means
-  // something next to what the other two are doing.
+  // Only the branches that are out is what the list is for; a campus already at
+  // Diff 0 has nothing left to do and is left off. Searching is the exception —
+  // it asks for a book by name, so every branch of it comes back, which is how a
+  // baseline gets corrected after its row settled.
+  const key = r => r.branch + '|' + r.isbn;
   if (!reconSticky) {
     reconSticky = new Set();
-    rows.forEach(r => { if (qualifies(r)) reconSticky.add(r.isbn); });
+    rows.forEach(r => { if (qualifies(r)) reconSticky.add(key(r)); });
   }
   const groups = new Map();
   rows.forEach(r => {
     if (search && !(r.title.toLowerCase().includes(search) || r.isbn.toLowerCase().includes(search))) return;
-    if (!groups.has(r.isbn)) groups.set(r.isbn, { title: r.title, rows: [], hit: false });
-    const g = groups.get(r.isbn);
-    g.rows.push(r);
-    if (qualifies(r)) { g.hit = true; reconSticky.add(r.isbn); }
-    if (reconSticky.has(r.isbn)) g.hit = true;
+    if (qualifies(r)) reconSticky.add(key(r));
+    if (!search && !reconSticky.has(key(r))) return;
+    if (!groups.has(r.isbn)) groups.set(r.isbn, { title: r.title, rows: [] });
+    groups.get(r.isbn).rows.push(r);
   });
   const order = { IRV: 0, LA: 1, RH: 2 };
-  // A book whose branches have all settled drops off the outstanding list, but a
-  // search is asking for that book by name — keep it, so a baseline can still be
-  // reached and corrected after the row balanced.
-  const shown = [...groups.values()].filter(g => g.hit || search);
+  const shown = [...groups.values()];
   shown.forEach(g => g.rows.sort((a, b) => order[a.branch] - order[b.branch]));
   // By title, always. Ordering by the size of the gap put the row being typed
   // into somewhere else the moment its Diff changed, and the next figure went
@@ -409,7 +406,7 @@ function drawRecon() {
       }).join('')).join('');
 
   const columns = [
-    ['Title / Branch', 'The book, and the campus. A title\'s three branches are always shown together; a branch already settled at Diff 0 is dimmed.'],
+    ['Title / Branch', 'The book, and the campus. Only the branches still out of balance are listed — a branch that settles while you work is dimmed and stays put until the tab is rebuilt. Search a title to bring all three of its branches back.'],
     [`Base ${RECON_BASELINE_DATE.slice(5)}`, `Starting count from the "3/30/26" column of the branch Inventory sheet. Type into the box to correct it, or to supply one where the spreadsheet has no row — that is what gives a row a Calculated at all. Hand-entered values are shown amber; clearing the box drops back to the spreadsheet.`],
     ['All tx', `Net of every recorded stock movement, including any dated ${RECON_BASELINE_DATE} itself: sales and stock-outs subtract, stock-ins and incoming transfers add.`],
     ['Calculated', 'Base + All tx. What the stock should be today if the transaction log were complete.'],
@@ -427,7 +424,7 @@ function drawRecon() {
       <div style="font-size:13px;color:#475569;line-height:1.7;">
         <strong>Calculated</strong> = ${RECON_BASELINE_DATE} spreadsheet baseline + all recorded transactions.<br>
         <strong>Rolled</strong> = ${RECON_SNAPSHOT_DATE} PDF snapshot + transactions after that date.<br>
-        <strong>Diff</strong> = Calculated − Rolled. Rows already settled at Diff 0 are dimmed; everything else is outstanding.
+        <strong>Diff</strong> = Calculated − Rolled. Only branches still out of balance are listed; search a title to see all of its branches.
       </div>
       <details style="margin-top:10px;font-size:12.5px;color:#475569;line-height:1.6;">
         <summary style="cursor:pointer;font-weight:600;color:#334155;">What the columns mean</summary>
