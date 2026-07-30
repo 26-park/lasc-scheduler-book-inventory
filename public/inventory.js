@@ -1226,12 +1226,12 @@ function renderHistPagination(totalEntries, totalPages) {
   if (!el) return;
   if (!totalEntries) { el.innerHTML = ''; return; }
   const p = _histPage;
-  const btn = (label, page, disabled) =>
-    `<button class="btn btn-secondary btn-sm" ${disabled ? 'disabled' : ''} onclick="histGoPage(${page})">${label}</button>`;
+  const btn = (glyph, label, page, disabled) =>
+    `<button class="btn btn-secondary btn-sm" title="${label}" aria-label="${label}" ${disabled ? 'disabled' : ''} onclick="histGoPage(${page})">${glyph}</button>`;
   el.innerHTML =
-    btn('‹ Prev', p - 1, p <= 1) +
-    `<span style="margin:0 6px;">Page ${p} / ${totalPages} <span style="color:#94a3b8;">(${totalEntries} entr${totalEntries === 1 ? 'y' : 'ies'})</span></span>` +
-    btn('Next ›', p + 1, p >= totalPages);
+    btn('&#8249;', 'Previous page', p - 1, p <= 1) +
+    `<span style="margin:0 6px;">${p} / ${totalPages}</span>` +
+    btn('&#8250;', 'Next page', p + 1, p >= totalPages);
 }
 
 // Totals for the given rows (either the current page or all filtered rows,
