@@ -109,11 +109,5 @@ service cloud.firestore {
       allow write: if isManager();
     }
 
-    // Reconciliation baselines — hand-entered 3/30 starting counts that
-    // override or fill in the spreadsheet. Temporary, alongside the Recon tab.
-    match /recon_baseline/{doc} {
-      allow read: if isLASCUser();
-      allow write: if isManager();
-    }
   }
 }

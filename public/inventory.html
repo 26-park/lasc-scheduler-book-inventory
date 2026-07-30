@@ -160,7 +160,6 @@
   <button class="nav-tab" onclick="switchTab('orders')">Orders</button>
   <button class="nav-tab" onclick="switchTab('history')">History</button>
   <button class="nav-tab" onclick="switchTab('books')">Books</button>
-  <button class="nav-tab manager-only" onclick="switchTab('recon')">Recon</button>
 </nav>
 
 <!-- ======== INVENTORY ======== -->
@@ -352,6 +351,11 @@
         <button class="branch-btn hist-branch-btn" data-hb="RH" onclick="setHistBranch('RH')">RH</button>
         <button class="branch-btn hist-branch-btn manager-only" data-hb="ALL" onclick="setHistBranch('ALL')">All</button>
         <input type="text" id="hist-search" class="search-input" oninput="onHistSearchInput()" placeholder="Search title, student, note…">
+        <div id="hist-totals" title="Totals for the records currently in view" style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#475569;"></div>
+        <select id="hist-totals-scope" onchange="setHistTotalsScope(this.value)" title="What the totals above cover" style="font-size:12px;padding:2px 4px;">
+          <option value="page">This page</option>
+          <option value="all">All (filtered)</option>
+        </select>
         <span class="toolbar-spacer"></span>
         <button class="btn btn-secondary btn-sm" onclick="exportHistoryCSV()">&#8595; Export CSV</button>
       </div>
@@ -388,6 +392,7 @@
             <tbody id="hist-tbody"><tr><td class="empty-state">Loading…</td></tr></tbody>
           </table>
         </div>
+        <div id="hist-pagination" style="display:flex;gap:8px;align-items:center;justify-content:center;padding:10px;font-size:13px;color:#475569;"></div>
       </div>
     </div>
   </main>
@@ -412,20 +417,6 @@
         </table>
       </div>
     </div>
-  </main>
-</div>
-
-<!-- ======== RECON (temporary) ======== -->
-<div id="view-recon" class="view">
-  <main>
-    <div class="card" style="padding:12px 16px;">
-      <div class="toolbar">
-        <input type="text" id="recon-search" class="search-input" placeholder="Search title / ISBN…" oninput="drawRecon()">
-        <span class="toolbar-spacer"></span>
-        <button class="btn btn-secondary btn-sm" onclick="applyReconStock()">Set stock to Calculated…</button>
-      </div>
-    </div>
-    <div id="recon-body"><div class="empty-state">Loading…</div></div>
   </main>
 </div>
 
@@ -555,7 +546,7 @@
 <!-- Edit History Record Modal -->
 <div class="modal-overlay" id="edit-hist-modal" onclick="if(event.target===this)closeEditHistModal()">
   <div class="modal" style="width:360px;">
-    <h3>Edit Record</h3>
+    <h3 id="edit-hist-title">Edit Record</h3>
     <div id="edit-hist-fields"></div>
     <div class="modal-actions">
       <button class="btn btn-secondary btn-sm" onclick="closeEditHistModal()">Cancel</button>
@@ -675,8 +666,5 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="firebase-init.js"></script>
 <script src="inventory.js"></script>
-<!-- Temporary stock reconciliation worksheet -->
-<script src="recon-data.js"></script>
-<script src="recon.js"></script>
 </body>
 </html>

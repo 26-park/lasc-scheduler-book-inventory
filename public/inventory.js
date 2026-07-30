@@ -94,7 +94,11 @@ function switchTab(tab) {
   document.getElementById('view-' + tab).classList.add('active');
   currentTab = tab;
   localStorage.setItem('inventory_tab', tab);
-  if (tab === 'history') invalidateHistCache(); // fresh data each time the tab is entered
+  // Entering History used to drop the cache every time, refetching four
+  // collections on each visit. In-session writes already invalidate it, so the
+  // only reason to refetch on entry is to catch another device's changes —
+  // do that on a staleness window instead of on every tab switch.
+  if (tab === 'history' && Date.now() - _histCacheAt > HIST_STALE_MS) invalidateHistCache();
   renderCurrentTab();
 }
 
@@ -103,7 +107,6 @@ function renderCurrentTab() {
   else if (currentTab === 'orders') renderOrders();
   else if (currentTab === 'history') loadHistory();
   else if (currentTab === 'books') renderBooks();
-  else if (currentTab === 'recon') renderRecon();
   else if (currentTab === 'users') loadUsers();
 }
 
@@ -985,12 +988,13 @@ function setHistBranch(b) {
 // values. Rebuilt on entering the History tab and after any write that
 // touches inventory or history records; filter changes reuse the cache.
 let _histCache = null;
-// Every stock write funnels through here, so it is also where the Recon tab's
-// transaction cache is dropped — otherwise a sale or restock made in this same
-// page session would not show up on it until a reload.
+let _histCacheAt = 0;               // when the cache was last built (staleness clock)
+const HIST_STALE_MS = 60000;        // re-fetch on tab entry only if older than this
+let _histPage = 1;                  // current History page (1-based)
+const HIST_PAGE_SIZE = 50;          // entries per page (a cart counts as one entry)
+let _histTotalsScope = 'page';      // 'page' = totals for this page; 'all' = all filtered
 function invalidateHistCache() {
   _histCache = null;
-  if (window.invalidateReconCache) window.invalidateReconCache();
 }
 
 async function buildHistCache() {
@@ -1032,6 +1036,7 @@ async function buildHistCache() {
     cache.stockAfter[ev.id] = after;
   });
   _histCache = cache;
+  _histCacheAt = Date.now();
 }
 
 // Signed stock change of a record from the perspective of the selected branch.
@@ -1166,13 +1171,131 @@ async function loadHistory() {
   if (currentHistTab === 'sales') rows = groupCartRows(rows);
 
   historyData = rows;
-  renderHistoryTable(filterHistRows(rows));
+  _histPage = 1;
+  renderHistory();
+}
+
+// Orchestrates the History table: applies the search filter, splits the rows
+// into pages (keeping multi-item carts whole), renders the current page, the
+// pager, and the totals for the chosen scope.
+function renderHistory() {
+  const fullRows = filterHistRows(historyData);
+  const entries = histEntries(fullRows);
+  const totalPages = Math.max(1, Math.ceil(entries.length / HIST_PAGE_SIZE));
+  if (_histPage > totalPages) _histPage = totalPages;
+  if (_histPage < 1) _histPage = 1;
+  const start = (_histPage - 1) * HIST_PAGE_SIZE;
+  const pageEntries = entries.slice(start, start + HIST_PAGE_SIZE);
+  const pageRows = pageEntries.flat();
+  const rowOffset = entries.slice(0, start).reduce((n, e) => n + e.length, 0);
+  renderHistoryTable(pageRows, fullRows.length, rowOffset);
+  renderHistPagination(entries.length, totalPages);
+  updateHistTotals(_histTotalsScope === 'page' ? pageRows : fullRows);
+}
+
+// Group rows into pageable entries: a multi-item sales cart is one entry (so a
+// page break never splits it); every other row is its own entry. Carts are
+// already contiguous in the sales view (groupCartRows), and only that sub-tab
+// renders them grouped, so other tabs are one-row entries.
+function histEntries(rows) {
+  if (currentHistTab !== 'sales') return rows.map(r => [r]);
+  const cnt = {};
+  rows.forEach(r => { if (r.txnId) cnt[r.txnId] = (cnt[r.txnId] || 0) + 1; });
+  const entries = [], seen = new Set();
+  rows.forEach(r => {
+    if (r.txnId && cnt[r.txnId] > 1) {
+      if (seen.has(r.txnId)) return;
+      seen.add(r.txnId);
+      entries.push(rows.filter(x => x.txnId === r.txnId));
+    } else {
+      entries.push([r]);
+    }
+  });
+  return entries;
+}
+
+function histGoPage(p) { _histPage = p; renderHistory(); }
+
+function setHistTotalsScope(s) {
+  _histTotalsScope = s === 'all' ? 'all' : 'page';
+  renderHistory();
+}
+
+function renderHistPagination(totalEntries, totalPages) {
+  const el = document.getElementById('hist-pagination');
+  if (!el) return;
+  if (!totalEntries) { el.innerHTML = ''; return; }
+  const p = _histPage;
+  const btn = (label, page, disabled) =>
+    `<button class="btn btn-secondary btn-sm" ${disabled ? 'disabled' : ''} onclick="histGoPage(${page})">${label}</button>`;
+  el.innerHTML =
+    btn('‹ Prev', p - 1, p <= 1) +
+    `<span style="margin:0 6px;">Page ${p} / ${totalPages} <span style="color:#94a3b8;">(${totalEntries} entr${totalEntries === 1 ? 'y' : 'ies'})</span></span>` +
+    btn('Next ›', p + 1, p >= totalPages);
+}
+
+// Totals for the given rows (either the current page or all filtered rows,
+// per the scope toggle). Renders the Sales summary cards (sales sub-tab only)
+// and the toolbar In/Out/Sales/Transfer/Net chips. changeOf() carries the
+// branch-aware sign, so Net follows the chosen branch.
+function updateHistTotals(rows) {
+  rows = rows || [];
+  const sc = document.getElementById('hist-totals-scope');
+  if (sc) sc.value = _histTotalsScope;
+  const tabOf = r => currentHistTab === 'all' ? r._tab : currentHistTab;
+
+  // Sales summary cards — only on the sales sub-tab.
+  const summEl = document.getElementById('hist-summary');
+  if (summEl) {
+    if (currentHistTab === 'sales') {
+      const totalQty = rows.reduce((s, r) => s + Number(r.quantity || 0), 0);
+      const totalRev = rows.reduce((s, r) => s + Number(r.totalPaid || 0), 0);
+      const totalDiscount = rows.reduce((s, r) => s + Number(r.sellingPrice || 0), 0) - totalRev;
+      const pay = salesPaymentBreakdown(rows);
+      const payCards = Object.keys(pay).sort().map(m =>
+        `<div class="summary-card"><div class="label">${esc(m)}</div><div class="value">${fmtMoney(pay[m])}</div></div>`).join('');
+      summEl.innerHTML =
+        `<div class="summary-card"><div class="label">Count</div><div class="value">${totalQty}</div></div>
+         <div class="summary-card"><div class="label">Revenue</div><div class="value">${fmtMoney(totalRev)}</div></div>
+         <div class="summary-card"><div class="label">Discount</div><div class="value">${fmtMoney(totalDiscount)}</div></div>
+         ${payCards}`;
+      summEl.style.display = 'flex';
+    } else {
+      summEl.style.display = 'none';
+      summEl.innerHTML = '';
+    }
+  }
+
+  // Toolbar chips.
+  const el = document.getElementById('hist-totals');
+  if (!el) return;
+  let inQ = 0, outQ = 0, salesQ = 0, trQ = 0, net = 0;
+  rows.forEach(r => {
+    const tab = tabOf(r);
+    const qn = Number(r.quantity) || 0;
+    if (tab === 'sales') salesQ += qn;
+    else if (tab === 'stockin') inQ += qn;
+    else if (tab === 'stockout') outQ += qn;
+    else if (tab === 'transfers') trQ += qn;
+    net += changeOf(tab, r);
+  });
+  const chip = (label, txt, color) =>
+    `<span style="white-space:nowrap;">${label} <b style="color:${color};">${txt}</b></span>`;
+  const neg = n => n === 0 ? '0' : '-' + n;
+  const div = `<span style="width:1px;height:14px;background:#e2e8f0;"></span>`;
+  el.innerHTML =
+    chip('In', inQ === 0 ? '0' : '+' + inQ, '#16a34a') +
+    chip('Out', neg(outQ), '#dc2626') +
+    chip('Sales', neg(salesQ), '#dc2626') +
+    chip('Transfer', String(trQ), '#0369a1') +
+    div +
+    chip('Net', (net > 0 ? '+' : '') + net, net >= 0 ? '#16a34a' : '#dc2626');
 }
 
 let _histSearchTimer = null;
 function onHistSearchInput() {
   clearTimeout(_histSearchTimer);
-  _histSearchTimer = setTimeout(() => renderHistoryTable(filterHistRows(historyData)), 200);
+  _histSearchTimer = setTimeout(() => { _histPage = 1; renderHistory(); }, 200);
 }
 
 function filterHistRows(rows) {
@@ -1214,15 +1337,40 @@ function fmtBy(email) {
   return at > 0 ? email.substring(0, at) : email;
 }
 
-function renderHistoryTable(rows) {
+// Sum sales revenue by payment method (Cash / Card / Zelle / …) over the given
+// sales rows. paymentSummary is stored per transaction as "Cash:$65, Zelle:$30"
+// and copied onto every line item of a cart, so count each transaction once
+// (by txnId) to avoid multiplying a split payment across its items.
+function salesPaymentBreakdown(rows) {
+  const seen = new Set();
+  const totals = {};
+  rows.forEach(r => {
+    const key = r.txnId || r._docId;
+    if (seen.has(key)) return;
+    seen.add(key);
+    (r.paymentSummary || '').split(',').forEach(part => {
+      const seg = part.trim();
+      if (!seg) return;
+      const i = seg.lastIndexOf(':$');
+      if (i < 0) return;
+      const method = seg.slice(0, i).trim();
+      const amt = Number(seg.slice(i + 2).replace(/[^0-9.]/g, '')) || 0;
+      if (method) totals[method] = (totals[method] || 0) + amt;
+    });
+  });
+  return totals;
+}
+
+function renderHistoryTable(rows, totalCount, rowOffset) {
   const theadRow = document.getElementById('hist-thead-row');
   const tbody = document.getElementById('hist-tbody');
-  const summEl = document.getElementById('hist-summary');
+  // Row ordinals count down from the newest across the whole filtered list, so
+  // they stay continuous as you page (page 2 picks up where page 1 left off).
+  const N = (totalCount || rows.length) - (rowOffset || 0);
 
   const mgr = currentRole === 'manager';
   if (currentHistTab === 'all') {
     theadRow.innerHTML = '<th>#</th><th>Type</th><th>Title</th><th>Branch</th><th class="ta-r">Change</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Detail</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
-    summEl.style.display = 'none';
     const typeMeta = {
       sales:     { label: 'Sale',     cls: 't-sale' },
       stockin:   { label: 'In',       cls: 't-in' },
@@ -1241,7 +1389,7 @@ function renderHistoryTable(rows) {
         : (t === 'stockin' ? (r.orderSource || '')
         : (t === 'stockout' && r.teacher ? `Teacher: ${r.teacher}` : ''));
       return `<tr>
-        <td class="td-dim">${rows.length - i}</td>
+        <td class="td-dim">${N - i}</td>
         <td><span class="type-badge ${typeMeta[t].cls}">${typeMeta[t].label}</span></td>
         <td>${esc(r.title)}</td>
         <td class="nowrap">${esc(branchTxt)}</td>
@@ -1257,15 +1405,6 @@ function renderHistoryTable(rows) {
 
   } else if (currentHistTab === 'sales') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th>Student</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th class="ta-r">Price</th><th class="ta-r">Discount</th><th class="ta-r">Paid</th><th>Payment</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
-
-    const totalQty = rows.reduce((s,r) => s + Number(r.quantity||0), 0);
-    const totalRev = rows.reduce((s,r) => s + Number(r.totalPaid||0), 0);
-    const totalDiscount = rows.reduce((s,r) => s + Number(r.sellingPrice||0), 0) - totalRev;
-    summEl.innerHTML = `
-      <div class="summary-card"><div class="label">Count</div><div class="value">${totalQty}</div></div>
-      <div class="summary-card"><div class="label">Revenue</div><div class="value">${fmtMoney(totalRev)}</div></div>
-      <div class="summary-card"><div class="label">Discount</div><div class="value">${fmtMoney(totalDiscount)}</div></div>`;
-    summEl.style.display = 'flex';
 
     const txnGroups = {};
     rows.forEach((r, i) => {
@@ -1285,7 +1424,7 @@ function renderHistoryTable(rows) {
 
         if (!isMulti) {
           html += `<tr>
-            <td class="td-dim">${rows.length - i}</td>
+            <td class="td-dim">${N - i}</td>
             <td>${esc(r.title)}</td>
             <td>${esc(r.branch)}</td>
             <td>${esc(r.student||'')}</td>
@@ -1313,7 +1452,7 @@ function renderHistoryTable(rows) {
         const grpDisc  = r.txnDiscount || 0;
 
         html += `<tr class="txn-summary" id="txn-row-${r.txnId}" onclick="toggleTxn('${r.txnId}')">
-          <td class="td-dim">${rows.length - i}</td>
+          <td class="td-dim">${N - i}</td>
           <td><span class="txn-chev">▸</span><span class="cart-badge">CART ×${grp.length}</span>${esc(r.title)} <span class="td-dim">+ ${grp.length - 1} more</span></td>
           <td>${esc(r.branch)}</td>
           <td>${esc(r.student||'')}</td>
@@ -1338,7 +1477,7 @@ function renderHistoryTable(rows) {
             <td class="ta-r td-dim">${esc(stockAfterOf('sales', g))}</td>
             <td class="ta-r">${fmtMoney(g.sellingPrice)}</td>
             <td></td><td></td><td></td><td></td><td></td><td></td>
-            ${mgr ? `<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="editHistoryRecord('${g._docId}','sales')">Edit</button> <button class="btn btn-danger btn-xs" onclick="deleteHistoryRecord('${g._docId}','sales')">Del</button></td>` : ''}
+            ${mgr ? '<td></td>' : ''}
           </tr>`;
         });
       });
@@ -1347,9 +1486,8 @@ function renderHistoryTable(rows) {
 
   } else if (currentHistTab === 'stockin') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Source</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
-    summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
-      <td class="td-dim">${rows.length - i}</td>
+      <td class="td-dim">${N - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td class="ta-r">${r.quantity}</td>
       <td class="ta-r td-dim">${esc(stockAfterOf('stockin', r))}</td>
@@ -1361,9 +1499,8 @@ function renderHistoryTable(rows) {
 
   } else if (currentHistTab === 'stockout') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>Branch</th><th class="ta-r">Qty</th><th class="ta-r" title="Branch stock right after this transaction">Stock</th><th>Teacher</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
-    summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
-      <td class="td-dim">${rows.length - i}</td>
+      <td class="td-dim">${N - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.branch)}</td>
       <td class="ta-r">${r.quantity}</td>
       <td class="ta-r td-dim">${esc(stockAfterOf('stockout', r))}</td>
@@ -1376,9 +1513,8 @@ function renderHistoryTable(rows) {
 
   } else if (currentHistTab === 'transfers') {
     theadRow.innerHTML = '<th>#</th><th>Title</th><th>From</th><th>To</th><th class="ta-r">Qty</th><th title="Stock at both branches right after this transfer">Stock</th><th>Note</th><th>Date</th><th>By</th>'+(mgr?'<th></th>':'');
-    summEl.style.display = 'none';
     tbody.innerHTML = rows.length ? rows.map((r, i) => `<tr>
-      <td class="td-dim">${rows.length - i}</td>
+      <td class="td-dim">${N - i}</td>
       <td>${esc(r.title)}</td><td>${esc(r.fromBranch)}</td><td>${esc(r.toBranch)}</td>
       <td class="ta-r">${r.quantity}</td>
       <td class="td-dim nowrap">${esc(stockAfterOf('transfers', r))}</td>
@@ -1403,6 +1539,19 @@ function toggleTxn(txnId) {
 // History Edit / Delete
 const _histCollMap = { sales:'sales', stockin:'stock_history', stockout:'stock_out', transfers:'transfers' };
 let _editHistDocId = null, _editHistTab = null;
+
+// Shared form-field builders for the history record editor.
+const _ehFg = (label, inner) => `<div class="form-group" style="margin-bottom:10px;"><label>${label}</label>${inner}</div>`;
+const _ehTi = (id, val) => `<input type="text" id="${id}" value="${esc(val||'')}">`;
+const _ehNi = (id, val) => `<input type="number" id="${id}" value="${val||0}" min="0" step="any" style="width:100%;">`;
+const _ehBrSel = (id, val) => `<select id="${id}" style="width:100%;"><option value="IRV"${val==='IRV'?' selected':''}>IRV</option><option value="LA"${val==='LA'?' selected':''}>LA</option><option value="RH"${val==='RH'?' selected':''}>RH</option></select>`;
+const _ehDi = (id, val) => `<input type="date" id="${id}" value="${(val||'').substring(0,10)}" style="width:100%;">`;
+const _ehBookSel = (id, curIsbn, curTitle) => {
+  const matchIsbn = curIsbn || (books.find(b => b.title === curTitle)?.isbn || '');
+  const opts = '<option value="">— select book —</option>' +
+    books.map(b => `<option value="${esc(b.isbn)}"${b.isbn === matchIsbn ? ' selected' : ''}>${esc(b.title)}${b.isbn ? ' (' + esc(b.isbn) + ')' : ''}</option>`).join('');
+  return `<select id="${id}" style="width:100%;">${opts}</select>`;
+};
 
 // Stock effect a history record HAS on inventory (positive = adds stock).
 function histStockEffects(tab, r) {
@@ -1458,17 +1607,7 @@ function editHistoryRecord(docId, tab) {
   _editHistDocId = docId; _editHistTab = tab;
   const r = historyData.find(x => x._docId === docId);
   if (!r) return;
-  const fg = (label, inner) => `<div class="form-group" style="margin-bottom:10px;"><label>${label}</label>${inner}</div>`;
-  const ti = (id, val) => `<input type="text" id="${id}" value="${esc(val||'')}">`;
-  const ni = (id, val) => `<input type="number" id="${id}" value="${val||0}" min="0" step="any" style="width:100%;">`;
-  const brSel = (id, val) => `<select id="${id}" style="width:100%;"><option value="IRV"${val==='IRV'?' selected':''}>IRV</option><option value="LA"${val==='LA'?' selected':''}>LA</option><option value="RH"${val==='RH'?' selected':''}>RH</option></select>`;
-  const di = (id, val) => `<input type="date" id="${id}" value="${(val||'').substring(0,10)}" style="width:100%;">`;
-  const bookSel = (id, curIsbn, curTitle) => {
-    const matchIsbn = curIsbn || (books.find(b => b.title === curTitle)?.isbn || '');
-    const opts = '<option value="">— select book —</option>' +
-      books.map(b => `<option value="${esc(b.isbn)}"${b.isbn === matchIsbn ? ' selected' : ''}>${esc(b.title)}${b.isbn ? ' (' + esc(b.isbn) + ')' : ''}</option>`).join('');
-    return `<select id="${id}" style="width:100%;">${opts}</select>`;
-  };
+  const fg = _ehFg, ti = _ehTi, ni = _ehNi, brSel = _ehBrSel, di = _ehDi, bookSel = _ehBookSel;
   let fields = '';
   if (tab === 'sales') {
     fields =
@@ -1510,6 +1649,7 @@ function editHistoryRecord(docId, tab) {
   document.getElementById('edit-hist-fields').innerHTML = fields;
   document.getElementById('edit-hist-modal').classList.add('open');
 }
+
 function closeEditHistModal() {
   document.getElementById('edit-hist-modal').classList.remove('open');
   _editHistDocId = null; _editHistTab = null;
