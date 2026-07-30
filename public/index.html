@@ -1650,7 +1650,9 @@ function onSessionTypeChange() {
   const nameInput=document.getElementById('reg-class-name');
   if (nameInput) nameInput.placeholder=isMT?'e.g. Staff Meeting, PD Training':'e.g. Advanced English A';
   document.getElementById('session-warnings').innerHTML='';
-  if (type==='PT') populatePTStudentDropdown('sess-student-select', currentTeacher?.campus);
+  // Reached from the schedule grid without ever opening the PT tab, so the
+  // student list the branch labels come from may not be attached yet.
+  if (type==='PT') { ensureGlobalDataListeners(); populatePTStudentDropdown('sess-student-select', currentTeacher?.campus); }
   if (isAdjustment) {
     const ah=document.getElementById('adj-hours');
     if (!ah.dataset.populated) { ah.innerHTML=hoursSelectOptions(1); ah.dataset.populated='1'; }
@@ -4216,6 +4218,9 @@ function initStudentsListener() {
   unsubStudentsGlobal=db.collection('students').onSnapshot(snap=>{
     allStudentsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
     if (document.getElementById('home-tab-students')?.classList.contains('active')) renderStudentsOverview();
+    // First attach can land after the PT session form is already on screen;
+    // refill it so the branch labels appear.
+    if (document.getElementById('pt-form')?.style.display!=='none') populatePTStudentDropdown('sess-student-select', currentTeacher?.campus);
   }, err=>console.error('students error:',err));
 }
 
