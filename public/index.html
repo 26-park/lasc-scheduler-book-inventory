@@ -103,8 +103,6 @@
     .miss-toggle { padding:6px 16px;border:1px solid #d0d0d0;background:white;border-radius:5px;cursor:pointer;font-size:13px;font-family:inherit;color:#555; }
     .miss-toggle.active { background:#1a1a2e;color:white;border-color:#1a1a2e; }
     .miss-toggle:hover:not(.active) { background:#f5f5f5; }
-    .miss-toggle-paid.active { background:#16a34a;color:white;border-color:#16a34a; }
-    .miss-toggle-unpaid.active { background:#dc2626;color:white;border-color:#dc2626; }
     .miss-section-label { font-size:11px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:6px; }
     .hours-nav-btn { padding:4px 10px;border:1px solid #d0d0d0;background:white;border-radius:5px;cursor:pointer;font-size:14px;font-family:inherit;color:#333;line-height:1; }
     .hours-nav-btn:hover { background:#f5f5f5; }
@@ -930,8 +928,8 @@
     <div style="margin-bottom:16px;">
       <div class="miss-section-label">Outcome</div>
       <div style="display:flex;gap:8px;">
-        <button id="pt-miss-out-cancel" class="miss-toggle miss-toggle-unpaid active" onclick="setPTMissOutcome('cancel')">Unpaid</button>
-        <button id="pt-miss-out-deduct" class="miss-toggle miss-toggle-paid" onclick="setPTMissOutcome('deduct')">Paid</button>
+        <button id="pt-miss-out-cancel" class="miss-toggle active" onclick="setPTMissOutcome('cancel')">Unpaid</button>
+        <button id="pt-miss-out-deduct" class="miss-toggle" onclick="setPTMissOutcome('deduct')">Paid</button>
       </div>
       <div style="font-size:11px;color:#888;margin-top:6px;" id="pt-miss-outcome-hint">Unpaid: does not count toward total hours</div>
     </div>
