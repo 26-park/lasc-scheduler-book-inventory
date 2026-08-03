@@ -83,6 +83,7 @@
     .session-block.PT.pending { background: #f9fafb; color: #6b7280; border-left-color: #d1d5db; border-style: dashed; }
     .sb-student { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sb-meta    { font-size: 10px; opacity: 0.75; }
+    .sb-reason  { display:-webkit-box;-webkit-line-clamp:2;line-clamp:2;-webkit-box-orient:vertical;overflow:hidden; }
 
     /* PT Tracker */
     .pt-table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -1564,9 +1565,14 @@ function renderSchedule() {
       if (sess.absenceType) {
         metaLines += `<div class="sb-meta">${absenceSummaryText(sess)}</div>`;
       }
+      const notHeldText = isPTNotHeld
+        ? `${sess.missOutcome==='deduct'?'Paid':'Unpaid'} · ${sess.missedReason}` : '';
+      if (notHeldText) metaLines += `<div class="sb-meta sb-reason">${escHtml(notHeldText)}</div>`;
+      const blockTitle = offHours
+        ? 'Outside the 7am–11pm grid — click to view/edit/delete' : notHeldText;
       html+=`<div class="session-block ${sess.type}${isPending?' pending':''}${absClass}${offHours?' off-hours':''}"
         style="top:${top}px;height:${Math.max(height-2,16)}px;"
-        onclick="openDetailModal('${sess.id}')" title="${offHours?'Outside the 7am–11pm grid — click to view/edit/delete':''}">
+        onclick="openDetailModal('${sess.id}')" title="${escHtml(blockTitle)}">
         <div class="sb-student">${offHours?'&#9888; ':''}${label}</div>
         ${metaLines}
       </div>`;
