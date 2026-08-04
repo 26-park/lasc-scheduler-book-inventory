@@ -1553,6 +1553,44 @@ const _ehBookSel = (id, curIsbn, curTitle) => {
   return `<select id="${id}" style="width:100%;">${opts}</select>`;
 };
 
+// Payment methods offered when selling; the history editor reuses this list so a
+// record can only ever be edited into a method the sell form can produce.
+const PAYMENT_METHODS = ['Cash', 'Card', 'Zelle', 'Check'];
+
+// paymentSummary is stored as "Cash:$65" or, for a split, "Cash:$65, Zelle:$30".
+// Split it into parts so each method can be edited; amount is null for a legacy
+// record that stored a bare method name with no amount.
+function parsePaymentSummary(s) {
+  return (s || '').split(',').map(p => p.trim()).filter(Boolean).map(seg => {
+    const i = seg.lastIndexOf(':$');
+    return i < 0 ? { method: seg, amount: null }
+                 : { method: seg.slice(0, i).trim(), amount: seg.slice(i + 2).trim() };
+  });
+}
+function formatPaymentSummary(parts) {
+  return parts.filter(p => p.method)
+    .map(p => (p.amount === null || p.amount === '') ? p.method : `${p.method}:$${p.amount}`)
+    .join(', ');
+}
+// One dropdown per payment part. Amounts are kept exactly as recorded (shown
+// beside the dropdown) so changing a method never rewrites what was collected.
+const _ehPaySel = (id, val) => {
+  const parts = parsePaymentSummary(val);
+  if (!parts.length) parts.push({ method: '', amount: null });
+  return parts.map((p, i) => {
+    const known = PAYMENT_METHODS.includes(p.method);
+    const opts = [`<option value=""${p.method ? '' : ' selected'}>— none —</option>`]
+      .concat(PAYMENT_METHODS.map(m => `<option value="${m}"${m === p.method ? ' selected' : ''}>${m}</option>`))
+      .concat(p.method && !known ? [`<option value="${esc(p.method)}" selected>${esc(p.method)}</option>`] : [])
+      .join('');
+    const amt = p.amount === null ? ''
+      : `<span style="font-size:12px;color:#666;white-space:nowrap;">$${esc(p.amount)}</span>`;
+    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">`
+      + `<select id="${id}-${i}" data-amount="${p.amount === null ? '' : esc(p.amount)}"`
+      + ` data-has-amount="${p.amount === null ? '0' : '1'}" style="flex:1;">${opts}</select>${amt}</div>`;
+  }).join('');
+};
+
 // Stock effect a history record HAS on inventory (positive = adds stock).
 function histStockEffects(tab, r) {
   const q = Number(r.quantity) || 0;
@@ -1607,7 +1645,7 @@ function editHistoryRecord(docId, tab) {
   _editHistDocId = docId; _editHistTab = tab;
   const r = historyData.find(x => x._docId === docId);
   if (!r) return;
-  const fg = _ehFg, ti = _ehTi, ni = _ehNi, brSel = _ehBrSel, di = _ehDi, bookSel = _ehBookSel;
+  const fg = _ehFg, ti = _ehTi, ni = _ehNi, brSel = _ehBrSel, di = _ehDi, bookSel = _ehBookSel, paySel = _ehPaySel;
   let fields = '';
   if (tab === 'sales') {
     fields =
@@ -1618,7 +1656,7 @@ function editHistoryRecord(docId, tab) {
       fg('Price', ni('eh-price', r.sellingPrice)) +
       fg('Discount', ni('eh-discount', r.txnDiscount||r.discount||0)) +
       fg('Paid', ni('eh-paid', r.totalPaid)) +
-      fg('Payment', ti('eh-payment', r.paymentSummary)) +
+      fg('Payment', paySel('eh-payment', r.paymentSummary)) +
       fg('Note', ti('eh-note', r.note)) +
       fg('Date', di('eh-date', r.soldAt));
   } else if (tab === 'stockin') {
@@ -1676,7 +1714,13 @@ async function saveHistoryEdit() {
   if (g('eh-price')   !== null) update.sellingPrice  = Number(g('eh-price')) || 0;
   if (g('eh-discount')!== null) update.txnDiscount   = Number(g('eh-discount')) || 0;
   if (g('eh-paid')    !== null) update.totalPaid      = Number(g('eh-paid')) || 0;
-  if (g('eh-payment') !== null) update.paymentSummary = g('eh-payment').trim();
+  const paySels = document.querySelectorAll('#edit-hist-fields [id^="eh-payment-"]');
+  if (paySels.length) {
+    update.paymentSummary = formatPaymentSummary(Array.from(paySels).map(el => ({
+      method: el.value,
+      amount: el.dataset.hasAmount === '1' ? el.dataset.amount : null
+    })));
+  }
   if (g('eh-date')    !== null && g('eh-date')) {
     // Keep the record's original time-of-day; the picker only edits the date part.
     const origTime = ((_editHistTab === 'sales' ? oldRecord?.soldAt : oldRecord?.createdAt) || '').substring(11,16);
