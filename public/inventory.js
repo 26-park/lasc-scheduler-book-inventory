@@ -1465,7 +1465,7 @@ function renderHistoryTable(rows, totalCount, rowOffset) {
           <td>${esc(r.note||'')}</td>
           <td class="td-dim nowrap">${fmtDateTime(r.soldAt)}</td>
           <td class="td-dim">${esc(fmtBy(r.createdBy||''))}</td>
-          ${mgr ? `<td class="nowrap"><button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteSalesTxn('${esc(r.txnId)}')">Del all</button></td>` : ''}
+          ${mgr ? `<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="event.stopPropagation();editSalesTxn('${esc(r.txnId)}')">Edit</button> <button class="btn btn-danger btn-xs" onclick="event.stopPropagation();deleteSalesTxn('${esc(r.txnId)}')">Del all</button></td>` : ''}
         </tr>`;
 
         grp.forEach(g => {
@@ -1477,7 +1477,7 @@ function renderHistoryTable(rows, totalCount, rowOffset) {
             <td class="ta-r td-dim">${esc(stockAfterOf('sales', g))}</td>
             <td class="ta-r">${fmtMoney(g.sellingPrice)}</td>
             <td></td><td></td><td></td><td></td><td></td><td></td>
-            ${mgr ? '<td></td>' : ''}
+            ${mgr ? `<td class="nowrap"><button class="btn btn-secondary btn-xs" onclick="event.stopPropagation();editHistoryRecord('${g._docId}','sales')">Edit</button></td>` : ''}
           </tr>`;
         });
       });
@@ -1538,12 +1538,12 @@ function toggleTxn(txnId) {
 
 // History Edit / Delete
 const _histCollMap = { sales:'sales', stockin:'stock_history', stockout:'stock_out', transfers:'transfers' };
-let _editHistDocId = null, _editHistTab = null;
+let _editHistDocId = null, _editHistTab = null, _editTxnId = null;
 
 // Shared form-field builders for the history record editor.
 const _ehFg = (label, inner) => `<div class="form-group" style="margin-bottom:10px;"><label>${label}</label>${inner}</div>`;
 const _ehTi = (id, val) => `<input type="text" id="${id}" value="${esc(val||'')}">`;
-const _ehNi = (id, val) => `<input type="number" id="${id}" value="${val||0}" min="0" step="any" style="width:100%;">`;
+const _ehNi = (id, val, attrs) => `<input type="number" id="${id}" value="${val||0}" min="0" step="any" style="width:100%;"${attrs ? ' ' + attrs : ''}>`;
 const _ehBrSel = (id, val) => `<select id="${id}" style="width:100%;"><option value="IRV"${val==='IRV'?' selected':''}>IRV</option><option value="LA"${val==='LA'?' selected':''}>LA</option><option value="RH"${val==='RH'?' selected':''}>RH</option></select>`;
 const _ehDi = (id, val) => `<input type="date" id="${id}" value="${(val||'').substring(0,10)}" style="width:100%;">`;
 const _ehBookSel = (id, curIsbn, curTitle) => {
@@ -1572,24 +1572,89 @@ function formatPaymentSummary(parts) {
     .map(p => (p.amount === null || p.amount === '') ? p.method : `${p.method}:$${p.amount}`)
     .join(', ');
 }
-// One dropdown per payment part. Amounts are kept exactly as recorded (shown
-// beside the dropdown) so changing a method never rewrites what was collected.
-const _ehPaySel = (id, val) => {
-  const parts = parsePaymentSummary(val);
-  if (!parts.length) parts.push({ method: '', amount: null });
-  return parts.map((p, i) => {
+// Payment editor: one row per method, each with its own amount, so a split
+// payment can be corrected method by method. Rows live in _ehPay while the modal
+// is open; the DOM is re-rendered whenever a row is added or removed.
+let _ehPay = [];
+let _ehPaySubtotal = 0;
+
+// Renders the container only — call renderEhPayRows() once it is in the DOM.
+const _ehPayField = (val, subtotal) => {
+  _ehPay = parsePaymentSummary(val);
+  if (!_ehPay.length) _ehPay = [{ method: 'Cash', amount: '' }];
+  _ehPaySubtotal = Number(subtotal) || 0;
+  return `<div id="eh-pay-rows"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:2px;">
+      <button type="button" class="btn btn-secondary btn-xs" onclick="ehPayAddRow()">+ Add payment</button>
+      <span id="eh-pay-sum" style="font-size:12px;color:#666;"></span>
+    </div>`;
+};
+
+function renderEhPayRows() {
+  const box = document.getElementById('eh-pay-rows');
+  if (!box) return;
+  box.innerHTML = _ehPay.map((p, i) => {
     const known = PAYMENT_METHODS.includes(p.method);
-    const opts = [`<option value=""${p.method ? '' : ' selected'}>— none —</option>`]
-      .concat(PAYMENT_METHODS.map(m => `<option value="${m}"${m === p.method ? ' selected' : ''}>${m}</option>`))
+    const opts = PAYMENT_METHODS.map(m => `<option value="${m}"${m === p.method ? ' selected' : ''}>${m}</option>`)
       .concat(p.method && !known ? [`<option value="${esc(p.method)}" selected>${esc(p.method)}</option>`] : [])
       .join('');
-    const amt = p.amount === null ? ''
-      : `<span style="font-size:12px;color:#666;white-space:nowrap;">$${esc(p.amount)}</span>`;
-    return `<div style="display:flex;gap:8px;align-items:center;margin-bottom:4px;">`
-      + `<select id="${id}-${i}" data-amount="${p.amount === null ? '' : esc(p.amount)}"`
-      + ` data-has-amount="${p.amount === null ? '0' : '1'}" style="flex:1;">${opts}</select>${amt}</div>`;
+    return `<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px;">
+      <select id="eh-pay-m-${i}" style="flex:1;">${opts}</select>
+      <span style="color:#666;">$</span>
+      <input type="number" id="eh-pay-a-${i}" value="${esc(p.amount == null ? '' : p.amount)}" min="0" step="any" style="width:100px;" oninput="ehPayUpdateSum()">
+      <button type="button" class="btn btn-danger btn-xs" onclick="ehPayRemoveRow(${i})"${_ehPay.length > 1 ? '' : ' style="visibility:hidden;"'}>&times;</button>
+    </div>`;
   }).join('');
-};
+  ehPayUpdateSum();
+}
+
+// Pull what is currently typed back into _ehPay so a re-render keeps it.
+function ehPaySync() {
+  _ehPay = _ehPay.map((p, i) => {
+    const m = document.getElementById('eh-pay-m-' + i);
+    const a = document.getElementById('eh-pay-a-' + i);
+    return { method: m ? m.value : p.method, amount: a ? a.value.trim() : p.amount };
+  });
+}
+function ehPayAddRow() { ehPaySync(); _ehPay.push({ method: 'Cash', amount: '' }); renderEhPayRows(); }
+function ehPayRemoveRow(i) {
+  ehPaySync();
+  _ehPay.splice(i, 1);
+  if (!_ehPay.length) _ehPay = [{ method: 'Cash', amount: '' }];
+  renderEhPayRows();
+}
+
+// What the payment rows should add up to: the amount actually recorded as paid,
+// or price minus discount when the editor has no Paid field of its own.
+function ehPayExpected() {
+  const paidEl = document.getElementById('eh-paid');
+  if (paidEl) return Number(paidEl.value) || 0;
+  const priceEl = document.getElementById('eh-price');
+  const sub = priceEl ? (Number(priceEl.value) || 0) : _ehPaySubtotal;
+  const discEl = document.getElementById('eh-discount');
+  return Math.max(0, sub - (Number(discEl && discEl.value) || 0));
+}
+
+function ehPayUpdateSum() {
+  const el = document.getElementById('eh-pay-sum');
+  if (!el) return;
+  ehPaySync();
+  const entered = _ehPay.filter(p => p.amount !== '' && p.amount != null);
+  if (!entered.length) { el.textContent = ''; return; }
+  const total = entered.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+  const expected = ehPayExpected();
+  const off = Math.abs(total - expected) > 0.005;
+  el.textContent = off ? `Total ${fmtMoney(total)} — does not match ${fmtMoney(expected)}` : `Total ${fmtMoney(total)}`;
+  el.style.color = off ? '#dc2626' : '#666';
+}
+
+function ehPayCollect() {
+  ehPaySync();
+  return formatPaymentSummary(_ehPay.map(p => ({
+    method: p.method,
+    amount: (p.amount === '' || p.amount == null) ? null : String(p.amount)
+  })));
+}
 
 // Stock effect a history record HAS on inventory (positive = adds stock).
 function histStockEffects(tab, r) {
@@ -1641,22 +1706,58 @@ function validateStockEffects(effects) {
   return bad.length ? `Cannot apply: ${bad[0]}.` : null;
 }
 
+// Every line item of one cart, in the order the sale recorded them. Read from
+// the unfiltered cache, never from historyData: a search or branch filter can
+// hide part of a cart, and updating only the visible half is what leaves the
+// order's own line items disagreeing with each other.
+function txnRecords(txnId) {
+  if (!txnId) return [];
+  const all = (_histCache && _histCache.sales) || historyData;
+  return all.filter(r => r.txnId === txnId);
+}
+
+// Spread a cart discount over its line items, earliest first — the order a sale
+// applies it in — so each item's Paid stays consistent with the order total.
+function splitTxnDiscount(recs, discount) {
+  let remaining = Math.max(0, Number(discount) || 0);
+  return recs.map(r => {
+    const sub = Number(r.sellingPrice) || 0;
+    const cut = Math.min(sub, remaining);
+    remaining -= cut;
+    return Math.max(0, sub - cut);
+  });
+}
+
 function editHistoryRecord(docId, tab) {
-  _editHistDocId = docId; _editHistTab = tab;
+  _editHistDocId = docId; _editHistTab = tab; _editTxnId = null;
   const r = historyData.find(x => x._docId === docId);
   if (!r) return;
-  const fg = _ehFg, ti = _ehTi, ni = _ehNi, brSel = _ehBrSel, di = _ehDi, bookSel = _ehBookSel, paySel = _ehPaySel;
+  const fg = _ehFg, ti = _ehTi, ni = _ehNi, brSel = _ehBrSel, di = _ehDi, bookSel = _ehBookSel;
+  // Student / payment / discount / note / date belong to the whole order, so for
+  // a multi-item cart they are edited once on the order, not on one of its books.
+  const grp = tab === 'sales' ? txnRecords(r.txnId) : [];
+  const itemOnly = grp.length > 1;
   let fields = '';
-  if (tab === 'sales') {
+  if (tab === 'sales' && itemOnly) {
+    fields =
+      `<div style="font-size:12px;color:#666;margin-bottom:10px;">
+        One item of an order of ${grp.length}. Student, payment, discount, note and date belong to the
+        whole order — <a href="#" onclick="event.preventDefault();editSalesTxn('${esc(r.txnId)}')">edit the order</a>.
+      </div>` +
+      fg('Title', bookSel('eh-title', r.isbn, r.title)) +
+      fg('Branch', brSel('eh-branch', r.branch)) +
+      fg('Qty', ni('eh-qty', r.quantity)) +
+      fg('Price', ni('eh-price', r.sellingPrice));
+  } else if (tab === 'sales') {
     fields =
       fg('Title', bookSel('eh-title', r.isbn, r.title)) +
       fg('Branch', brSel('eh-branch', r.branch)) +
       fg('Student', ti('eh-student', r.student)) +
       fg('Qty', ni('eh-qty', r.quantity)) +
-      fg('Price', ni('eh-price', r.sellingPrice)) +
-      fg('Discount', ni('eh-discount', r.txnDiscount||r.discount||0)) +
-      fg('Paid', ni('eh-paid', r.totalPaid)) +
-      fg('Payment', paySel('eh-payment', r.paymentSummary)) +
+      fg('Price', ni('eh-price', r.sellingPrice, 'oninput="ehPayUpdateSum()"')) +
+      fg('Discount', ni('eh-discount', r.txnDiscount||r.discount||0, 'oninput="ehPayUpdateSum()"')) +
+      fg('Paid', ni('eh-paid', r.totalPaid, 'oninput="ehPayUpdateSum()"')) +
+      fg('Payment', _ehPayField(r.paymentSummary, r.sellingPrice)) +
       fg('Note', ti('eh-note', r.note)) +
       fg('Date', di('eh-date', r.soldAt));
   } else if (tab === 'stockin') {
@@ -1684,15 +1785,68 @@ function editHistoryRecord(docId, tab) {
       fg('Note', ti('eh-note', r.note)) +
       fg('Date', di('eh-date', r.createdAt));
   }
+  document.getElementById('edit-hist-title').textContent = itemOnly ? 'Edit Item' : 'Edit Record';
   document.getElementById('edit-hist-fields').innerHTML = fields;
+  renderEhPayRows();
   document.getElementById('edit-hist-modal').classList.add('open');
+}
+
+// Order-level editor for a multi-item cart: the fields the sell form records
+// once for the whole cart, saved to every line item together.
+function editSalesTxn(txnId) {
+  const recs = txnRecords(txnId);
+  if (!recs.length) return;
+  _editHistDocId = null; _editHistTab = 'sales'; _editTxnId = txnId;
+  const r = recs[0];
+  const subtotal = recs.reduce((s, g) => s + (Number(g.sellingPrice) || 0), 0);
+  const items = recs.map(g => `${esc(g.title)} &times;${g.quantity} — ${fmtMoney(g.sellingPrice)}`).join('<br>');
+  document.getElementById('edit-hist-title').textContent = `Edit Order (${recs.length} items)`;
+  document.getElementById('edit-hist-fields').innerHTML =
+    `<div style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.6;">${items}
+      <div style="margin-top:4px;">Edit a book, its quantity or its price on that item's own row.</div></div>` +
+    _ehFg('Student', _ehTi('eh-student', r.student)) +
+    _ehFg('Discount', _ehNi('eh-discount', r.txnDiscount || 0, 'oninput="ehPayUpdateSum()"')) +
+    _ehFg('Payment', _ehPayField(r.paymentSummary, subtotal)) +
+    _ehFg('Note', _ehTi('eh-note', r.note)) +
+    _ehFg('Date', _ehDi('eh-date', r.soldAt));
+  renderEhPayRows();
+  document.getElementById('edit-hist-modal').classList.add('open');
+}
+
+// Saving the order: none of these fields touch stock, so it is one batch write
+// of the shared values plus each item's re-split share of the discount.
+async function saveSalesTxnEdit() {
+  const recs = txnRecords(_editTxnId);
+  if (!recs.length) return;
+  const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
+  const discount = Number(g('eh-discount')) || 0;
+  const origTime = (recs[0].soldAt || '').substring(11, 16);
+  const shared = {
+    student: g('eh-student').trim(),
+    note: g('eh-note').trim(),
+    paymentSummary: ehPayCollect(),
+    txnDiscount: discount,
+    soldAt: g('eh-date') ? g('eh-date') + ' ' + (origTime || '00:00') : (recs[0].soldAt || '')
+  };
+  const paid = splitTxnDiscount(recs, discount);
+  try {
+    const batch = db.batch();
+    recs.forEach((rec, i) => batch.update(db.collection('sales').doc(rec._docId),
+      Object.assign({ totalPaid: paid[i] }, shared)));
+    await batch.commit();
+    invalidateHistCache();
+    showToast(`Order updated (${recs.length} items).`, 'ok');
+    closeEditHistModal();
+    loadHistory();
+  } catch(e) { console.error(e); showToast('Error saving.', 'error'); }
 }
 
 function closeEditHistModal() {
   document.getElementById('edit-hist-modal').classList.remove('open');
-  _editHistDocId = null; _editHistTab = null;
+  _editHistDocId = null; _editHistTab = null; _editTxnId = null;
 }
 async function saveHistoryEdit() {
+  if (_editTxnId) return saveSalesTxnEdit();
   if (!_editHistDocId || !_editHistTab) return;
   const coll = _histCollMap[_editHistTab];
   const oldRecord = historyData.find(x => x._docId === _editHistDocId);
@@ -1714,13 +1868,7 @@ async function saveHistoryEdit() {
   if (g('eh-price')   !== null) update.sellingPrice  = Number(g('eh-price')) || 0;
   if (g('eh-discount')!== null) update.txnDiscount   = Number(g('eh-discount')) || 0;
   if (g('eh-paid')    !== null) update.totalPaid      = Number(g('eh-paid')) || 0;
-  const paySels = document.querySelectorAll('#edit-hist-fields [id^="eh-payment-"]');
-  if (paySels.length) {
-    update.paymentSummary = formatPaymentSummary(Array.from(paySels).map(el => ({
-      method: el.value,
-      amount: el.dataset.hasAmount === '1' ? el.dataset.amount : null
-    })));
-  }
+  if (document.getElementById('eh-pay-rows')) update.paymentSummary = ehPayCollect();
   if (g('eh-date')    !== null && g('eh-date')) {
     // Keep the record's original time-of-day; the picker only edits the date part.
     const origTime = ((_editHistTab === 'sales' ? oldRecord?.soldAt : oldRecord?.createdAt) || '').substring(11,16);
@@ -1739,6 +1887,18 @@ async function saveHistoryEdit() {
   }
   try {
     await db.collection(coll).doc(_editHistDocId).update(update);
+    // A cart splits its discount across line items by price, so editing one
+    // item's price re-splits Paid over the whole order.
+    if (_editHistTab === 'sales' && oldRecord && update.sellingPrice !== undefined) {
+      const recs = txnRecords(oldRecord.txnId);
+      if (recs.length > 1) {
+        const merged = recs.map(rec => rec._docId === _editHistDocId ? Object.assign({}, rec, update) : rec);
+        const paid = splitTxnDiscount(merged, merged[0].txnDiscount || 0);
+        const batch = db.batch();
+        merged.forEach((rec, i) => batch.update(db.collection('sales').doc(rec._docId), { totalPaid: paid[i] }));
+        await batch.commit();
+      }
+    }
     await applyStockEffects(applyList, +1);
     invalidateHistCache();
     showToast('Updated. Inventory adjusted.', 'ok');
@@ -1760,6 +1920,17 @@ async function deleteHistoryRecord(docId, tab) {
       + (negatives.length ? `\n\nThis takes stock below zero:\n${negatives.join('\n')}` : ''))) return;
   try {
     await db.collection(coll).doc(docId).delete();
+    // Removing one book from an order leaves the rest holding its share of the
+    // cart discount, so re-split Paid over what is left.
+    if (tab === 'sales' && record) {
+      const rest = txnRecords(record.txnId).filter(rec => rec._docId !== docId);
+      if (rest.length) {
+        const paid = splitTxnDiscount(rest, rest[0].txnDiscount || 0);
+        const batch = db.batch();
+        rest.forEach((rec, i) => batch.update(db.collection('sales').doc(rec._docId), { totalPaid: paid[i] }));
+        await batch.commit();
+      }
+    }
     await applyStockEffects(applyList, +1);
     invalidateHistCache();
     showToast('Deleted. Inventory adjusted.', 'ok');
@@ -1770,7 +1941,7 @@ async function deleteHistoryRecord(docId, tab) {
 
 // Delete every line item of a multi-item sale (shared txnId) at once.
 async function deleteSalesTxn(txnId) {
-  const recs = historyData.filter(x => x.txnId === txnId);
+  const recs = txnRecords(txnId);
   if (!recs.length) return;
   let applyList = [];
   recs.forEach(r => {
