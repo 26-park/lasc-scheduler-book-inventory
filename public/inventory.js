@@ -1741,11 +1741,10 @@ function editHistoryRecord(docId, tab) {
   if (tab === 'sales' && itemOnly) {
     fields =
       `<div style="font-size:12px;color:#666;margin-bottom:10px;">
-        One item of an order of ${grp.length}. Student, payment, discount, note and date belong to the
-        whole order — <a href="#" onclick="event.preventDefault();editSalesTxn('${esc(r.txnId)}')">edit the order</a>.
+        One item of an order of ${grp.length}. Branch, student, payment, discount, note and date belong
+        to the whole order — <a href="#" onclick="event.preventDefault();editSalesTxn('${esc(r.txnId)}')">edit the order</a>.
       </div>` +
       fg('Title', bookSel('eh-title', r.isbn, r.title)) +
-      fg('Branch', brSel('eh-branch', r.branch)) +
       fg('Qty', ni('eh-qty', r.quantity)) +
       fg('Price', ni('eh-price', r.sellingPrice));
   } else if (tab === 'sales') {
@@ -1804,6 +1803,7 @@ function editSalesTxn(txnId) {
   document.getElementById('edit-hist-fields').innerHTML =
     `<div style="font-size:12px;color:#666;margin-bottom:10px;line-height:1.6;">${items}
       <div style="margin-top:4px;">Edit a book, its quantity or its price on that item's own row.</div></div>` +
+    _ehFg('Branch', _ehBrSel('eh-branch', r.branch)) +
     _ehFg('Student', _ehTi('eh-student', r.student)) +
     _ehFg('Discount', _ehNi('eh-discount', r.txnDiscount || 0, 'oninput="ehPayUpdateSum()"')) +
     _ehFg('Payment', _ehPayField(r.paymentSummary, subtotal)) +
@@ -1813,31 +1813,46 @@ function editSalesTxn(txnId) {
   document.getElementById('edit-hist-modal').classList.add('open');
 }
 
-// Saving the order: none of these fields touch stock, so it is one batch write
-// of the shared values plus each item's re-split share of the discount.
+// Saving the order: one batch write of the shared values plus each item's
+// re-split share of the discount. Only a branch change touches stock, and then
+// it moves every book in the order, not one line of it.
 async function saveSalesTxnEdit() {
   const recs = txnRecords(_editTxnId);
   if (!recs.length) return;
   const g = id => { const el = document.getElementById(id); return el ? el.value : ''; };
   const discount = Number(g('eh-discount')) || 0;
   const origTime = (recs[0].soldAt || '').substring(11, 16);
+  const branch = g('eh-branch');
   const shared = {
+    branch,
     student: g('eh-student').trim(),
     note: g('eh-note').trim(),
     paymentSummary: ehPayCollect(),
     txnDiscount: discount,
     soldAt: g('eh-date') ? g('eh-date') + ' ' + (origTime || '00:00') : (recs[0].soldAt || '')
   };
+  let applyList = [];
+  if (recs.some(rec => rec.branch !== branch)) {
+    recs.forEach(rec => {
+      applyList = applyList
+        .concat(histStockEffects('sales', rec).map(e => ({ ...e, delta: -e.delta })))
+        .concat(histStockEffects('sales', Object.assign({}, rec, { branch })));
+    });
+    const err = validateStockEffects(applyList);
+    if (err) { showToast(err, 'error'); return; }
+  }
   const paid = splitTxnDiscount(recs, discount);
   try {
     const batch = db.batch();
     recs.forEach((rec, i) => batch.update(db.collection('sales').doc(rec._docId),
       Object.assign({ totalPaid: paid[i] }, shared)));
     await batch.commit();
+    await applyStockEffects(applyList, +1);
     invalidateHistCache();
-    showToast(`Order updated (${recs.length} items).`, 'ok');
+    showToast(`Order updated (${recs.length} items).${applyList.length ? ' Inventory adjusted.' : ''}`, 'ok');
     closeEditHistModal();
     loadHistory();
+    if (currentTab === 'inventory') renderInventory();
   } catch(e) { console.error(e); showToast('Error saving.', 'error'); }
 }
 
