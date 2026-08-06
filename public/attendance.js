@@ -502,7 +502,9 @@ function doSignOut() {
 }
 
 firebase.auth().onAuthStateChanged(async user => {
-  if (user && user.email.endsWith('@lascusa.com')) {
+  // Signed out, non-LASC, or not on the Attendance allow-list (utils.js) — send
+  // them to the Scheduler rather than showing an empty page.
+  if (user && user.email.endsWith('@lascusa.com') && isAttendanceUser(user.email)) {
     currentUser = user;
     try {
       const snap = await db.collection('users').doc(user.email).get();

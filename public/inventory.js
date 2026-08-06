@@ -2311,6 +2311,7 @@ firebase.auth().onAuthStateChanged(async user => {
       currentRole = 'staff';
     }
     document.body.classList.add('role-' + currentRole);
+    applyAttendanceAccess(user.email);
     document.getElementById('user-email-display').textContent = user.email;
     const badge = document.getElementById('role-badge');
     badge.textContent = currentRole;
