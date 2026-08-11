@@ -9,3 +9,13 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
+
+// Local (IndexedDB) cache. Repeat visits resume their listeners from the cached
+// data and only pay for documents that actually changed, which is where most of
+// the daily read quota used to go. synchronizeTabs keeps it working when the
+// Scheduler and Inventory pages are open side by side. Must run before any
+// query — every page starts its listeners after auth resolves, so it does.
+// Failures are non-fatal: the app just runs without the cache.
+db.enablePersistence({ synchronizeTabs: true }).catch(err => {
+  console.warn('Firestore offline persistence unavailable:', err && err.code);
+});

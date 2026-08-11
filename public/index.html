@@ -399,10 +399,20 @@
 
   <div id="dtab-pt" class="detail-tab-content">
     <main>
-      <div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:6px;">
-        <button class="btn btn-primary btn-sm" onclick="openAddPTFromTracker()">+ Add PT Session</button>
-        <button class="btn btn-secondary btn-sm" onclick="exportPTCSV()">&#8595; Export CSV</button>
-        <button class="btn btn-secondary btn-sm" onclick="printPTTracker()">&#128438; Print</button>
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:6px;">
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <div class="hours-period" style="margin-bottom:0;">
+            <button class="hours-period-btn active" id="ptsf-active"   onclick="setPTStudentFilter('active')">Active</button>
+            <button class="hours-period-btn"        id="ptsf-inactive" onclick="setPTStudentFilter('inactive')">Inactive</button>
+            <button class="hours-period-btn"        id="ptsf-all"      onclick="setPTStudentFilter('all')">All</button>
+          </div>
+          <span id="pt-student-count" style="font-size:12px;color:#6b7280;"></span>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" onclick="openAddPTFromTracker()">+ Add PT Session</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportPTCSV()">&#8595; Export CSV</button>
+          <button class="btn btn-secondary btn-sm" onclick="printPTTracker()">&#128438; Print</button>
+        </div>
       </div>
       <div id="pt-tracker-content"><div class="empty-state">Loading…</div></div>
     </main>
@@ -1035,6 +1045,20 @@ let ptMiniStudentName = null, ptMiniWeekStart = null;
 let unsubSessions = null, unsubContracts = null, unsubSchoolEvents = null;
 // Sessions (any type) where the selected teacher is the substitute — loaded per teacher.
 let subCoverageSessions = [], unsubSubCoverage = null;
+// A teacher's session history grows forever (one document per class occurrence),
+// so the live listener only covers the calendar quarters the user has actually
+// looked at. `sessions` = live window + anything pulled in on demand:
+//   ensureSessionRange()  — a date range (schedule navigation, add/edit forms)
+//   ensureSeriesLoaded()  — every session of one class/student (series edits)
+//   ensurePTHistory()     — the teacher's full PT history (PT tracker totals)
+//   ensureAllSessions()   — everything (holiday cleanup)
+// Widening re-attaches the listener over the union, so the window only grows.
+let _liveSessions = [];       // docs from the live windowed listener
+let _sessWin = null;          // {from,to} the listener currently covers
+let _sessExtra = new Map();   // id -> doc pulled in from outside the window
+let _sessAllLoaded = false;   // teacher's whole history is in memory
+let _sessPTLoaded = false;    // teacher's whole PT history is in memory
+let _sessSeriesLoaded = new Set(); // student names whose full series is loaded
 let pendingTeacherId = window.location.hash.slice(1) || null;
 let calendarYear = new Date().getFullYear();
 let homeHoursPeriod = 'week';
@@ -1043,10 +1067,13 @@ let homeHoursCampus = 'all';
 let homeHoursStatusFilter = 'active';
 let homeHoursTypeFilter = 'all';
 let homeHoursHoursFilter = 'all';
-// PT sessions only (all time, live). PT volume is small and is the only data that
-// needs full history (PT tracker + rename/delete cascades all filter type==='PT').
+// PT sessions across all teachers, live, but only from PT_WINDOW_START on — the
+// Students overview totals are the only screen that reads it, and old sessions
+// pile up forever. Rename/delete cascades no longer rely on this array; they
+// query the student's own sessions so they still cover the full history.
 // Bulk Regular-class sessions are NOT loaded here — the Hours report queries them
 // by date range on demand, keeping load light as years accumulate.
+const PT_WINDOW_START = (new Date().getFullYear()-1) + '-01-01';
 let allPTSessionsGlobal = [], unsubAllPTSessionsGlobal = null;
 let allPTContractsGlobal = [], unsubAllContractsGlobal = null;
 let allStudentsGlobal = [], unsubStudentsGlobal = null;
@@ -1284,6 +1311,7 @@ function _showHomeView() {
   if (unsubContracts) { unsubContracts(); unsubContracts = null; }
   if (unsubSubCoverage) { unsubSubCoverage(); unsubSubCoverage = null; }
   subCoverageSessions = [];
+  resetSessionWindow();
   currentTeacher = null;
   document.getElementById('view-home').classList.add('active');
   document.getElementById('view-detail').classList.remove('active');
@@ -1319,8 +1347,10 @@ function _showTeacherDetailView(teacher) {
   document.getElementById('header-teacher-name').textContent = `${teacher.name} (${teacher.campus})`;
   document.getElementById('teacher-context-bar').style.display = 'block';
   document.querySelectorAll('#home-tabs .detail-tab').forEach((t,i)=>t.classList.toggle('active',i===0));
-  switchDetailTab(localStorage.getItem('scheduler_detail_tab') || 'schedule');
+  // Attach first so the session window is already set for this teacher when the
+  // tab renders — otherwise the render would attach a window of its own.
   startTeacherListeners(teacher.id);
+  switchDetailTab(localStorage.getItem('scheduler_detail_tab') || 'schedule');
 }
 function openTeacherDetail(teacher) {
   window.location.hash = teacher.id;
@@ -1348,7 +1378,13 @@ function switchDetailTab(name) {
   if (name==='schedule') { renderQuarterSelector(); renderSchedule(); }
   // PT contract add/edit + student dropdowns read the global contract/session/
   // student arrays, so make sure those listeners are attached when the PT tab opens.
-  if (name==='pt')       { ensureGlobalDataListeners(); renderPTTracker(); }
+  // The tracker shows lifetime totals, so it also needs the teacher's PT history
+  // from outside the loaded schedule window.
+  if (name==='pt')       {
+    ensureGlobalDataListeners();
+    renderPTTracker();
+    ensurePTHistory().then(added => { if (added) renderPTTracker(); });
+  }
 }
 
 function openTeacherPT(teacherId) {
@@ -1383,19 +1419,141 @@ function initTeacherListener() {
   );
 }
 
+// Calendar-quarter bounds for a date — the granularity the session window grows
+// in, so week-by-week navigation does not re-attach the listener constantly.
+function quarterBlockStart(dateStr) {
+  const y = dateStr.slice(0,4), m = parseInt(dateStr.slice(5,7),10);
+  return `${y}-${String(Math.floor((m-1)/3)*3+1).padStart(2,'0')}-01`;
+}
+function quarterBlockEnd(dateStr) {
+  const y = parseInt(dateStr.slice(0,4),10), m = parseInt(dateStr.slice(5,7),10);
+  const em = Math.floor((m-1)/3)*3+3;
+  return `${y}-${String(em).padStart(2,'0')}-${new Date(y,em,0).getDate()}`;
+}
+
+// `sessions` = the live window plus every on-demand doc that falls outside it
+// (inside the window the live snapshot is authoritative).
+function rebuildSessions() {
+  const inWin = s => _sessWin && s.date >= _sessWin.from && s.date <= _sessWin.to;
+  const extra = [];
+  _sessExtra.forEach(s => { if (!inWin(s)) extra.push(s); });
+  sessions = _liveSessions.concat(extra);
+}
+
+function _mergeSessionDocs(docs) {
+  let added = 0;
+  docs.forEach(d => { if (!_sessExtra.has(d.id)) added++; _sessExtra.set(d.id, {id:d.id,...d.data()}); });
+  rebuildSessions();
+  return added;
+}
+
+function resetSessionWindow() {
+  _liveSessions = []; sessions = [];
+  _sessWin = null; _sessExtra = new Map();
+  _sessAllLoaded = false; _sessPTLoaded = false; _sessSeriesLoaded = new Set();
+}
+
+// Keep an on-demand doc in step after a single-document write. Docs inside the
+// live window are refreshed by the listener; the ones outside it are not, so
+// re-read just that document (deleted docs drop out).
+async function syncSessionDoc(id) {
+  if (!_sessExtra.has(id)) return;
+  try {
+    const snap = await db.collection('sessions').doc(id).get();
+    if (snap.exists) _sessExtra.set(id, {id:snap.id,...snap.data()});
+    else _sessExtra.delete(id);
+    rebuildSessions();
+    if (document.getElementById('dtab-pt').classList.contains('active')) renderPTTracker();
+    renderSchedule();
+  } catch(e) { console.error('session sync error:', e); }
+}
+
+// Drop everything fetched on demand so the next ensure* call re-reads it —
+// used after bulk writes that may have changed docs outside the live window.
+function invalidateSessionExtras() {
+  _sessExtra = new Map();
+  _sessAllLoaded = false; _sessPTLoaded = false; _sessSeriesLoaded = new Set();
+  rebuildSessions();
+}
+
+// Resolves once the first snapshot for the new window has arrived.
+function attachSessionListener(teacherId, from, to) {
+  if (unsubSessions) unsubSessions();
+  _sessWin = { from, to };
+  return new Promise(resolve => {
+    let first = true;
+    const done = () => { if (first) { first = false; resolve(); } };
+    unsubSessions = db.collection('sessions')
+      .where('teacherId','==',teacherId)
+      .where('date','>=',from).where('date','<=',to)
+      .onSnapshot(
+        snap => {
+          _liveSessions = snap.docs.map(d => ({id:d.id,...d.data()}));
+          rebuildSessions();
+          renderSchedule();
+          if (document.getElementById('dtab-pt').classList.contains('active')) renderPTTracker();
+          if (document.getElementById('pt-mini-schedule-modal').classList.contains('open')) renderPTMiniGrid();
+          done();
+        },
+        err => { console.error('Firestore sessions error:', err); showToast('Firebase error: ' + err.message, 'error'); done(); }
+      );
+  });
+}
+
+// Widen the live window (in whole quarters) so it covers [from,to].
+function ensureSessionRange(from, to) {
+  if (!currentTeacher || !from || !to) return Promise.resolve();
+  // Half-typed dates in a date input ("0202-06-30") would blow the window open.
+  if (from < '2000-01-01' || to > '2099-12-31' || to < from) return Promise.resolve();
+  const needFrom = quarterBlockStart(from), needTo = quarterBlockEnd(to);
+  if (_sessWin && needFrom >= _sessWin.from && needTo <= _sessWin.to) return Promise.resolve();
+  const newFrom = _sessWin && _sessWin.from < needFrom ? _sessWin.from : needFrom;
+  const newTo   = _sessWin && _sessWin.to   > needTo   ? _sessWin.to   : needTo;
+  return attachSessionListener(currentTeacher.id, newFrom, newTo);
+}
+
+// Every session of one class/student for this teacher — series edit/delete must
+// see the whole series, not just the part inside the window.
+async function ensureSeriesLoaded(studentName) {
+  if (!currentTeacher || !studentName) return 0;
+  if (_sessAllLoaded || _sessSeriesLoaded.has(studentName)) return 0;
+  try {
+    const snap = await db.collection('sessions')
+      .where('teacherId','==',currentTeacher.id)
+      .where('studentName','==',studentName).get();
+    _sessSeriesLoaded.add(studentName);
+    return _mergeSessionDocs(snap.docs);
+  } catch(e) { console.error('series load error:', e); return 0; }
+}
+
+// The teacher's full PT history — the PT tracker shows lifetime totals.
+async function ensurePTHistory() {
+  if (!currentTeacher || _sessAllLoaded || _sessPTLoaded) return 0;
+  try {
+    const snap = await db.collection('sessions')
+      .where('teacherId','==',currentTeacher.id)
+      .where('type','==','PT').get();
+    _sessPTLoaded = true;
+    return _mergeSessionDocs(snap.docs);
+  } catch(e) { console.error('PT history load error:', e); return 0; }
+}
+
+// Everything this teacher ever had — only for operations that must scan it all.
+async function ensureAllSessions() {
+  if (!currentTeacher || _sessAllLoaded) return 0;
+  try {
+    const snap = await db.collection('sessions').where('teacherId','==',currentTeacher.id).get();
+    _sessAllLoaded = true; _sessPTLoaded = true;
+    return _mergeSessionDocs(snap.docs);
+  } catch(e) { console.error('full history load error:', e); return 0; }
+}
+
 function startTeacherListeners(teacherId) {
-  if (unsubSessions)  unsubSessions();
   if (unsubContracts) unsubContracts();
   if (unsubSubCoverage) unsubSubCoverage();
-  unsubSessions = db.collection('sessions').where('teacherId','==',teacherId).onSnapshot(
-    snap => {
-      sessions = snap.docs.map(d => ({id:d.id,...d.data()}));
-      renderSchedule();
-      if (document.getElementById('dtab-pt').classList.contains('active')) renderPTTracker();
-      if (document.getElementById('pt-mini-schedule-modal').classList.contains('open')) renderPTMiniGrid();
-    },
-    err => { console.error('Firestore sessions error:', err); showToast('Firebase error: ' + err.message, 'error'); }
-  );
+  resetSessionWindow();
+  const wk = dateToStr(currentWeekStart);
+  attachSessionListener(teacherId, quarterBlockStart(wk), quarterBlockEnd(wk));
   // Sessions this teacher substitutes for (taught by others) — shown on the schedule grid.
   unsubSubCoverage = db.collection('sessions').where('substituteId','==',teacherId).onSnapshot(
     snap => {
@@ -1493,6 +1651,9 @@ function clampToGrid(top, height) {
 
 function renderSchedule() {
   if (!document.getElementById('dtab-schedule').classList.contains('active')) return;
+  // Navigating outside the loaded window widens it; the new snapshot re-renders.
+  const _wkEnd = new Date(currentWeekStart); _wkEnd.setDate(_wkEnd.getDate()+6);
+  ensureSessionRange(dateToStr(currentWeekStart), dateToStr(_wkEnd));
   localStorage.setItem('scheduler_week', dateToStr(currentWeekStart));
   updateWeekLabel();
   const grid=document.getElementById('schedule-grid'), today=dateToStr(new Date());
@@ -1756,10 +1917,26 @@ function getTimeSlots() {
   }));
 }
 
+// Overlap/rule checks read `sessions`, so the dates being validated have to be
+// inside the loaded window. Widening is async: re-validate once it lands.
+function _ensureFormRange(from, to) {
+  if (!from || !to) return;
+  const before = _sessWin;
+  ensureSessionRange(from, to).then(() => { if (_sessWin !== before) validateForm(); });
+}
+
 function validateForm() {
   const type=document.getElementById('sess-type').value;
   const warnEl=document.getElementById('session-warnings');
   const errors=[], warnings=[], infos=[];
+
+  if (type==='Regular'||type==='Meeting'||type==='Training') {
+    _ensureFormRange(document.getElementById('reg-from-date').value, document.getElementById('reg-to-date').value);
+  } else if (type==='PT' && isPTRepeatOn()) {
+    _ensureFormRange(document.getElementById('sess-date').value, document.getElementById('pt-repeat-to').value);
+  } else {
+    const _d=document.getElementById('sess-date').value; _ensureFormRange(_d,_d);
+  }
 
   if (type==='Regular'||type==='Meeting'||type==='Training') {
     const from=document.getElementById('reg-from-date').value;
@@ -1970,6 +2147,7 @@ function openAddPTFromTracker() {
 
 async function deleteHolidaySessions() {
   if (currentRole !== 'manager') return;
+  await ensureAllSessions(); // this one really does have to scan the whole history
   const holidaySessions = sessions.filter(s => isDateBlocked(s.date));
   if (holidaySessions.length === 0) {
     showToast('No sessions found on holidays.', 'ok');
@@ -1987,6 +2165,7 @@ async function deleteHolidaySessions() {
     const batch = db.batch();
     holidaySessions.forEach(s => batch.delete(db.collection('sessions').doc(s.id)));
     await batch.commit();
+    invalidateSessionExtras();
     showToast(`${holidaySessions.length} holiday session(s) deleted.`, 'ok');
   } catch(e) { showToast('Error deleting sessions.', 'error'); }
 }
@@ -2022,6 +2201,9 @@ async function addSession() {
       if (!confirmed) return;
     }
     if (effectiveDates.length*validSlots.length>300) return showToast('Too many sessions (max 300). Reduce the range.','error');
+    // The overlap check below only sees loaded sessions — make sure the whole
+    // target range is in memory before trusting it.
+    await ensureSessionRange(from,to);
     const conflictDates=[];
     for (const date of effectiveDates) for (const ts of validSlots) {
       if (getOverlaps(date,ts.start,ts.end).length>0 && !conflictDates.includes(date)) conflictDates.push(date);
@@ -2111,6 +2293,7 @@ async function addSession() {
         if (!confirmed) return;
       }
       if (effectiveDates.length>300) return showToast('Too many sessions (max 300). Reduce the range.','error');
+      await ensureSessionRange(date,to);
       const conflictDates=effectiveDates.filter(d=>getOverlaps(d,start,end).length>0);
       if (conflictDates.length>0) return showToast(`Cannot add: overlaps on ${conflictDates.length} day(s): ${conflictDates.slice(0,3).map(d=>fmtDate(d)).join(', ')}${conflictDates.length>3?'…':''}`,'error');
       const ruleViolations=new Set();
@@ -2139,6 +2322,7 @@ async function addSession() {
       return;
     }
 
+    await ensureSessionRange(date,date);
     const overlaps=getOverlaps(date,start,end);
     if (overlaps.length>0) return showToast(`Cannot add: overlaps with ${overlaps[0].type} session (${formatTime(overlaps[0].startTime)}–${formatTime(overlaps[0].endTime)}).`,'error');
     if (isDateBlocked(date)) return showToast('Cannot add: this date is a school holiday. Mark it as School Open in School Calendar first.','error');
@@ -2166,6 +2350,14 @@ async function addSession() {
 function openDetailModal(id) {
   const s=sessions.find(x=>x.id===id); if (!s) return;
   selectedSessionId=id;
+  // "All <student> on <day>s (N)" must count the whole series, including the
+  // part outside the loaded window — reopen once the rest arrives.
+  if (currentRole==='manager' && s.studentName && s.type!=='Adjustment') {
+    ensureSeriesLoaded(s.studentName).then(added => {
+      if (added && selectedSessionId===id &&
+          document.getElementById('session-detail-modal').classList.contains('open')) openDetailModal(id);
+    });
+  }
   const isPending=s.type==='PT'&&s.conducted===false;
   const d=strToDate(s.date);
   const dayName=DAYS[((d.getDay()+6)%7)];
@@ -2363,6 +2555,7 @@ async function deletePTSessionRow(id) {
     const snap = await db.collection('sessions').doc(id).get();
     const s = snap.data() || {};
     await db.collection('sessions').doc(id).delete();
+    await syncSessionDoc(id);
     await logAudit('delete','sessions',id,`Deleted PT session: ${s.studentName||'?'} on ${s.date||'?'} ${s.startTime||''}–${s.endTime||''}`,[snapDoc('sessions',id,s)]);
     showToast('Session deleted.','ok');
   } catch(e) { showToast('Error deleting session.','error'); }
@@ -2377,6 +2570,7 @@ async function deleteThisSession() {
     const delSummary = s.type==='Adjustment'
       ? `Deleted extra payroll hours: ${sessionHours(s)} hr(s) on ${s.date||'?'} — ${s.notes||''}`
       : `Deleted ${s.type||'?'} session: ${s.studentName||'?'} on ${s.date||'?'}`;
+    await syncSessionDoc(selectedSessionId);
     await logAudit('delete','sessions',selectedSessionId,delSummary,[snapDoc('sessions',selectedSessionId,s)]);
     closeDetailModal();
     showToast('Session deleted.','ok');
@@ -2387,12 +2581,14 @@ async function deleteAllRecurring(id) {
   if (currentRole !== 'manager') return;
   const s=sessions.find(x=>x.id===id); if (!s) return;
   const dayName=DAYS[((strToDate(s.date).getDay()+6)%7)];
+  await ensureSeriesLoaded(s.studentName); // the series can reach outside the loaded window
   const recurring=getRecurringSessions(s);
   if (!confirm(`Delete all ${recurring.length} "${s.studentName}" sessions on ${dayName}s?`)) return;
   try {
     const batch=db.batch();
     recurring.forEach(sess=>batch.delete(db.collection('sessions').doc(sess.id)));
     await batch.commit();
+    invalidateSessionExtras();
     await logAudit('delete','sessions','(batch)',`Deleted ${recurring.length} ${s.type||'?'} session(s): ${s.studentName} on ${dayName}s`,recurring.map(sess=>snapDoc('sessions',sess.id,sess)));
     closeDetailModal();
     showToast(`${recurring.length} sessions deleted.`,'ok');
@@ -2403,12 +2599,14 @@ async function deleteAllRecurringPT(id) {
   if (currentRole !== 'manager') return;
   const s=sessions.find(x=>x.id===id); if (!s) return;
   const dayName=DAYS[((strToDate(s.date).getDay()+6)%7)];
+  await ensureSeriesLoaded(s.studentName);
   const recurring=getRecurringPTSessions(s);
   if (!confirm(`Delete all ${recurring.length} "${s.studentName}" PT sessions on ${dayName}s?`)) return;
   try {
     const batch=db.batch();
     recurring.forEach(sess=>batch.delete(db.collection('sessions').doc(sess.id)));
     await batch.commit();
+    invalidateSessionExtras();
     await logAudit('delete','sessions','(batch)',`Deleted ${recurring.length} PT session(s): ${s.studentName} on ${dayName}s`,recurring.map(sess=>snapDoc('sessions',sess.id,sess)));
     closeDetailModal();
     showToast(`${recurring.length} PT sessions deleted.`,'ok');
@@ -2539,17 +2737,20 @@ async function saveEditedSession() {
       updateData.classLevel=firebase.firestore.FieldValue.delete();
     }
     if (editScope==='all') {
+      await ensureSeriesLoaded(s.studentName);
       const recurring=getRecurringSessions(s);
       const batch=db.batch();
       const shared={type,studentName:name||type,startTime,endTime,notes,creditHours};
       recurring.forEach(sess=>batch.update(db.collection('sessions').doc(sess.id),shared));
       await batch.commit();
+      invalidateSessionExtras();
       await logAudit('update','sessions','(batch)',`Updated ${recurring.length} ${type} session(s): ${name||type} (${currentTeacher.name})`);
       showToast(`${recurring.length} sessions updated!`,'ok');
     } else {
       const date=document.getElementById('edit-date').value;
       if (!date) return showToast('Please select a date.','error');
       await db.collection('sessions').doc(editingSessionId).update({...updateData,date});
+      await syncSessionDoc(editingSessionId);
       await logAudit('update','sessions',editingSessionId,`Updated ${type} session: ${name||type} on ${date}`);
       showToast('Session updated!','ok');
     }
@@ -2685,6 +2886,7 @@ async function undoPTNotHeld(sessionId) {
       missedReason: firebase.firestore.FieldValue.delete(),
       missOutcome: firebase.firestore.FieldValue.delete()
     });
+    await syncSessionDoc(sessionId);
     await logAudit('update','sessions',sessionId,`Reverted PT session to scheduled: ${s.studentName||'?'} on ${s.date||'?'}`);
     showToast('Reverted to scheduled.','ok');
   } catch(e) { showToast('Error updating session.','error'); }
@@ -2704,6 +2906,7 @@ async function togglePTConducted(sessionId, currentValue) {
       await logAudit('update','sessions',sessionId,`Marked PT session as done: ${s.studentName||'?'} on ${s.date||'?'}`);
       showToast('✓ Marked as done!','ok');
     }
+    await syncSessionDoc(sessionId);
   } catch(e) { showToast('Error updating session.','error'); }
 }
 
@@ -2739,10 +2942,36 @@ async function savePTMissed() {
     await db.collection('sessions').doc(ptMissTargetId).update({
       conducted: false, missedReason: reason, missOutcome: ptMissOutcome
     });
+    await syncSessionDoc(ptMissTargetId);
     await logAudit('update','sessions',ptMissTargetId,`Marked PT session as not-held: ${s.studentName||'?'} on ${s.date||'?'} — ${reason}`);
     showToast('Saved.','ok');
     closePTMissModal();
   } catch(e) { showToast('Error updating session.','error'); }
+}
+
+// PT student status filter. Past students keep piling up in this tab, so the
+// default view only shows students that are still active. "Inactive" is the
+// same flag the Students overview uses (students/{id}.isInactive) — a student
+// that only exists as a contract/session name has no record and stays active.
+let ptStudentFilter='active';
+function setPTStudentFilter(val) {
+  ptStudentFilter=val;
+  ['active','inactive','all'].forEach(v=>{
+    const b=document.getElementById('ptsf-'+v); if (b) b.classList.toggle('active', v===val);
+  });
+  renderPTTracker();
+}
+function isPTStudentInactive(studentName) {
+  const contract=ptContracts.find(c=>c.studentName===studentName);
+  const rec=allStudentsGlobal.find(s=>
+    (contract&&contract.studentId&&s.studentId===contract.studentId)||
+    (s.name||'').toLowerCase()===(studentName||'').toLowerCase());
+  return isStudentInactive(rec);
+}
+function filterPTStudents(students) {
+  if (ptStudentFilter==='all') return students;
+  const wantInactive=ptStudentFilter==='inactive';
+  return students.filter(n=>isPTStudentInactive(n)===wantInactive);
 }
 
 function renderPTTracker() {
@@ -2754,13 +2983,25 @@ function renderPTTracker() {
   ptSessions.forEach(s=>{ if (!studentSessions[s.studentName]) studentSessions[s.studentName]=[]; studentSessions[s.studentName].push(s); });
   ptContracts.forEach(c=>{ if (!studentSessions[c.studentName]) studentSessions[c.studentName]=[]; });
 
-  const students=Object.keys(studentSessions).sort();
-  if (students.length===0) { container.innerHTML='<div class="empty-state">No PT sessions yet.</div>'; return; }
+  const allStudents=Object.keys(studentSessions).sort();
+  const students=filterPTStudents(allStudents);
+  const countEl=document.getElementById('pt-student-count');
+  if (countEl) countEl.textContent=allStudents.length===0?''
+    :`Showing ${students.length} of ${allStudents.length} student${allStudents.length===1?'':'s'}`;
+
+  if (allStudents.length===0) { container.innerHTML='<div class="empty-state">No PT sessions yet.</div>'; return; }
+  if (students.length===0) {
+    container.innerHTML=`<div class="empty-state">No ${ptStudentFilter} students. Switch the filter above to see the other ${allStudents.length}.</div>`;
+    return;
+  }
 
   let html='';
   students.forEach(student => {
     const list=studentSessions[student];
     const contract=ptContracts.find(c=>c.studentName===student);
+    const inactiveBadge=isPTStudentInactive(student)
+      ? `<span style="font-size:11px;color:#9ca3af;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:4px;padding:1px 7px;margin-left:6px;vertical-align:middle;font-weight:400;">Inactive</span>`
+      : '';
     const conductedList=list.filter(s=>s.conducted!==false||s.missOutcome==='deduct');
     const totalUsed=conductedList.reduce((n,s)=>n+sessionHours(s),0);
 
@@ -2772,7 +3013,7 @@ function renderPTTracker() {
         <h2 style="margin:0;">
           <button class="btn-student-link" data-student="${escHtml(student)}" onclick="openPTMiniSchedule(this.dataset.student)">
             ${escHtml(student)} <span style="font-size:12px;color:#6b7280;font-weight:400;">↗</span>
-          </button>${idBadge}
+          </button>${idBadge}${inactiveBadge}
         </h2>
         <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
           <span>Total hours: <strong>${totalUsed.toFixed(1)} hrs</strong></span>
@@ -2849,6 +3090,7 @@ function changePTMiniWeek(dir) { ptMiniWeekStart.setDate(ptMiniWeekStart.getDate
 
 function renderPTMiniGrid() {
   const end=new Date(ptMiniWeekStart); end.setDate(end.getDate()+6);
+  ensureSessionRange(dateToStr(ptMiniWeekStart), dateToStr(end));
   document.getElementById('pt-mini-week-label').textContent=
     `${ptMiniWeekStart.getMonth()+1}/${ptMiniWeekStart.getDate()} – ${end.getMonth()+1}/${end.getDate()}/${end.getFullYear()}`;
   const today=dateToStr(new Date());
@@ -3819,7 +4061,8 @@ function getPTData() {
   const studentSessions={};
   ptSessions.forEach(s=>{ if(!studentSessions[s.studentName]) studentSessions[s.studentName]=[]; studentSessions[s.studentName].push(s); });
   ptContracts.forEach(c=>{ if(!studentSessions[c.studentName]) studentSessions[c.studentName]=[]; });
-  return { studentSessions, students: Object.keys(studentSessions).sort() };
+  // Export/print what the tracker is currently showing (see ptStudentFilter).
+  return { studentSessions, students: filterPTStudents(Object.keys(studentSessions).sort()) };
 }
 
 function exportPTCSV() {
@@ -4217,6 +4460,15 @@ function _updateStudentFilterBadge() {
   if (summary) summary.textContent=parts.length?parts.join(' · '):'';
 }
 
+// Every session ever recorded for one student, across teachers. The global PT
+// listener is windowed, but renames and deletes must reach the whole history —
+// a single-field equality query, so no composite index is involved.
+async function fetchStudentSessions(studentName) {
+  if (!studentName) return [];
+  const snap=await db.collection('sessions').where('studentName','==',studentName).get();
+  return snap.docs.map(d=>({id:d.id,...d.data()}));
+}
+
 function initAllContractsListener() {
   if (unsubAllContractsGlobal) return;
   unsubAllContractsGlobal=db.collection('pt_contracts').onSnapshot(snap=>{
@@ -4233,6 +4485,9 @@ function initStudentsListener() {
     // First attach can land after the PT session form is already on screen;
     // refill it so the branch labels appear.
     if (document.getElementById('pt-form')?.style.display!=='none') populatePTStudentDropdown('sess-student-select', currentTeacher?.campus);
+    // The PT tracker's active/inactive filter reads these records, so the first
+    // (lazy) attach usually lands after the tab has already rendered.
+    if (document.getElementById('dtab-pt')?.classList.contains('active')) renderPTTracker();
   }, err=>console.error('students error:',err));
 }
 
@@ -4306,7 +4561,8 @@ async function saveStudentRegistration() {
   // Block deactivation if the student has PT sessions on/after the inactive date
   if (inactive && _regStuMode==='edit') {
     const checkDate=inactiveFrom||dateToStr(new Date());
-    const futureSessions=allPTSessionsGlobal.filter(s=>s.studentName===_editStuOldName&&s.date>=checkDate);
+    const stuSessions=await fetchStudentSessions(_editStuOldName);
+    const futureSessions=stuSessions.filter(s=>s.type==='PT'&&s.date>=checkDate);
     if (futureSessions.length>0) {
       const lastDate=futureSessions.map(s=>s.date).sort().pop();
       const nextDay=dateToStr(new Date(strToDate(lastDate).getTime()+86400000));
@@ -4350,11 +4606,12 @@ async function saveStudentRegistration() {
         const ref=db.collection('students').doc();
         batch.set(ref,data);
       }
-      // If name changed → update pt_contracts + PT sessions
+      // If name changed → update pt_contracts + PT sessions (whole history, not
+      // just the windowed global list, or old sessions would keep the old name)
       if (name!==_editStuOldName) {
         allPTContractsGlobal.filter(c=>c.studentName===_editStuOldName)
           .forEach(c=>batch.update(db.collection('pt_contracts').doc(c.id),{studentName:name}));
-        allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.studentName===_editStuOldName)
+        (await fetchStudentSessions(_editStuOldName)).filter(s=>s.type==='PT')
           .forEach(s=>batch.update(db.collection('sessions').doc(s.id),{studentName:name}));
       }
       // Sync studentId to pt_contracts if changed
@@ -4376,7 +4633,9 @@ async function deleteStudent(gIdx) {
   if (currentRole!=='manager') return;
   const sg=studentsOverviewData[gIdx]; if (!sg) return;
   const contractCount=sg.contracts.length;
-  const sessionCount=allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.studentName===sg.name).length;
+  // Full history — the windowed global list would under-count old sessions.
+  const stuSessions=(await fetchStudentSessions(sg.name)).filter(s=>s.type==='PT');
+  const sessionCount=stuSessions.length;
   let msg=`Delete "${sg.name}"?\n\nThis will permanently delete:`;
   if (sg.isRegistered) msg+='\n• Student registration';
   if (contractCount>0) msg+=`\n• ${contractCount} PT contract(s)`;
@@ -4395,11 +4654,10 @@ async function deleteStudent(gIdx) {
       batch.delete(db.collection('pt_contracts').doc(c.id));
       snapshot.push(snapDoc('pt_contracts',c.id,c));
     });
-    allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.studentName===sg.name)
-      .forEach(s=>{
-        batch.delete(db.collection('sessions').doc(s.id));
-        snapshot.push(snapDoc('sessions',s.id,s));
-      });
+    stuSessions.forEach(s=>{
+      batch.delete(db.collection('sessions').doc(s.id));
+      snapshot.push(snapDoc('sessions',s.id,s));
+    });
     await batch.commit();
     await logAudit('delete','students',sg.docId||'(legacy)',`Deleted student: ${sg.name} (${contractCount} contract(s), ${sessionCount} session(s))`,snapshot);
     showToast('Student deleted.','ok');
@@ -4461,7 +4719,9 @@ async function deletePTContractFromModal() {
   const c=allPTContractsGlobal.find(x=>x.id===editPTContractId); if (!c) return;
   const teacher=teachers.find(t=>t.id===c.teacherId);
   const tName=teacher?teacher.name:'(unknown)';
-  const relSess=allPTSessionsGlobal.filter(s=>s.type==='PT'&&s.teacherId===c.teacherId&&s.studentName===c.studentName);
+  // Full history for this student, then narrowed to this teacher's sessions.
+  const relSess=(await fetchStudentSessions(c.studentName))
+    .filter(s=>s.type==='PT'&&s.teacherId===c.teacherId);
   let msg=`Delete PT contract between "${c.studentName}" and "${tName}"?`;
   if (relSess.length>0) msg+=`\n\n${relSess.length} session record(s) will also be deleted.`;
   msg+='\n\nThis cannot be undone.';
@@ -4577,8 +4837,10 @@ function renderStudentsOverview() {
     displaySections=[{label:null,students:studentList}];
   }
 
+  // The PT session list behind these totals starts at PT_WINDOW_START, so say so
+  // rather than showing a number that looks like a lifetime total.
   let html=`<table class="hours-table" style="width:100%"><thead><tr>
-    <th>Teacher</th><th>Campus</th><th>Conducted (hrs)</th><th>Sessions</th><th class="manager-only" style="width:1px;"></th>
+    <th>Teacher</th><th>Campus</th><th>Conducted (hrs)<span style="font-weight:400;text-transform:none;letter-spacing:0;color:#9ca3af;"> · since ${fmtDate(PT_WINDOW_START)}</span></th><th>Sessions</th><th class="manager-only" style="width:1px;"></th>
   </tr></thead><tbody>`;
 
   // Render one student group
@@ -4661,7 +4923,8 @@ function renderStudentsOverview() {
 function exportStudentsOverviewCSV() {
   if (studentsOverviewData.length===0) { showToast('No data to export.','error'); return; }
   const ptSessions=allPTSessionsGlobal.filter(s=>s.type==='PT');
-  const rows=[['Student Name','Student ID','Branch','Status','Teacher','Campus','Conducted (hrs)','Conducted (sessions)']];
+  const rows=[['Student Name','Student ID','Branch','Status','Teacher','Campus',
+    `Conducted (hrs) since ${PT_WINDOW_START}`,`Conducted (sessions) since ${PT_WINDOW_START}`]];
   studentsOverviewData.forEach(sg=>{
     const status=isStudentInactive(sg)?'Inactive':'Active';
     if (sg.contracts.length===0) {
@@ -4733,6 +4996,7 @@ async function saveInlineTime(id) {
     const snap = await db.collection('sessions').doc(id).get();
     const s = snap.data() || {};
     await db.collection('sessions').doc(id).update({ startTime: start, endTime: end, creditHours });
+    await syncSessionDoc(id);
     await logAudit('update','sessions',id,`Updated session time: ${s.studentName||'?'} on ${s.date||'?'} → ${start}–${end}`);
     showToast('Time updated!', 'ok');
     closeDetailModal();
@@ -4801,11 +5065,13 @@ async function exportHoursOverviewCSV() {
   URL.revokeObjectURL(url);
 }
 
-// Global PT-sessions listener (all teachers) — PT only, used by PT tracker and
-// rename/delete cascades. Regular sessions are queried on demand by the Hours report.
+// Global PT-sessions listener (all teachers) — PT only and windowed to
+// PT_WINDOW_START onward. Regular sessions are queried on demand by the Hours
+// report; per-student full history is queried by fetchStudentSessions().
 function initAllSessionsListener() {
   if (unsubAllPTSessionsGlobal) return;
-  unsubAllPTSessionsGlobal=db.collection('sessions').where('type','==','PT').onSnapshot(snap=>{
+  unsubAllPTSessionsGlobal=db.collection('sessions')
+    .where('type','==','PT').where('date','>=',PT_WINDOW_START).onSnapshot(snap=>{
     allPTSessionsGlobal=snap.docs.map(d=>({id:d.id,...d.data()}));
     invalidateHoursCache(); // PT hours may have changed
     if (document.getElementById('home-tab-hours').classList.contains('active')) renderAllTeachersHours();
@@ -4904,9 +5170,14 @@ function snapDoc(collection, id, data) {
 
 let auditFilter = 'all';
 let auditData = [];
+// The audit log only grows, so it is read one page at a time with a cursor
+// instead of pulling a fixed slab of the newest records on every tab entry.
+const AUDIT_PAGE_SIZE = 50;
+let _auditCursor = null, _auditHasMore = true, _auditPage = 1, _auditLoading = false;
 
 function setAuditFilter(f) {
   auditFilter = f;
+  _auditPage = 1;
   ['all','create','update','delete'].forEach(k => {
     const b = document.getElementById('audbtn-' + k);
     if (b) b.classList.toggle('active', k === f);
@@ -4914,22 +5185,67 @@ function setAuditFilter(f) {
   renderAuditTable();
 }
 
+async function loadMoreAudit() {
+  if (!_auditHasMore || _auditLoading) return 0;
+  _auditLoading = true;
+  try {
+    let q = db.collection('scheduler_audit').orderBy('changedAt','desc').limit(AUDIT_PAGE_SIZE);
+    if (_auditCursor) q = q.startAfter(_auditCursor);
+    const snap = await q.get();
+    if (snap.docs.length) _auditCursor = snap.docs[snap.docs.length-1];
+    _auditHasMore = snap.docs.length === AUDIT_PAGE_SIZE;
+    auditData = auditData.concat(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
+    return snap.docs.length;
+  } finally { _auditLoading = false; }
+}
+
 async function renderAuditLog() {
   const el = document.getElementById('audit-log-content');
   el.innerHTML = '<div class="empty-state">Loading…</div>';
+  auditData = []; _auditCursor = null; _auditHasMore = true; _auditPage = 1;
   try {
-    const snap = await db.collection('scheduler_audit').orderBy('changedAt','desc').limit(500).get();
-    auditData = snap.docs.map(d => ({ _id: d.id, ...d.data() }));
+    await loadMoreAudit();
     renderAuditTable();
   } catch(e) {
+    console.error(e);
     el.innerHTML = '<div class="empty-state">Error loading history.</div>';
   }
 }
 
+// Next page: pull another page from Firestore first if the filter has eaten
+// through everything loaded so far.
+async function changeAuditPage(dir) {
+  if (dir > 0) {
+    const filteredCount = () => (auditFilter === 'all' ? auditData : auditData.filter(r => r.action === auditFilter)).length;
+    while (_auditPage * AUDIT_PAGE_SIZE >= filteredCount() && _auditHasMore) {
+      const n = await loadMoreAudit();
+      if (!n) break;
+    }
+    if (_auditPage * AUDIT_PAGE_SIZE >= filteredCount()) { renderAuditTable(); return; }
+    _auditPage++;
+  } else {
+    if (_auditPage === 1) return;
+    _auditPage--;
+  }
+  renderAuditTable();
+}
+
 function renderAuditTable() {
   const el = document.getElementById('audit-log-content');
-  const rows = auditFilter === 'all' ? auditData : auditData.filter(r => r.action === auditFilter);
-  if (!rows.length) { el.innerHTML = '<div class="empty-state">No records found.</div>'; return; }
+  const allRows = auditFilter === 'all' ? auditData : auditData.filter(r => r.action === auditFilter);
+  if (!allRows.length) { el.innerHTML = '<div class="empty-state">No records found.</div>'; return; }
+  const totalPages = Math.max(1, Math.ceil(allRows.length / AUDIT_PAGE_SIZE));
+  if (_auditPage > totalPages) _auditPage = totalPages;
+  const start = (_auditPage-1) * AUDIT_PAGE_SIZE;
+  const rows = allRows.slice(start, start + AUDIT_PAGE_SIZE);
+  const hasNext = start + rows.length < allRows.length || _auditHasMore;
+  const pager = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;font-size:12px;color:#6b7280;">
+      <span>${start+1}–${start+rows.length}${_auditHasMore?'':' of '+allRows.length} · page ${_auditPage}</span>
+      <span style="display:flex;gap:6px;">
+        <button class="btn btn-secondary btn-sm" ${_auditPage===1?'disabled style="opacity:0.45;"':''} onclick="changeAuditPage(-1)">&#8592; Prev</button>
+        <button class="btn btn-secondary btn-sm" ${hasNext?'':'disabled style="opacity:0.45;"'} onclick="changeAuditPage(1)">Next &#8594;</button>
+      </span>
+    </div>`;
 
   const mgr = currentRole === 'manager';
 
@@ -4976,7 +5292,7 @@ function renderAuditTable() {
         </tr>`).join('')}
       </tbody>
     </table>
-  </div>`;
+  </div>${pager}`;
 }
 
 let _editAuditId = null;

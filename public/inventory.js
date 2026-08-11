@@ -43,9 +43,38 @@ async function loadInventory() {
   inventory = snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+// Only pending orders are loaded up front — they are the only ones the
+// inventory view needs (getPending) and the only ones the Orders tab shows by
+// default. Received/cancelled orders pile up forever, so they are fetched on
+// demand when the Orders status filter asks for them. Sorting is done in JS so
+// the query stays a single-field equality (no composite index needed).
+const _ordersLoaded = new Set();
+
+function sortOrders() {
+  pendingOrders.sort((a, b) => String(b.orderedAt || '').localeCompare(String(a.orderedAt || '')));
+}
+
 async function loadPendingOrders() {
-  const snap = await db.collection('pending_orders').orderBy('orderedAt','desc').get();
+  const snap = await db.collection('pending_orders').where('status', '==', 'pending').get();
   pendingOrders = snap.docs.map(d => ({ ...d.data(), id: d.id }));
+  sortOrders();
+  _ordersLoaded.clear();
+  _ordersLoaded.add('pending');
+}
+
+// Pull in the order statuses the Orders tab is about to display, once each.
+async function ensureOrdersLoaded(statusFilter) {
+  const need = statusFilter === 'ALL' ? ['pending', 'received', 'cancelled'] : [statusFilter];
+  const missing = need.filter(s => !_ordersLoaded.has(s));
+  if (!missing.length) return;
+  const snaps = await Promise.all(
+    missing.map(s => db.collection('pending_orders').where('status', '==', s).get()));
+  const have = new Set(pendingOrders.map(o => o.id));
+  snaps.forEach(sn => sn.docs.forEach(d => {
+    if (!have.has(d.id)) pendingOrders.push({ ...d.data(), id: d.id });
+  }));
+  missing.forEach(s => _ordersLoaded.add(s));
+  sortOrders();
 }
 
 function getStock(isbn, branch) {
@@ -270,11 +299,13 @@ async function computeAsOfStock(asOf) {
     map[k] = (map[k] || 0) + qty;
   };
 
+  // Only transactions after the chosen moment matter here, so let Firestore
+  // filter them instead of reading the whole ledger and discarding most of it.
+  const since = (coll, dateField) => db.collection(coll)
+    .where(dateField, '>', asOf).orderBy(dateField, 'desc').limit(5000).get();
   const [salesSnap, inSnap, outSnap, trSnap] = await Promise.all([
-    db.collection('sales').orderBy('soldAt', 'desc').limit(5000).get(),
-    db.collection('stock_history').orderBy('createdAt', 'desc').limit(5000).get(),
-    db.collection('stock_out').orderBy('createdAt', 'desc').limit(5000).get(),
-    db.collection('transfers').orderBy('createdAt', 'desc').limit(5000).get()
+    since('sales', 'soldAt'), since('stock_history', 'createdAt'),
+    since('stock_out', 'createdAt'), since('transfers', 'createdAt')
   ]);
 
   // Reverse only transactions that occurred strictly after the chosen moment.
@@ -829,9 +860,11 @@ async function addOrder() {
   }
 }
 
-function renderOrders() {
+async function renderOrders() {
   const branchFilter = document.getElementById('ord-filter-branch').value;
   const statusFilter = document.getElementById('ord-filter-status').value;
+  try { await ensureOrdersLoaded(statusFilter); }
+  catch(e) { console.error(e); showToast('Error loading orders.', 'error'); }
 
   let rows = pendingOrders.filter(o => {
     if (branchFilter !== 'ALL' && o.branch !== branchFilter) return false;
@@ -988,6 +1021,7 @@ function setHistBranch(b) {
 // values. Rebuilt on entering the History tab and after any write that
 // touches inventory or history records; filter changes reuse the cache.
 let _histCache = null;
+let _histCacheFrom = null;          // earliest record date the cache covers ('' = everything)
 let _histCacheAt = 0;               // when the cache was last built (staleness clock)
 const HIST_STALE_MS = 60000;        // re-fetch on tab entry only if older than this
 let _histPage = 1;                  // current History page (1-based)
@@ -995,14 +1029,39 @@ const HIST_PAGE_SIZE = 50;          // entries per page (a cart counts as one en
 let _histTotalsScope = 'page';      // 'page' = totals for this page; 'all' = all filtered
 function invalidateHistCache() {
   _histCache = null;
+  _histCacheFrom = null;
 }
 
-async function buildHistCache() {
+// Earliest record date the current filter needs. Records *newer* than that are
+// always fetched too: the stock-after column rolls today's stock backwards
+// through the timeline, so it needs every record after the window start.
+function histFetchFrom() {
+  const from = document.getElementById('hist-from').value;
+  const to = document.getElementById('hist-to').value;
+  if (from || to) return from || '';
+  const year = document.getElementById('hist-year').value;
+  if (year === 'ALL') return '';
+  const quarter = document.getElementById('hist-quarter').value;
+  const qStartMonth = { Winter: 1, Spring: 4, Summer: 7, Fall: 10 }[quarter] || 1;
+  return `${year}-${String(qStartMonth).padStart(2, '0')}-01`;
+}
+
+// A cache built from an earlier date also covers any later window.
+function histCacheCovers(from) {
+  if (!_histCache || _histCacheFrom === null) return false;
+  if (_histCacheFrom === '') return true;
+  return from !== '' && from >= _histCacheFrom;
+}
+
+async function buildHistCache(from) {
+  const q = (coll, dateField) => {
+    let ref = db.collection(coll);
+    if (from) ref = ref.where(dateField, '>=', from);
+    return ref.orderBy(dateField, 'desc').limit(5000).get();
+  };
   const [salesSnap, inSnap, outSnap, trSnap] = await Promise.all([
-    db.collection('sales').orderBy('soldAt', 'desc').limit(5000).get(),
-    db.collection('stock_history').orderBy('createdAt', 'desc').limit(5000).get(),
-    db.collection('stock_out').orderBy('createdAt', 'desc').limit(5000).get(),
-    db.collection('transfers').orderBy('createdAt', 'desc').limit(5000).get()
+    q('sales', 'soldAt'), q('stock_history', 'createdAt'),
+    q('stock_out', 'createdAt'), q('transfers', 'createdAt')
   ]);
   const toRows = snap => snap.docs.map(d => ({ _docId: d.id, ...d.data() }));
   const cache = {
@@ -1036,6 +1095,7 @@ async function buildHistCache() {
     cache.stockAfter[ev.id] = after;
   });
   _histCache = cache;
+  _histCacheFrom = from;
   _histCacheAt = Date.now();
 }
 
@@ -1107,7 +1167,14 @@ function clearHistDateRange() {
 
 function restoreHistFilters() {
   let f; try { f = JSON.parse(localStorage.getItem('inv_hist_filters') || 'null'); } catch(e) { f = null; }
-  if (!f) return;
+  if (!f) {
+    // Default to the current quarter. The tab used to open on "All Years",
+    // which read the entire ledger on every visit.
+    const now = nowLA();
+    document.getElementById('hist-year').value = now.substring(0, 4);
+    document.getElementById('hist-quarter').value = getQuarter(now);
+    return;
+  }
   const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.value = val; };
   if (f.branch && ['LA','RH','IRV','ALL'].includes(f.branch) && (f.branch !== 'ALL' || currentRole === 'manager')) {
     histBranch = f.branch;
@@ -1132,7 +1199,12 @@ async function loadHistory() {
   const toDate = document.getElementById('hist-to').value;
   localStorage.setItem('inv_hist_filters', JSON.stringify({ branch, year, quarter, fromDate, toDate }));
 
-  if (!_histCache) await buildHistCache();
+  const needFrom = histFetchFrom();
+  if (!histCacheCovers(needFrom)) {
+    const tbody = document.getElementById('history-tbody');
+    if (tbody) tbody.innerHTML = '<tr><td colspan="12" class="empty-state">Loading…</td></tr>';
+    await buildHistCache(needFrom);
+  }
   let rows;
   if (currentHistTab === 'all') {
     // Merge all four record types into one timeline, newest first.
