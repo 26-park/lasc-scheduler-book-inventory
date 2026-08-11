@@ -308,6 +308,7 @@
           </div>
         </div>
         <div id="audit-log-content"><div class="empty-state">Loading…</div></div>
+        <div id="audit-pagination" style="display:flex;gap:8px;align-items:center;justify-content:center;padding:10px;font-size:13px;color:#475569;"></div>
       </div>
     </main>
   </div>
@@ -5172,28 +5173,44 @@ let auditFilter = 'all';
 let auditData = [];
 // The audit log only grows, so it is read one page at a time with a cursor
 // instead of pulling a fixed slab of the newest records on every tab entry.
+// Paging mirrors the Inventory history tab: the action filter is applied in the
+// query and the pager is the same "‹ p / n ›" control. Pages already fetched
+// stay in auditData, so going back is free and only forward moves hit Firestore.
+// Inventory holds every row in memory and therefore knows the page count up
+// front; here the count is only known once the last page has been reached, so
+// it reads "3 / 12+" until then. (The compat SDK has no count() aggregation,
+// and reading the whole collection just to total it would undo the paging.)
 const AUDIT_PAGE_SIZE = 50;
-let _auditCursor = null, _auditHasMore = true, _auditPage = 1, _auditLoading = false;
+let _auditCursor = null, _auditPage = 1, _auditEnd = false, _auditLoading = false;
+
+function auditQuery() {
+  let q = db.collection('scheduler_audit');
+  if (auditFilter !== 'all') q = q.where('action','==',auditFilter);
+  return q.orderBy('changedAt','desc');
+}
 
 function setAuditFilter(f) {
   auditFilter = f;
-  _auditPage = 1;
   ['all','create','update','delete'].forEach(k => {
     const b = document.getElementById('audbtn-' + k);
     if (b) b.classList.toggle('active', k === f);
   });
-  renderAuditTable();
+  renderAuditLog();
 }
 
-async function loadMoreAudit() {
-  if (!_auditHasMore || _auditLoading) return 0;
+// Pages held in memory. The last one is only a full page if more may follow.
+function auditLoadedPages() { return Math.max(1, Math.ceil(auditData.length / AUDIT_PAGE_SIZE)); }
+
+// Fetch the next page from the cursor. Returns how many records arrived.
+async function loadAuditPage() {
+  if (_auditLoading || _auditEnd) return 0;
   _auditLoading = true;
   try {
-    let q = db.collection('scheduler_audit').orderBy('changedAt','desc').limit(AUDIT_PAGE_SIZE);
+    let q = auditQuery().limit(AUDIT_PAGE_SIZE);
     if (_auditCursor) q = q.startAfter(_auditCursor);
     const snap = await q.get();
     if (snap.docs.length) _auditCursor = snap.docs[snap.docs.length-1];
-    _auditHasMore = snap.docs.length === AUDIT_PAGE_SIZE;
+    if (snap.docs.length < AUDIT_PAGE_SIZE) _auditEnd = true;
     auditData = auditData.concat(snap.docs.map(d => ({ _id: d.id, ...d.data() })));
     return snap.docs.length;
   } finally { _auditLoading = false; }
@@ -5202,9 +5219,9 @@ async function loadMoreAudit() {
 async function renderAuditLog() {
   const el = document.getElementById('audit-log-content');
   el.innerHTML = '<div class="empty-state">Loading…</div>';
-  auditData = []; _auditCursor = null; _auditHasMore = true; _auditPage = 1;
+  auditData = []; _auditCursor = null; _auditPage = 1; _auditEnd = false;
   try {
-    await loadMoreAudit();
+    await loadAuditPage();
     renderAuditTable();
   } catch(e) {
     console.error(e);
@@ -5212,40 +5229,42 @@ async function renderAuditLog() {
   }
 }
 
-// Next page: pull another page from Firestore first if the filter has eaten
-// through everything loaded so far.
-async function changeAuditPage(dir) {
-  if (dir > 0) {
-    const filteredCount = () => (auditFilter === 'all' ? auditData : auditData.filter(r => r.action === auditFilter)).length;
-    while (_auditPage * AUDIT_PAGE_SIZE >= filteredCount() && _auditHasMore) {
-      const n = await loadMoreAudit();
-      if (!n) break;
-    }
-    if (_auditPage * AUDIT_PAGE_SIZE >= filteredCount()) { renderAuditTable(); return; }
-    _auditPage++;
-  } else {
-    if (_auditPage === 1) return;
-    _auditPage--;
+async function auditGoPage(p) {
+  if (p < 1 || p === _auditPage) return;
+  // Forward moves pull the pages in between, so the cursor stays in order.
+  while (auditData.length < p * AUDIT_PAGE_SIZE && !_auditEnd) {
+    if (!await loadAuditPage()) break;
   }
+  if (auditData.length <= (p-1) * AUDIT_PAGE_SIZE) { renderAuditTable(); return; }
+  _auditPage = p;
   renderAuditTable();
+}
+
+function renderAuditPagination() {
+  const el = document.getElementById('audit-pagination');
+  if (!el) return;
+  if (!auditData.length) { el.innerHTML = ''; return; }
+  const p = _auditPage, pages = auditLoadedPages();
+  const btn = (glyph, label, page, disabled) =>
+    `<button class="btn btn-secondary btn-sm" title="${label}" aria-label="${label}" ${disabled ? 'disabled' : ''} onclick="auditGoPage(${page})">${glyph}</button>`;
+  el.innerHTML =
+    btn('&#8249;', 'Previous page', p - 1, p <= 1) +
+    `<span style="margin:0 6px;">${p} / ${pages}${_auditEnd ? '' : '+'}</span>` +
+    btn('&#8250;', 'Next page', p + 1, _auditEnd && p >= pages);
 }
 
 function renderAuditTable() {
   const el = document.getElementById('audit-log-content');
-  const allRows = auditFilter === 'all' ? auditData : auditData.filter(r => r.action === auditFilter);
-  if (!allRows.length) { el.innerHTML = '<div class="empty-state">No records found.</div>'; return; }
-  const totalPages = Math.max(1, Math.ceil(allRows.length / AUDIT_PAGE_SIZE));
-  if (_auditPage > totalPages) _auditPage = totalPages;
-  const start = (_auditPage-1) * AUDIT_PAGE_SIZE;
-  const rows = allRows.slice(start, start + AUDIT_PAGE_SIZE);
-  const hasNext = start + rows.length < allRows.length || _auditHasMore;
-  const pager = `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;font-size:12px;color:#6b7280;">
-      <span>${start+1}–${start+rows.length}${_auditHasMore?'':' of '+allRows.length} · page ${_auditPage}</span>
-      <span style="display:flex;gap:6px;">
-        <button class="btn btn-secondary btn-sm" ${_auditPage===1?'disabled style="opacity:0.45;"':''} onclick="changeAuditPage(-1)">&#8592; Prev</button>
-        <button class="btn btn-secondary btn-sm" ${hasNext?'':'disabled style="opacity:0.45;"'} onclick="changeAuditPage(1)">Next &#8594;</button>
-      </span>
-    </div>`;
+  const pages = auditLoadedPages();
+  if (_auditPage > pages) _auditPage = pages;
+  if (_auditPage < 1) _auditPage = 1;
+  const start = (_auditPage - 1) * AUDIT_PAGE_SIZE;
+  const rows = auditData.slice(start, start + AUDIT_PAGE_SIZE);
+  if (!rows.length) {
+    el.innerHTML = '<div class="empty-state">No records found.</div>';
+    renderAuditPagination();
+    return;
+  }
 
   const mgr = currentRole === 'manager';
 
@@ -5292,7 +5311,8 @@ function renderAuditTable() {
         </tr>`).join('')}
       </tbody>
     </table>
-  </div>${pager}`;
+  </div>`;
+  renderAuditPagination();
 }
 
 let _editAuditId = null;
