@@ -22,6 +22,23 @@ This project was built around actual operational needs rather than a predefined 
 
 ---
 
+## Screenshots
+
+### Teacher Scheduling
+Weekly scheduling interface for managing teacher classes, PT sessions, and schedule status.
+
+![Teacher Scheduling](docs/images/scheduler.png)
+
+### Hours Overview
+Centralized view of teacher working hours used to support payroll-related review.
+
+![Hours Overview](docs/images/payroll.png)
+
+### Book Inventory Management
+Book catalog and inventory management interface supporting multi-campus operations.
+
+![Book Inventory Management](docs/images/book inventory.png)
+
 ## Business Problem
 
 Several day-to-day administrative tasks were managed manually or across separate workflows.
