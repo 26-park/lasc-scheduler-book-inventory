@@ -37,7 +37,7 @@ Centralized view of teacher working hours used to support payroll-related review
 ### Book Inventory Management
 Book catalog and inventory management interface supporting multi-campus operations.
 
-![Book Inventory Management](docs/images/book inventory.png)
+![Book Inventory Management](docs/images/bookinventory.png)
 
 ## Business Problem
 
